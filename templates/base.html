@@ -12,7 +12,21 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="/static/css/shadcn.css">
+    
+    <!-- jQuery (required for JsRender/JsViews) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <!-- JsRender/JsViews templating libraries -->
+    <script src="/static/js/vendor/jsrender.min.js"></script>
+    <script src="/static/js/vendor/jsviews.min.js"></script>
+
+    <!-- Calcite Design System -->
+    <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/3.3.3/calcite.css">
+    <script type="module" src="https://js.arcgis.com/calcite-components/3.3.3/calcite.esm.js"></script>
+    <script nomodule src="https://js.arcgis.com/calcite-components/3.3.3/calcite.js"></script>
+    
+    <!-- Custom TodoTracker styles -->
+    <link rel="stylesheet" href="/static/css/custom.css">
     <script>
         // Set theme ASAP to avoid flash. (Default: light)
         (function () {
@@ -23,43 +37,45 @@
         })();
     </script>
 </head>
-<body class="min-h-screen bg-background text-foreground">
-    <!-- Navigation -->
-    <nav class="tt-nav">
-        <div class="tt-container">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-4">
-                    <a href="/" class="tt-brand text-lg">
-                        📋 TodoTracker
-                    </a>
-                    {% if project_name %}
-                        <span class="tt-kbd truncate max-w-[28ch]" title="{{ project_name }}">
-                            {{ project_name }}
-                        </span>
-                    {% endif %}
-                    <div class="hidden sm:flex items-center gap-1 ml-2">
-                        <a href="/" class="tt-nav-link {% if request.url.path == '/' %}tt-nav-link-active{% endif %}">
-                            Todos
-                        </a>
-                        <a href="/notes" class="tt-nav-link {% if request.url.path == '/notes' %}tt-nav-link-active{% endif %}">
-                            Notes
-                        </a>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button id="ttThemeToggle" type="button" class="tt-btn tt-btn-ghost" title="Toggle theme">
-                        <span id="ttThemeLabel">🌙 Dark</span>
-                    </button>
-                    <span class="hidden md:inline text-sm text-muted-foreground">MCP Server Ready</span>
-                </div>
-            </div>
-        </div>
-    </nav>
+<body class="calcite-mode-auto">
+    <calcite-shell>
+        <!-- Header -->
+        <header slot="header">
+            <calcite-navigation>
+                <calcite-navigation-logo slot="logo" heading="TodoTracker" description="AI-powered todo management">
+                    📋
+                </calcite-navigation-logo>
 
-    <!-- Main Content -->
-    <main class="tt-container py-8">
-        {% block content %}{% endblock %}
-    </main>
+                {% if project_name %}
+                <calcite-chip appearance="outline" scale="s" slot="navigation-action">
+                    {{ project_name }}
+                </calcite-chip>
+                {% endif %}
+
+                <calcite-menu slot="navigation-secondary">
+                    <calcite-menu-item href="/" {% if request.url.path == '/' %}active{% endif %}>
+                        Todos
+                    </calcite-menu-item>
+                    <calcite-menu-item href="/notes" {% if request.url.path == '/notes' %}active{% endif %}>
+                        Notes
+                    </calcite-menu-item>
+                </calcite-menu>
+
+                <calcite-navigation-user slot="user">
+                    <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
+                        <span id="ttThemeLabel">🌙 Dark</span>
+                    </calcite-button>
+                    <span slot="user-menu-actions" class="text-sm text-color-2">MCP Server Ready</span>
+                </calcite-navigation-user>
+            </calcite-navigation>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <div class="p-6">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
 
     <!-- Markdown rendering utility -->
     <script>
@@ -102,27 +118,35 @@
             if (!btn) return;
             var label = document.getElementById("ttThemeLabel");
             function syncLabel() {
-                var isDark = document.documentElement.classList.contains("dark");
+                var body = document.body;
+                var isDark = body.classList.contains("calcite-mode-dark");
                 if (label) label.textContent = isDark ? "☀️ Light" : "🌙 Dark";
             }
             syncLabel();
             btn.addEventListener("click", function () {
-                var root = document.documentElement;
-                var isDark = root.classList.toggle("dark");
-                try { localStorage.setItem("tt-theme", isDark ? "dark" : "light"); } catch (e) {}
+                var body = document.body;
+                var isDark = body.classList.contains("calcite-mode-dark");
+                if (isDark) {
+                    body.classList.remove("calcite-mode-dark");
+                    body.classList.add("calcite-mode-light");
+                    try { localStorage.setItem("tt-theme", "light"); } catch (e) {}
+                } else {
+                    body.classList.remove("calcite-mode-light");
+                    body.classList.add("calcite-mode-dark");
+                    try { localStorage.setItem("tt-theme", "dark"); } catch (e) {}
+                }
                 syncLabel();
             });
         })();
     </script>
 
-    <!-- Footer -->
-    <footer class="border-t border-border mt-12">
-        <div class="tt-container py-6">
-            <p class="text-center text-sm text-muted-foreground">
+        <!-- Footer -->
+        <footer slot="footer">
+            <p class="text-center text-sm text-color-2 py-4">
                 TodoTracker - AI-powered todo management with Model Context Protocol
             </p>
-        </div>
-    </footer>
+        </footer>
+    </calcite-shell>
 </body>
 </html>
 

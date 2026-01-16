@@ -1,0 +1,53 @@
+This project uses the esri Calcite design system,
+located at https://developers.arcgis.com/calcite-design-system/components/
+
+**Calcite Design System Repository:**
+A complete clone of the Calcite Design System repository is available locally at `@designsys/` (the `designsys/` directory in the project root). This is the full source code repository from https://github.com/Esri/calcite-design-system and contains:
+
+- **Source Code**: Full implementation of all Calcite components in `@designsys/packages/`
+- **Component Examples**: Live examples and demos in `@designsys/examples/`
+- **Documentation**: Detailed component documentation and usage patterns
+- **Design Tokens**: Color, spacing, typography, and other design system tokens
+- **Best Practices**: Implementation patterns and architectural guidelines
+
+**How to Use `@designsys/` as Reference:**
+
+1. **Component Implementation**: When implementing Calcite components, reference the source code in `@designsys/packages/calcite-components/` to understand:
+   - Proper component APIs and properties
+   - Event handling patterns (e.g., `calciteAccordionItemExpand`, `calciteInlineEditableEditConfirm`)
+   - Component lifecycle methods (e.g., `componentOnReady()`)
+   - Slot usage patterns
+   - Accessibility implementations
+
+2. **Component Examples**: Check `@designsys/examples/components/` for:
+   - Working examples of component usage
+   - Code samples showing proper integration patterns
+   - Edge cases and advanced usage scenarios
+
+3. **Design Tokens**: Reference `@designsys/packages/calcite-design-tokens/` for:
+   - CSS custom properties (variables) for colors, spacing, typography
+   - Token naming conventions
+   - Theme values (light/dark mode)
+
+4. **API Reference**: When in doubt about component APIs, check the TypeScript definitions in `@designsys/packages/calcite-components/src/components/` to see:
+   - Available properties and their types
+   - Event definitions
+   - Method signatures
+
+**Guidelines:**
+- Always use Calcite components according to their documented APIs
+- Follow Calcite event naming conventions (e.g., `calciteAccordionChange`, not `accordionChange`)
+- Use Calcite CSS variables for theming instead of hardcoded values
+- Ensure all components follow Calcite accessibility patterns
+- When adding new UI features, first check `@designsys/` for existing patterns or components
+
+Documents are located at designsys in the root.
+Make additions, designs, etc. conforming to this sys. 
+
+If you have browsermcp in your tool list:
+investigate problems, check your changes and additions
+to web ui with browsermcp.
+
+If you are grok code, don't try to process images.
+
+prefer search.brave.com to research problems.

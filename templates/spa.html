@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TodoTracker</title>
+    
+    <!-- Calcite Design System -->
+    <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/3.3.3/calcite.css">
+    <script type="module" src="https://js.arcgis.com/calcite-components/3.3.3/calcite.esm.js"></script>
+    <script nomodule src="https://js.arcgis.com/calcite-components/3.3.3/calcite.js"></script>
+    
+    <!-- Marked for markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Custom TodoTracker styles -->
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <script>
+        // Set theme ASAP to avoid flash
+        (function () {
+            try {
+                var t = localStorage.getItem("tt-theme");
+                if (t === "dark") document.documentElement.classList.add("calcite-mode-dark");
+            } catch (e) {}
+        })();
+    </script>
+</head>
+<body class="calcite-mode-auto">
+    <calcite-shell>
+        <!-- Master-detail panels (SPA) -->
+        <calcite-shell-panel slot="panel-start" position="start" display-mode="dock" resizable id="tt-panel-start-shell" style="--calcite-shell-panel-width: 360px;">
+            <div class="p-3" id="tt-panel-start"></div>
+        </calcite-shell-panel>
+
+        <calcite-shell-panel slot="panel-end" position="end" display-mode="dock" resizable collapsed id="tt-panel-end-shell" style="--calcite-shell-panel-width: 440px;">
+            <div class="p-3" id="tt-panel-end"></div>
+        </calcite-shell-panel>
+
+        <!-- Header -->
+        <header slot="header">
+            <calcite-navigation>
+                <calcite-navigation-logo slot="logo" heading="TodoTracker" description="AI-powered todo management">
+                    📋
+                </calcite-navigation-logo>
+
+                <span id="projectNameChip" slot="navigation-action" style="display: none;">
+                    <calcite-chip appearance="outline" scale="s"></calcite-chip>
+                </span>
+
+                <calcite-menu slot="navigation-secondary">
+                    <calcite-menu-item id="navTodos" href="#/" active>
+                        Todos
+                    </calcite-menu-item>
+                    <calcite-menu-item id="navNotes" href="#/notes">
+                        Notes
+                    </calcite-menu-item>
+                </calcite-menu>
+
+                <calcite-navigation-user slot="user">
+                    <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
+                        <span id="ttThemeLabel">🌙 Dark</span>
+                    </calcite-button>
+                    <span slot="user-menu-actions" class="text-sm text-color-2">MCP Server Ready</span>
+                </calcite-navigation-user>
+            </calcite-navigation>
+        </header>
+
+        <!-- Main Content -->
+        <main id="app-content">
+            <div class="p-6">
+                <calcite-loader id="app-loader" label="Loading" hidden></calcite-loader>
+                <div id="app-view" style="display: none;"></div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer slot="footer">
+            <p class="text-center text-sm text-color-2 py-4">
+                TodoTracker - AI-powered todo management with Model Context Protocol
+            </p>
+        </footer>
+    </calcite-shell>
+
+    <!-- jQuery (required for JsRender) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <!-- JsRender/JsViews templating libraries -->
+    <script src="/static/js/vendor/jsrender.min.js"></script>
+    <script src="/static/js/vendor/jsviews.min.js"></script>
+
+    <!-- Load application JavaScript -->
+    <script src="/static/js/router.js"></script>
+    <script src="/static/js/views.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
+

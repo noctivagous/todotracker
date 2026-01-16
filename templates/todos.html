@@ -3,213 +3,296 @@
 {% block title %}Todos - TodoTracker{% endblock %}
 
 {# ------------------------------------------------------------------------- #}
-{# Macros                                                                    #}
-{# NOTE: Keep macros OUTSIDE blocks so they are defined before block renders. #}
+{# JsRender Templates - Replaces Jinja2 macros                              #}
 {# ------------------------------------------------------------------------- #}
+<script type="text/javascript" src="/static/js/todo-views.js"></script>
 
+{# ------------------------------------------------------------------------- #}
+{# Legacy Jinja2 Macro (deprecated - kept for fallback)                    #}
+{# ------------------------------------------------------------------------- #}
 {% macro render_todo(todo, index=0) %}
-<div class="todo-item {{ todo.status.value }} tt-surface tt-hover-surface mb-2 rounded-lg p-2 cursor-pointer" 
-     onclick="window.location.href='/todo/{{ todo.id }}'">
-    <div class="flex items-start justify-between gap-2">
-        <div class="flex-1 space-y-1.5">
-            <!-- Header Section: Title, ID, Badges -->
-            <div class="border border-gray-200 rounded-md p-1.5 bg-gray-50/50">
-                <div class="flex items-center flex-wrap gap-1.5">
-                    <span class="text-lg font-semibold text-gray-900">
-                        {{ todo.title }}
-                    </span>
-                    <div class="flex items-center gap-0.5 text-xs text-gray-400" onclick="event.stopPropagation()">
-                        <span>#{{ todo.id }}</span>
-                        <button onclick="event.stopPropagation(); copyTodoId({{ todo.id }});" 
-                                class="text-gray-400 hover:text-indigo-600 transition-colors"
-                                title="Copy todo ID to clipboard"
-                                id="copyBtn{{ todo.id }}">
-                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                            </svg>
-                        </button>
-                    </div>
-                    <span class="status-badge status-{{ todo.status.value }}">
-                        {{ todo.status.value.replace('_', ' ') }}
-                    </span>
-                    <span class="category-badge category-{{ todo.category.value }}">
-                        {{ todo.category.value }}
-                    </span>
-                    {% if todo.queue and todo.queue > 0 %}
-                    <span class="tt-badge tt-badge-info">⏯️ Queue {{ todo.queue }}</span>
-                    {% endif %}
-                    {% if todo.priority_class %}
-                    <span class="tt-badge tt-badge-warning">🔺 Priority {{ todo.priority_class }}</span>
-                    {% endif %}
-                    {% if todo.task_size %}
-                    <span class="tt-badge tt-badge-muted">📏 Size {{ todo.task_size }}/5</span>
-                    {% endif %}
-                    {% if todo.topic %}
-                    <span class="tt-badge tt-badge-muted">📁 {{ todo.topic }}</span>
-                    {% endif %}
-                    {% for tag in todo.tags %}
-                    <span class="tt-badge tt-badge-muted">🏷️ {{ tag.name }}</span>
-                    {% endfor %}
+<calcite-card class="tt-todo-item todo-item {{ todo.status.value }}"
+              data-todo-id="{{ todo.id }}"
+              data-url="/todo/{{ todo.id }}"
+              data-tt-expanded="0">
+
+    <!-- Summary Row (always visible in all views) -->
+    <div slot="title" class="flex items-start justify-between gap-2">
+        <div class="flex-1 space-y-1.5 min-w-0">
+            <!-- Header Section: Chevron (compact), Title, ID, Badges -->
+            <div class="flex items-center flex-wrap gap-1.5">
+                <calcite-button type="button"
+                                class="tt-accordion-toggle tt-accordion-toggle-btn"
+                                data-action="toggle-accordion"
+                                appearance="transparent"
+                                scale="s"
+                                aria-label="Expand/collapse">
+                    <calcite-icon icon="chevron-right" scale="s"></calcite-icon>
+                </calcite-button>
+
+                <span class="tt-todo-title-display text-lg font-semibold tt-title-display" data-role="titleDisplay">
+                    {{ todo.title }}
+                </span>
+                <calcite-input type="text"
+                               class="tt-title-input hidden"
+                               data-role="titleInput"
+                               value="{{ todo.title|e }}"
+                               onclick="event.stopPropagation()">
+                </calcite-input>
+
+                <div class="flex items-center gap-0.5 text-xs text-color-3" onclick="event.stopPropagation()">
+                    <span class="tt-todo-id-number">#{{ todo.id }}</span>
+                    <calcite-button data-action="copy-id"
+                                    appearance="transparent"
+                                    scale="xs"
+                                    title="Copy todo ID to clipboard"
+                                    id="copyBtn{{ todo.id }}">
+                        <calcite-icon icon="copy" scale="s"></calcite-icon>
+                    </calcite-button>
                 </div>
-            </div>
-            
-            <!-- Description Section -->
-            {% if todo.description %}
-                <div class="border border-gray-200 rounded-md p-1.5 bg-gray-50/30">
-                    <div class="text-sm text-muted-foreground markdown-render">{{ todo.description }}</div>
-                </div>
-            {% endif %}
-            
-            <!-- Progress Sections -->
-            {% if todo.progress_summary or todo.remaining_work %}
-                <div class="border border-gray-200 rounded-md p-1.5 bg-gray-50/30 space-y-1">
-                    {% if todo.progress_summary %}
-                        <div class="text-sm">
-                            <strong>Progress:</strong>
-                            <span class="text-muted-foreground">{{ todo.progress_summary }}</span>
-                        </div>
-                    {% endif %}
-                    {% if todo.remaining_work %}
-                        <div class="text-sm">
-                            <strong>Remaining:</strong>
-                            <span class="text-muted-foreground">{{ todo.remaining_work }}</span>
-                        </div>
-                    {% endif %}
-                </div>
-            {% endif %}
-            
-            <!-- Metadata Section: Timestamps -->
-            <div class="border border-gray-200 rounded-md p-1 bg-gray-50/50">
-                <div class="text-xs text-muted-foreground">
-                    Created: {{ todo.created_at.strftime('%b %d %Y %H:%M') }}
-                    {% if todo.updated_at != todo.created_at %}
-                        | Updated: {{ todo.updated_at.strftime('%b %d %Y %H:%M') }}
-                    {% endif %}
-                </div>
+
+                <calcite-chip appearance="solid" scale="s" class="status-{{ todo.status.value }}">
+                    {{ todo.status.value.replace('_', ' ') }}
+                </calcite-chip>
+
+                <calcite-chip appearance="outline" scale="s" class="category-{{ todo.category.value }}">
+                    {{ todo.category.value }}
+                </calcite-chip>
+
+                {% if todo.queue and todo.queue > 0 %}
+                <calcite-chip appearance="solid" color="blue" scale="s">⏯️ Queue {{ todo.queue }}</calcite-chip>
+                {% endif %}
+
+                {% if todo.priority_class %}
+                <calcite-chip appearance="solid" color="orange" scale="s">🔺 Priority {{ todo.priority_class }}</calcite-chip>
+                {% endif %}
+
+                {% if todo.task_size %}
+                <calcite-chip appearance="outline" scale="s">📏 Size {{ todo.task_size }}/5</calcite-chip>
+                {% endif %}
+
+                {% if todo.topic %}
+                <calcite-chip appearance="outline" scale="s">📁 {{ todo.topic }}</calcite-chip>
+                {% endif %}
+
+                {% for tag in todo.tags %}
+                <calcite-chip appearance="outline" scale="s">🏷️ {{ tag.name }}</calcite-chip>
+                {% endfor %}
             </div>
         </div>
-        
-        <!-- Right Side: Actions and Controls -->
-        <div class="flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
-            <!-- Action Buttons -->
-            <div class="border border-gray-200 rounded-md p-1 bg-gray-50/50">
-                <div class="flex space-x-1.5">
-                    <a href="/todo/{{ todo.id }}" 
-                       class="tt-btn tt-btn-secondary tt-btn-sm"
-                       onclick="event.stopPropagation()">
-                        View
-                    </a>
-                    <form action="/api/todos/{{ todo.id }}/delete" method="POST" class="inline"
-                          onsubmit="return confirm('Delete this todo and all subtasks?')"
-                          onclick="event.stopPropagation()">
-                        <button type="submit" class="tt-btn tt-btn-destructive tt-btn-sm">
-                            Delete
-                        </button>
-                    </form>
-                </div>
-            </div>
 
-            <!-- Queue Controls -->
-            <div class="border border-gray-200 rounded-md p-1 bg-gray-50/50">
-                <div class="flex flex-col items-end gap-1 text-xs">
-                    <div class="flex items-center gap-1.5">
-                        <form action="{% if todo.queue and todo.queue > 0 %}/api/todos/{{ todo.id }}/queue/remove{% else %}/api/todos/{{ todo.id }}/queue/add{% endif %}" method="POST" class="inline">
-                            <label class="flex items-center cursor-pointer">
-                                <input type="checkbox" {% if todo.queue and todo.queue > 0 %}checked{% endif %}
-                                       onchange="this.form.submit()"
-                                       class="sr-only peer">
-                                <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                                <span class="ml-2 text-sm font-medium text-gray-700">Queued</span>
-                            </label>
-                        </form>
-                        {% if todo.queue and todo.queue > 0 %}
-                            <span class="font-semibold text-indigo-700">#{{ todo.queue }}</span>
-                            <form action="/api/todos/{{ todo.id }}/queue/up" method="POST" class="inline">
-                                <button type="submit"
-                                        {% if todo.queue <= 1 %}disabled{% endif %}
-                                        class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 disabled:hover:bg-gray-200"
-                                        title="Move up in queue">
-                                    ↑
-                                </button>
-                            </form>
-                            <form action="/api/todos/{{ todo.id }}/queue/down" method="POST" class="inline">
-                                <button type="submit"
-                                        {% if max_queue and todo.queue >= max_queue %}disabled{% endif %}
-                                        class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 disabled:hover:bg-gray-200"
-                                        title="Move down in queue">
-                                    ↓
-                                </button>
-                            </form>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Priority and Task Size Controls -->
-            <div class="border border-gray-200 rounded-md p-1 bg-gray-50/50">
-                <div class="flex gap-1.5 items-center text-xs">
-                    <!-- Priority Dropdown -->
-                    <select name="priority_class" 
-                            data-todo-id="{{ todo.id }}"
-                            class="priority-dropdown tt-select text-xs px-2 py-1"
-                            title="Priority class"
-                            onclick="event.stopPropagation()"
-                            onchange="updateTodoField({{ todo.id }}, 'priority_class', this.value)">
-                        <option value="" {% if not todo.priority_class %}selected{% endif %}>Priority: —</option>
-                        {% for p in ['A','B','C','D','E'] %}
-                            <option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>Priority: {{ p }}</option>
-                        {% endfor %}
-                    </select>
-                    
-                    <!-- Task Size Segmented Control -->
-                    <div class="tt-segmented-control" onclick="event.stopPropagation()" title="Task size (1-5)">
-                        {% for s in range(1, 6) %}
-                            <button type="button"
-                                    class="{% if todo.task_size == s %}active{% endif %}"
-                                    onclick="updateTodoField({{ todo.id }}, 'task_size', '{{ s }}')"
-                                    title="Task size: {{ s }}/5">
-                                {{ s }}
-                            </button>
-                        {% endfor %}
-                    </div>
-                </div>
+        <!-- Actions (always visible); Edit only in Full view -->
+        <div class="tt-no-nav flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
+            <div class="flex space-x-1.5">
+                <calcite-button href="/todo/{{ todo.id }}"
+                                 appearance="outline"
+                                 scale="s"
+                                 onclick="event.stopPropagation()">
+                    View
+                </calcite-button>
+                <calcite-button type="button"
+                                 appearance="outline"
+                                 scale="s"
+                                 data-action="edit">
+                    Edit
+                </calcite-button>
+                <calcite-button type="button"
+                                 appearance="solid"
+                                 scale="s"
+                                 class="tt-action-save hidden"
+                                 data-action="save">
+                    Save
+                </calcite-button>
+                <calcite-button type="button"
+                                 appearance="outline"
+                                 scale="s"
+                                 class="tt-action-cancel hidden"
+                                 data-action="cancel">
+                    Cancel
+                </calcite-button>
+                <form action="/api/todos/{{ todo.id }}/delete" method="POST" class="tt-todo-delete-form inline"
+                      onsubmit="return confirm('Delete this todo and all subtasks?')"
+                      onclick="event.stopPropagation()">
+                    <calcite-button type="submit"
+                                     appearance="solid"
+                                     kind="danger"
+                                     scale="s">
+                        Delete
+                    </calcite-button>
+                </form>
             </div>
         </div>
     </div>
-    
-    <!-- Render children recursively -->
-    {% if todo.children %}
-        <div class="ml-6 mt-3 space-y-2">
-            {% for child in todo.children %}
-                {{ render_todo(child, loop.index0) }}
-            {% endfor %}
+
+    <!-- Details (Compact: accordion; Medium/Full: always visible) -->
+    <div slot="content" class="tt-accordion-content tt-todo-details-content space-y-2">
+        <div class="tt-todo-details-grid grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-2">
+            <div class="tt-todo-details-left space-y-2 min-w-0">
+                <!-- Description -->
+                <calcite-panel data-action="toggle-accordion">
+                    <div slot="header">Description</div>
+                    <div class="tt-desc-display tt-todo-description-display text-sm text-color-2 markdown-render"
+                         data-role="descDisplay"
+                         data-placeholder="No description">{{ todo.description or '' }}</div>
+                    <calcite-text-area class="tt-desc-input tt-todo-description-input hidden"
+                                       data-role="descInput"
+                                       rows="4"
+                                       onclick="event.stopPropagation()">{{ todo.description or '' }}</calcite-text-area>
+                </calcite-panel>
+
+                <!-- Progress Sections (hidden in Medium view) -->
+                {% if todo.work_completed or todo.work_remaining or todo.implementation_issues or todo.progress_summary or todo.remaining_work %}
+                <calcite-panel>
+                    <div slot="header">Progress</div>
+                    <div class="space-y-2">
+                        {% if todo.work_completed %}
+                            <div class="tt-todo-progress-completed">
+                                <strong>Work completed:</strong>
+                                <div class="tt-todo-progress-completed-content text-color-2 markdown-render">{{ todo.work_completed }}</div>
+                            </div>
+                        {% endif %}
+                        {% if todo.work_remaining %}
+                            <div class="tt-todo-progress-remaining">
+                                <strong>Work remaining:</strong>
+                                <div class="tt-todo-progress-remaining-content text-color-2 markdown-render">{{ todo.work_remaining }}</div>
+                            </div>
+                        {% endif %}
+                        {% if todo.implementation_issues %}
+                            <div class="tt-todo-progress-issues">
+                                <strong>Issues:</strong>
+                                <div class="tt-todo-progress-issues-content text-color-2 markdown-render">{{ todo.implementation_issues }}</div>
+                            </div>
+                        {% endif %}
+                        {% if todo.progress_summary %}
+                            <div class="tt-todo-progress-summary">
+                                <strong>Progress (legacy):</strong>
+                                <div class="tt-todo-progress-summary-content text-color-2 markdown-render">{{ todo.progress_summary }}</div>
+                            </div>
+                        {% endif %}
+                        {% if todo.remaining_work %}
+                            <div class="tt-todo-progress-remaining-legacy">
+                                <strong>Remaining (legacy):</strong>
+                                <div class="tt-todo-progress-remaining-legacy-content text-color-2 markdown-render">{{ todo.remaining_work }}</div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </calcite-panel>
+                {% endif %}
+
+                <!-- Metadata: Timestamps -->
+                <calcite-notice scale="s" open>
+                    <div slot="message">
+                        Created: {{ todo.created_at.strftime('%b %d %Y %H:%M') }}
+                        {% if todo.updated_at != todo.created_at %}
+                            | Updated: {{ todo.updated_at.strftime('%b %d %Y %H:%M') }}
+                        {% endif %}
+                    </div>
+                </calcite-notice>
+            </div>
+
+            <!-- Controls (Queue / Priority / Size). Compact: only when expanded -->
+            <div class="tt-controls-block tt-todo-controls-box space-y-2 tt-no-nav" onclick="event.stopPropagation()">
+                <!-- Queue Controls -->
+                <calcite-panel>
+                    <div slot="header">Queue Controls</div>
+                    <div class="space-y-2">
+                        <form action="{% if todo.queue and todo.queue > 0 %}/api/todos/{{ todo.id }}/queue/remove{% else %}/api/todos/{{ todo.id }}/queue/add{% endif %}" method="POST" class="tt-todo-queue-toggle-form">
+                            <calcite-label>
+                                <calcite-switch {% if todo.queue and todo.queue > 0 %}checked{% endif %}
+                                                onchange="this.closest('form').submit()"></calcite-switch>
+                                Queued
+                            </calcite-label>
+                        </form>
+                        {% if todo.queue and todo.queue > 0 %}
+                            <div class="flex items-center gap-2">
+                                <span class="font-semibold text-color-brand">#{{ todo.queue }}</span>
+                                <form action="/api/todos/{{ todo.id }}/queue/up" method="POST" class="tt-todo-queue-up-form">
+                                    <button type="submit"
+                                            {% if todo.queue <= 1 %}disabled{% endif %}
+                                            class="tt-todo-queue-up-btn px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 disabled:hover:bg-gray-200"
+                                            title="Move up in queue">
+                                        ↑
+                                    </button>
+                                </form>
+                                <form action="/api/todos/{{ todo.id }}/queue/down" method="POST" class="tt-todo-queue-down-form inline">
+                                    <button type="submit"
+                                            {% if max_queue and todo.queue >= max_queue %}disabled{% endif %}
+                                            class="tt-todo-queue-down-btn px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 disabled:hover:bg-gray-200"
+                                            title="Move down in queue">
+                                        ↓
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                        <div class="space-y-2">
+                            <!-- Priority Dropdown -->
+                            <calcite-label>
+                                Priority Class
+                                <calcite-select name="priority_class"
+                                                data-todo-id="{{ todo.id }}"
+                                                data-field="priority_class"
+                                                scale="s"
+                                                onclick="event.stopPropagation()">
+                                    <calcite-option value="" {% if not todo.priority_class %}selected{% endif %}></calcite-option>
+                                    {% for p in ['A','B','C','D','E'] %}
+                                        <calcite-option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>{{ p }}</calcite-option>
+                                    {% endfor %}
+                                </calcite-select>
+                            </calcite-label>
+
+                            <!-- Task Size Segmented Control -->
+                            <calcite-label>
+                                Task Size (1-5)
+                                <calcite-segmented-control onclick="event.stopPropagation()">
+                                    {% for s in range(1, 6) %}
+                                        <calcite-segmented-control-item value="{{ s }}"
+                                                                       {% if todo.task_size == s %}checked{% endif %}
+                                                                       data-action="set-task-size"
+                                                                       data-value="{{ s }}">
+                                            {{ s }}
+                                        </calcite-segmented-control-item>
+                                    {% endfor %}
+                                </calcite-segmented-control>
+                            </calcite-label>
+                        </div>
+                    </div>
+                </calcite-panel>
+            </div>
         </div>
-    {% endif %}
-</div>
+
+        <!-- Render children recursively -->
+        {% if todo.children %}
+            <div class="tt-children-block tt-todo-children-container ml-6 mt-3 space-y-2">
+                {% for child in todo.children %}
+                    {{ render_todo(child, loop.index0) }}
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</calcite-card>
 {% endmacro %}
 
 {% block content %}
 <div class="flex justify-between items-center mb-6">
-    <h2 class="text-3xl font-bold">
+    <h1 class="text-2xl font-bold">
         {% if is_search_page %}
             Search Results{% if search_query %}: "{{ search_query }}"{% endif %}
         {% else %}
             Todo List
         {% endif %}
-    </h2>
-    <div class="flex space-x-3">
+    </h1>
+    <div class="flex items-center gap-3">
         <!-- Search Box -->
-        <div class="hidden sm:flex items-center gap-2">
-            <input type="text" 
-                   id="searchInput" 
-                   placeholder="Search todos..." 
-                   class="tt-input w-64"
-                   value="{{ search_query or '' }}"
-                   onkeydown="if(event.key === 'Enter') { handleSearch(event); }">
-        </div>
+        <calcite-input type="text"
+                       id="searchInput"
+                       placeholder="Search todos..."
+                       value="{{ search_query or '' }}"
+                       onkeydown="if(event.key === 'Enter') { handleSearch(event); }"
+                       scale="m">
+        </calcite-input>
 
         <!-- Sort Controls (preserve filters) -->
-        <form method="GET" action="{% if is_search_page %}/search{% else %}/{% endif %}" class="hidden sm:flex items-center gap-2">
+        <form method="GET" action="{% if is_search_page %}/search{% else %}/{% endif %}" class="flex items-center gap-2">
             {% if is_search_page and search_query %}
                 <input type="hidden" name="q" value="{{ search_query }}">
             {% endif %}
@@ -217,194 +300,872 @@
             {% if queued_filter %}
                 <input type="hidden" name="queued" value="true">
             {% endif %}
-            <label class="text-sm text-muted-foreground font-medium">Sort</label>
-            <select name="sort_by" class="tt-select w-52" onchange="this.form.submit()">
-                <option value="activity" {% if current_sort_by == 'activity' %}selected{% endif %}>Activity</option>
-                <option value="updated_at" {% if current_sort_by == 'updated_at' %}selected{% endif %}>Updated</option>
-                <option value="created_at" {% if current_sort_by == 'created_at' %}selected{% endif %}>Created</option>
-                <option value="title" {% if current_sort_by == 'title' %}selected{% endif %}>Title</option>
-                <option value="status" {% if current_sort_by == 'status' %}selected{% endif %}>Status</option>
-                <option value="category" {% if current_sort_by == 'category' %}selected{% endif %}>Category</option>
-                <option value="queue" {% if current_sort_by == 'queue' %}selected{% endif %}>Queue</option>
-                <option value="priority_class" {% if current_sort_by == 'priority_class' %}selected{% endif %}>Priority</option>
-                <option value="task_size" {% if current_sort_by == 'task_size' %}selected{% endif %}>Task Size</option>
-            </select>
-            <select name="sort_dir" class="tt-select w-28" onchange="this.form.submit()">
-                <option value="desc" {% if current_sort_dir == 'desc' %}selected{% endif %}>Desc</option>
-                <option value="asc" {% if current_sort_dir == 'asc' %}selected{% endif %}>Asc</option>
-            </select>
+            <calcite-label>Sort by
+                <calcite-select name="sort_by" onchange="this.form.submit()" scale="s">
+                    <calcite-option value="activity" {% if current_sort_by == 'activity' %}selected{% endif %}>Activity</calcite-option>
+                    <calcite-option value="updated_at" {% if current_sort_by == 'updated_at' %}selected{% endif %}>Updated</calcite-option>
+                    <calcite-option value="created_at" {% if current_sort_by == 'created_at' %}selected{% endif %}>Created</calcite-option>
+                    <calcite-option value="title" {% if current_sort_by == 'title' %}selected{% endif %}>Title</calcite-option>
+                    <calcite-option value="status" {% if current_sort_by == 'status' %}selected{% endif %}>Status</calcite-option>
+                    <calcite-option value="category" {% if current_sort_by == 'category' %}selected{% endif %}>Category</calcite-option>
+                    <calcite-option value="queue" {% if current_sort_by == 'queue' %}selected{% endif %}>Queue</calcite-option>
+                    <calcite-option value="priority_class" {% if current_sort_by == 'priority_class' %}selected{% endif %}>Priority</calcite-option>
+                    <calcite-option value="task_size" {% if current_sort_by == 'task_size' %}selected{% endif %}>Task Size</calcite-option>
+                </calcite-select>
+            </calcite-label>
+            <calcite-select name="sort_dir" onchange="this.form.submit()" scale="s">
+                <calcite-option value="desc" {% if current_sort_dir == 'desc' %}selected{% endif %}>Desc</calcite-option>
+                <calcite-option value="asc" {% if current_sort_dir == 'asc' %}selected{% endif %}>Asc</calcite-option>
+            </calcite-select>
         </form>
 
         <!-- Export Dropdown -->
-        <div class="relative inline-block">
-            <button onclick="document.getElementById('exportMenu').classList.toggle('hidden')" 
-                    class="tt-btn tt-btn-secondary">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                </svg>
+        <calcite-dropdown>
+            <calcite-button slot="trigger" appearance="outline" scale="m">
+                <calcite-icon icon="download" scale="s"></calcite-icon>
                 Export
-            </button>
-            <div id="exportMenu" class="hidden absolute right-0 mt-2 w-48 tt-menu z-10">
-                <a href="/api/export/json" 
-                   class="tt-menu-item">
+            </calcite-button>
+            <calcite-dropdown-group>
+                <calcite-dropdown-item href="/api/export/json">
                     📄 Export as JSON
-                </a>
-                <a href="/api/export/csv" 
-                   class="tt-menu-item">
+                </calcite-dropdown-item>
+                <calcite-dropdown-item href="/api/export/csv">
                     📊 Export as CSV
-                </a>
-                <a href="/api/export/markdown" 
-                   class="tt-menu-item">
+                </calcite-dropdown-item>
+                <calcite-dropdown-item href="/api/export/markdown">
                     📝 Export as Markdown
-                </a>
-            </div>
-        </div>
+                </calcite-dropdown-item>
+            </calcite-dropdown-group>
+        </calcite-dropdown>
         
         <!-- New Todo Button -->
-        <button onclick="document.getElementById('createModal').classList.remove('hidden')" 
-                class="tt-btn tt-btn-primary">
+        <calcite-button onclick="document.getElementById('createModal').open = true"
+                         appearance="solid">
             + New Todo
-        </button>
+        </calcite-button>
     </div>
 </div>
 
 <div class="flex flex-wrap gap-2 mb-4">
     {% if is_search_page %}
-        <a href="/?status={{ current_status_filter or 'pending' }}&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
-           class="tt-btn tt-btn-sm tt-btn-secondary">
+        <calcite-button href="/?status={{ current_status_filter or 'pending' }}&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
+                         appearance="outline"
+                         scale="s">
             ← Back to All Todos
-        </a>
+        </calcite-button>
     {% else %}
-        <a href="/?status={{ current_status_filter or 'pending' }}&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
-           class="tt-btn tt-btn-sm {% if not queued_filter %}tt-btn-primary{% else %}tt-btn-secondary{% endif %}">
+        <calcite-button href="/?status={{ current_status_filter or 'pending' }}&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
+                         {% if not queued_filter %}appearance="solid"{% else %}appearance="outline"{% endif %}
+                         scale="s">
             All (current status filter)
-        </a>
-        <a href="/?status={{ current_status_filter or 'pending' }}&queued=true&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
-           class="tt-btn tt-btn-sm {% if queued_filter %}tt-btn-primary{% else %}tt-btn-secondary{% endif %}">
+        </calcite-button>
+        <calcite-button href="/?status={{ current_status_filter or 'pending' }}&queued=true&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
+                         {% if queued_filter %}appearance="solid"{% else %}appearance="outline"{% endif %}
+                         scale="s">
             In queue ({{ stats.queued }})
-        </a>
+        </calcite-button>
     {% endif %}
 </div>
 
 <!-- Statistics -->
-<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-    <a href="/?status=all&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="tt-card p-4 cursor-pointer {% if current_status_filter == 'all' %}tt-ring{% endif %}">
-        <div class="text-sm text-muted-foreground">Total</div>
-        <div class="text-2xl font-bold">{{ stats.total }}</div>
-    </a>
-    <div class="tt-card p-4 {% if not current_status_filter or current_status_filter == 'pending' %}tt-ring{% endif %}">
-        <div class="flex items-center justify-between">
-            <a href="/?status=pending&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="flex-1 cursor-pointer">
-                <div class="text-sm text-muted-foreground">Pending</div>
-                <div class="text-2xl font-bold">{{ stats.pending }}</div>
-            </a>
-            <a href="/?status={{ current_status_filter or 'pending' }}&queued=true&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
-               class="tt-btn tt-btn-sm {% if queued_filter %}tt-btn-primary{% else %}tt-btn-secondary{% endif %}"
-               onclick="event.stopPropagation()">
+<div class="tt-stats-container grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+    <calcite-card href="/?status=all&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="cursor-pointer {% if current_status_filter == 'all' %}tt-ring{% endif %}">
+        <div class="tt-stat-label text-sm text-muted-foreground">Total</div>
+        <div class="tt-stat-value text-2xl font-bold">{{ stats.total }}</div>
+    </calcite-card>
+    <calcite-card class="{% if not current_status_filter or current_status_filter == 'pending' %}tt-ring{% endif %}">
+        <div class="tt-stat-pending-inner flex items-center justify-between">
+            <calcite-link href="/?status=pending&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="flex-1 cursor-pointer">
+                <div class="tt-stat-label text-sm text-muted-foreground">Pending</div>
+                <div class="tt-stat-value text-2xl font-bold">{{ stats.pending }}</div>
+            </calcite-link>
+            <calcite-button href="/?status={{ current_status_filter or 'pending' }}&queued=true&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
+                             {% if queued_filter %}appearance="solid"{% else %}appearance="outline"{% endif %}
+                             scale="s"
+                             onclick="event.stopPropagation()">
                 {{ stats.queued }}
-            </a>
+            </calcite-button>
         </div>
-    </div>
-    <a href="/?status=in_progress&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="tt-card p-4 cursor-pointer {% if current_status_filter == 'in_progress' %}tt-ring{% endif %}">
-        <div class="text-sm text-muted-foreground">In Progress</div>
-        <div class="text-2xl font-bold">{{ stats.in_progress }}</div>
-    </a>
-    <a href="/?status=completed&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="tt-card p-4 cursor-pointer {% if current_status_filter == 'completed' %}tt-ring{% endif %}">
-        <div class="text-sm text-muted-foreground">Completed</div>
-        <div class="text-2xl font-bold">{{ stats.completed }}</div>
-    </a>
+    </calcite-card>
+    <calcite-card href="/?status=in_progress&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="cursor-pointer {% if current_status_filter == 'in_progress' %}tt-ring{% endif %}">
+        <div class="tt-stat-label text-sm text-muted-foreground">In Progress</div>
+        <div class="tt-stat-value text-2xl font-bold">{{ stats.in_progress }}</div>
+    </calcite-card>
+    <calcite-card href="/?status=completed&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="cursor-pointer {% if current_status_filter == 'completed' %}tt-ring{% endif %}">
+        <div class="tt-stat-label text-sm text-muted-foreground">Completed</div>
+        <div class="tt-stat-value text-2xl font-bold">{{ stats.completed }}</div>
+    </calcite-card>
+</div>
+
+<!-- View Mode Toggle (above listing) -->
+<div class="tt-view-mode-toggle-container flex items-center gap-2 mb-4">
+    <div class="tt-view-mode-toggle-label text-sm text-muted-foreground font-medium">View</div>
+    <calcite-segmented-control id="ttViewModeToggle" title="View mode">
+        <calcite-segmented-control-item value="compact" data-view="compact">Compact</calcite-segmented-control-item>
+        <calcite-segmented-control-item value="medium" data-view="medium">Medium</calcite-segmented-control-item>
+        <calcite-segmented-control-item value="full" data-view="full">Full</calcite-segmented-control-item>
+    </calcite-segmented-control>
+    <calcite-segmented-control class="hidden" id="ttDescColumnsToggle" title="Description columns (Full view)">
+        <calcite-segmented-control-item value="1" data-cols="1">1</calcite-segmented-control-item>
+        <calcite-segmented-control-item value="2" data-cols="2">2</calcite-segmented-control-item>
+        <calcite-segmented-control-item value="3" data-cols="3">3</calcite-segmented-control-item>
+    </calcite-segmented-control>
 </div>
 
 <!-- Todo Tree -->
-<div class="tt-card">
-    <div class="tt-card-content">
-    {% if todos %}
-        {% for todo in todos %}
-            {{ render_todo(todo, loop.index0) }}
-        {% endfor %}
-    {% else %}
+<calcite-card class="tt-todo-list-card">
+    <div class="tt-todo-list-content" id="todoList">
+        <!-- Todos will be rendered here by JsRender -->
         <div class="text-center py-12 text-muted-foreground">
-            {% if is_search_page %}
-                <p class="text-lg">No todos found matching "{{ search_query }}".</p>
-                <p class="text-sm mt-2">Try a different search term or <a href="/" class="text-indigo-600 hover:underline">view all todos</a>.</p>
-            {% else %}
-                <p class="text-lg">No todos yet.</p>
-                <p class="text-sm mt-2">Create your first todo to get started!</p>
-            {% endif %}
+            <p class="text-lg">Loading todos...</p>
         </div>
-    {% endif %}
-</div>
-</div>
-
-<!-- Create Modal -->
-<div id="createModal" class="hidden fixed inset-0 tt-modal-backdrop flex items-center justify-center z-50">
-    <div class="tt-card w-full max-w-md">
-        <div class="flex justify-between items-center mb-4">
-            <div class="tt-card-header w-full flex items-center justify-between">
-                <h3 class="text-xl font-bold">Create New Todo</h3>
-            <button onclick="document.getElementById('createModal').classList.add('hidden')" 
-                    class="tt-btn tt-btn-ghost tt-btn-sm">✕</button>
-            </div>
-        </div>
-        
-        <form action="/api/todos/form" method="POST" class="space-y-4 tt-card-content">
-            <div>
-                <label class="block text-sm font-medium mb-1">Title*</label>
-                <input type="text" name="title" required 
-                       class="tt-input">
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium mb-1">Description</label>
-                <textarea name="description" rows="3"
-                          class="tt-textarea"></textarea>
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium mb-1">Category</label>
-                <select name="category" 
-                        class="tt-select">
-                    {% for cat in categories %}
-                        <option value="{{ cat }}">{{ cat }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium mb-1">
-                    Topic <span class="text-muted-foreground text-xs">(optional, e.g., "window layout")</span>
-                </label>
-                <input type="text" name="topic" id="topicInput" list="topicList"
-                       class="tt-input">
-                <datalist id="topicList"></datalist>
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium mb-1">
-                    Tags <span class="text-muted-foreground text-xs">(optional, comma-separated)</span>
-                </label>
-                <input type="text" name="tags" id="tagsInput" 
-                       placeholder="e.g., ui, frontend, urgent"
-                       class="tt-input">
-                <div id="tagSuggestions" class="mt-2 flex flex-wrap gap-2"></div>
-            </div>
-            
-            <div class="flex space-x-3">
-                <button type="submit" 
-                        class="tt-btn tt-btn-primary flex-1">
-                    Create
-                </button>
-                <button type="button" 
-                        onclick="document.getElementById('createModal').classList.add('hidden')"
-                        class="tt-btn tt-btn-secondary flex-1">
-                    Cancel
-                </button>
-            </div>
-        </form>
     </div>
-</div>
+</calcite-card>
 
 <script>
+// Initialize todo rendering with JsRender
+(function() {
+    // Wait for dependencies
+    function waitForDeps(callback) {
+        if (typeof $ !== 'undefined' && typeof $.templates !== 'undefined' && typeof window.getCurrentViewMode === 'function') {
+            callback();
+        } else {
+            setTimeout(() => waitForDeps(callback), 100);
+        }
+    }
+
+    // Convert server-side todo data to format expected by JsRender
+    function prepareTodoData(todo) {
+        const prepared = {
+            id: todo.id,
+            title: todo.title || '',
+            description: todo.description || '',
+            status: typeof todo.status === 'object' ? todo.status.value : todo.status,
+            category: typeof todo.category === 'object' ? todo.category.value : todo.category,
+            queue: todo.queue || 0,
+            priority_class: todo.priority_class || null,
+            task_size: todo.task_size || null,
+            topic: todo.topic || null,
+            tags: (todo.tags || []).map(t => typeof t === 'object' ? { name: t.name } : { name: t }),
+            work_completed: todo.work_completed || null,
+            work_remaining: todo.work_remaining || null,
+            implementation_issues: todo.implementation_issues || null,
+            created_at: typeof todo.created_at === 'string' ? todo.created_at : (todo.created_at ? todo.created_at.toISOString() : ''),
+            updated_at: typeof todo.updated_at === 'string' ? todo.updated_at : (todo.updated_at ? todo.updated_at.toISOString() : ''),
+            expanded: false,
+            editingEnabled: false
+        };
+
+        // Check localStorage for expanded state (compact view)
+        if (window.getCurrentViewMode && window.getCurrentViewMode() === 'compact') {
+            try {
+                const expanded = localStorage.getItem(`tt-accordion-${todo.id}`) === '1';
+                prepared.expanded = expanded;
+            } catch (e) {}
+        }
+
+        // Recursively prepare children
+        if (todo.children && todo.children.length > 0) {
+            prepared.children = todo.children.map(child => prepareTodoData(child));
+        }
+
+        return prepared;
+    }
+
+    // Render todos using JsRender
+    window.rerenderTodos = async function() {
+        const container = document.getElementById('todoList');
+        if (!container) return;
+
+        try {
+            // Fetch todos from API
+            const response = await fetch('/api/todos');
+            if (!response.ok) throw new Error('Failed to fetch todos');
+            const todos = await response.json();
+
+            if (!todos || todos.length === 0) {
+                container.innerHTML = '<div class="text-center py-12 text-muted-foreground"><p class="text-lg">No todos yet.</p><p class="text-sm mt-2">Create your first todo to get started!</p></div>';
+                return;
+            }
+
+            // Prepare todos data
+            const preparedTodos = todos.map(todo => prepareTodoData(todo));
+
+            // Render using JsRender
+            waitForDeps(function() {
+                if (typeof $.templates === 'undefined' || !$.templates.todoItem) {
+                    console.error('JsRender templates not loaded');
+                    return;
+                }
+
+                const viewMode = window.getCurrentViewMode ? window.getCurrentViewMode() : 'full';
+                let html = '';
+
+                if (viewMode === 'compact') {
+                    // For compact view, wrap all root todos in a single accordion
+                    html = '<calcite-accordion selection-mode="multiple" class="tt-todo-accordion">';
+                    preparedTodos.forEach(todo => {
+                        html += renderTodoItem(todo, viewMode, true); // true = isRoot
+                    });
+                    html += '</calcite-accordion>';
+                } else {
+                    // For medium and full views, render each todo as a card
+                    preparedTodos.forEach(todo => {
+                        html += renderTodoItem(todo, viewMode, true);
+                    });
+                }
+
+                container.innerHTML = html;
+
+                // Initialize Calcite components
+                if (window.initializeAccordionHandlers) {
+                    window.initializeAccordionHandlers();
+                }
+                if (window.initializeInlineEditing) {
+                    window.initializeInlineEditing();
+                }
+
+                // Render markdown
+                if (typeof renderMarkdown === 'function') {
+                    document.querySelectorAll('.markdown-render').forEach(el => {
+                        renderMarkdown(el);
+                    });
+                }
+
+                // Re-attach event handlers
+                attachEventHandlers();
+            });
+        } catch (error) {
+            console.error('Error rendering todos:', error);
+            container.innerHTML = '<div class="text-center py-12 text-color-danger"><p class="text-lg">Failed to load todos. Please refresh the page.</p></div>';
+        }
+    };
+
+    // Render a single todo item
+    function renderTodoItem(todo, viewMode, isRoot = false) {
+        if (typeof $.templates === 'undefined' || !$.templates.todoItem) {
+            return '';
+        }
+
+        const template = $.templates.todoItem;
+        const data = {
+            ...todo,
+            viewMode: viewMode
+        };
+
+        let html = template.render(data);
+
+        // Recursively render children
+        if (todo.children && todo.children.length > 0) {
+            let childrenHtml = '';
+            if (viewMode === 'compact') {
+                // For compact view, children are also accordion items (nested)
+                childrenHtml = todo.children.map(child => renderTodoItem(child, viewMode, false)).join('');
+            } else {
+                // For other views, children are cards
+                childrenHtml = todo.children.map(child => renderTodoItem(child, viewMode, false)).join('');
+            }
+            
+            // Insert children before closing tag
+            if (viewMode === 'compact') {
+                html = html.replace('</calcite-accordion-item>', childrenHtml + '</calcite-accordion-item>');
+            } else {
+                html = html.replace('</calcite-card>', childrenHtml + '</calcite-card>');
+            }
+        }
+
+        return html;
+    }
+
+    // Attach event handlers for interactive elements
+    function attachEventHandlers() {
+        const list = document.getElementById('todoList');
+        if (!list) return;
+
+        // Priority dropdown change
+        list.addEventListener('change', function(e) {
+            const el = e.target.closest('[data-field="priority_class"]');
+            if (!el) return;
+            const item = el.closest('[data-todo-id]');
+            if (!item) return;
+            const todoId = item.getAttribute('data-todo-id');
+            const value = el.value || '';
+            updateTodoField(todoId, 'priority_class', value);
+        });
+
+        // Task size segmented control
+        list.addEventListener('click', function(e) {
+            const actionEl = e.target.closest('[data-action="set-task-size"]');
+            if (!actionEl) return;
+            const item = actionEl.closest('[data-todo-id]');
+            if (!item) return;
+            const todoId = item.getAttribute('data-todo-id');
+            const val = actionEl.getAttribute('data-value') || '';
+            updateTodoField(todoId, 'task_size', val);
+        });
+    }
+
+    // Update todo field via AJAX
+    async function updateTodoField(todoId, fieldName, fieldValue) {
+        const formData = new FormData();
+        formData.append(fieldName, fieldValue);
+        
+        try {
+            const response = await fetch(`/api/todos/${todoId}/update`, {
+                method: 'POST',
+                body: formData,
+                redirect: 'manual'
+            });
+            
+            if (response.ok || response.status === 303 || response.status === 302) {
+                // Re-render to show updated values
+                window.rerenderTodos();
+            } else {
+                console.error('Failed to update todo:', response.statusText);
+                window.rerenderTodos();
+            }
+        } catch (error) {
+            console.error('Error updating todo:', error);
+            window.rerenderTodos();
+        }
+    }
+
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        waitForDeps(function() {
+            window.rerenderTodos();
+        });
+    });
+})();
+</script>
+
+<!-- Create Dialog -->
+<calcite-dialog id="createModal" label="Create New Todo">
+    <form id="createModalForm" action="/api/todos/form" method="POST" slot="content" class="space-y-4">
+        <calcite-label>
+            Title*
+            <calcite-input type="text" name="title" required></calcite-input>
+        </calcite-label>
+        
+        <calcite-label>
+            Description
+            <calcite-text-area name="description" rows="3"></calcite-text-area>
+        </calcite-label>
+        
+        <calcite-label>
+            Category
+            <calcite-select name="category">
+                {% for cat in categories %}
+                    <calcite-option value="{{ cat }}">{{ cat }}</calcite-option>
+                {% endfor %}
+            </calcite-select>
+        </calcite-label>
+        
+        <calcite-label>
+            Topic
+            <span class="text-color-3 text-xs">(optional, e.g., "window layout")</span>
+            <calcite-input type="text" name="topic" id="topicInput" list="topicList"></calcite-input>
+            <datalist id="topicList" class="tt-create-form-topic-datalist"></datalist>
+        </calcite-label>
+        
+        <calcite-label>
+            Tags
+            <span class="text-color-3 text-xs">(optional, comma-separated)</span>
+            <calcite-input type="text" name="tags" id="tagsInput"
+                           placeholder="e.g., ui, frontend, urgent"></calcite-input>
+            <div id="tagSuggestions" class="mt-2 flex flex-wrap gap-2"></div>
+        </calcite-label>
+    </form>
+    
+    <calcite-button slot="primary" type="submit" form="createModalForm" appearance="solid">
+        Create
+    </calcite-button>
+    <calcite-button slot="secondary" onclick="document.getElementById('createModal').open = false" appearance="outline">
+        Cancel
+    </calcite-button>
+</calcite-dialog>
+
+<script>
+// -----------------------------
+// View modes + accordion + inline edit
+// -----------------------------
+(function () {
+    const VIEW_KEY = 'tt-view-mode';
+    const DESC_COLS_KEY = 'tt-desc-columns';
+    const DEFAULT_VIEW = 'full';
+    const DEFAULT_DESC_COLS = 2;
+
+    function getViewMode() {
+        try { return localStorage.getItem(VIEW_KEY) || DEFAULT_VIEW; } catch (e) { return DEFAULT_VIEW; }
+    }
+    function setViewMode(mode) {
+        try { localStorage.setItem(VIEW_KEY, mode); } catch (e) {}
+        document.documentElement.setAttribute('data-tt-view', mode);
+
+        // If leaving Full view while editing, cancel edit UI.
+        if (mode !== 'full' && typeof editingTodoId === 'number' && editingTodoId !== null) {
+            try { window.cancelInlineEdit(editingTodoId); } catch (e) {}
+        }
+
+        // Update segmented control selected value
+        const toggle = document.getElementById('ttViewModeToggle');
+        if (toggle) {
+            toggle.value = mode;
+            // Also update the selectedItem property if available
+            const items = toggle.querySelectorAll('calcite-segmented-control-item');
+            items.forEach(item => {
+                if (item.value === mode || item.getAttribute('data-view') === mode) {
+                    item.setAttribute('selected', '');
+                } else {
+                    item.removeAttribute('selected');
+                }
+            });
+        }
+
+        // Only show description columns control in Full view
+        const colsToggle = document.getElementById('ttDescColumnsToggle');
+        if (colsToggle) colsToggle.classList.toggle('hidden', mode !== 'full');
+
+        // When leaving compact view, remove inline maxHeight/opacity constraints so layout is natural
+        if (mode !== 'compact') {
+            document.querySelectorAll('.tt-accordion-content').forEach(el => {
+                el.style.maxHeight = '';
+                el.style.opacity = '';
+            });
+        } else {
+            // In compact, first hide ALL accordion content immediately
+            document.querySelectorAll('.tt-accordion-content').forEach(content => {
+                content.style.maxHeight = '0px';
+                content.style.opacity = '0';
+            });
+            // Then apply persisted expanded state (or default to collapsed)
+            document.querySelectorAll('.todo-item[data-todo-id]').forEach(item => {
+                const id = item.getAttribute('data-todo-id');
+                const key = `tt-accordion-${id}`;
+                let expanded = false;
+                try { expanded = localStorage.getItem(key) === '1'; } catch (e) {}
+                // Ensure data attribute is set
+                item.setAttribute('data-tt-expanded', expanded ? '1' : '0');
+                // Apply styles explicitly for expanded items
+                if (expanded) {
+                    setExpandedByElement(item, true, false);
+                }
+            });
+        }
+    }
+
+    function getDescCols() {
+        try {
+            const v = parseInt(localStorage.getItem(DESC_COLS_KEY) || String(DEFAULT_DESC_COLS), 10);
+            if (Number.isFinite(v) && v >= 1 && v <= 3) return v;
+        } catch (e) {}
+        return DEFAULT_DESC_COLS;
+    }
+    function setDescCols(cols) {
+        try { localStorage.setItem(DESC_COLS_KEY, String(cols)); } catch (e) {}
+        document.documentElement.style.setProperty('--tt-desc-columns', String(cols));
+        const colsToggle = document.getElementById('ttDescColumnsToggle');
+        if (colsToggle) {
+            colsToggle.value = String(cols);
+            // Also update the selectedItem property if available
+            const items = colsToggle.querySelectorAll('calcite-segmented-control-item');
+            items.forEach(item => {
+                if (item.value === String(cols) || item.getAttribute('data-cols') === String(cols)) {
+                    item.setAttribute('selected', '');
+                } else {
+                    item.removeAttribute('selected');
+                }
+            });
+        }
+    }
+
+    function isCompact() {
+        return document.documentElement.getAttribute('data-tt-view') === 'compact';
+    }
+
+    function refreshAncestorHeights(startEl) {
+        // If nested accordions exist, expanding a child changes the parent's scrollHeight.
+        // Recompute maxHeight for any expanded ancestors so content isn't clipped.
+        let el = startEl ? startEl.parentElement : null;
+        while (el) {
+            const parentTodo = el.closest && el.closest('.todo-item[data-todo-id]');
+            if (!parentTodo) break;
+            const isExpanded = parentTodo.getAttribute('data-tt-expanded') === '1';
+            const content = parentTodo.querySelector('.tt-accordion-content');
+            if (isCompact() && isExpanded && content) {
+                // Recalculate height for nested accordions
+                const height = content.scrollHeight;
+                content.style.maxHeight = height + 'px';
+                content.style.opacity = '1';
+            }
+            el = parentTodo.parentElement;
+        }
+    }
+
+    function setExpandedByElement(itemEl, expanded, persist = true) {
+        if (!itemEl) return;
+        const id = itemEl.getAttribute('data-todo-id');
+        itemEl.setAttribute('data-tt-expanded', expanded ? '1' : '0');
+
+        if (persist && id) {
+            try { localStorage.setItem(`tt-accordion-${id}`, expanded ? '1' : '0'); } catch (e) {}
+        }
+
+        const content = itemEl.querySelector('.tt-accordion-content');
+        if (content && isCompact()) {
+            if (expanded) {
+                // First collapse it to measure
+                content.style.maxHeight = '0px';
+                content.style.opacity = '0';
+                // Force reflow to ensure collapse happens
+                void content.offsetHeight;
+                // Now measure and expand
+                const height = content.scrollHeight;
+                content.style.maxHeight = height + 'px';
+                content.style.opacity = '1';
+            } else {
+                // Collapse: set inline styles to override any previous expanded state
+                content.style.maxHeight = '0px';
+                content.style.opacity = '0';
+            }
+        } else if (content && !isCompact()) {
+            // Not in compact mode - clear inline styles so CSS can handle it
+            content.style.maxHeight = '';
+            content.style.opacity = '';
+        }
+
+        refreshAncestorHeights(itemEl);
+    }
+
+    window.toggleTodoAccordion = function (todoId) {
+        const item = document.querySelector(`.todo-item[data-todo-id="${todoId}"]`);
+        if (!item) return;
+        const expanded = item.getAttribute('data-tt-expanded') === '1';
+        setExpandedByElement(item, !expanded, true);
+    };
+
+    // Inline edit (Full view only; title + description)
+    let editingTodoId = null;
+
+    function getTodoEl(todoId) {
+        return document.querySelector(`.todo-item[data-todo-id="${todoId}"]`);
+    }
+
+    function setEditMode(todoId, enabled) {
+        const item = getTodoEl(todoId);
+        if (!item) return;
+        item.setAttribute('data-tt-editing', enabled ? '1' : '0');
+
+        const titleDisplay = item.querySelector('[data-role="titleDisplay"]');
+        const titleInput = item.querySelector('[data-role="titleInput"]');
+        const descDisplay = item.querySelector('[data-role="descDisplay"]');
+        const descInput = item.querySelector('[data-role="descInput"]');
+
+        if (enabled) {
+            if (titleInput && titleDisplay) titleInput.value = (titleDisplay.textContent || '').trim();
+            // Don't overwrite the textarea with rendered markdown textContent; keep the raw value.
+        }
+
+        if (titleDisplay) titleDisplay.classList.toggle('hidden', enabled);
+        if (titleInput) titleInput.classList.toggle('hidden', !enabled);
+        if (descDisplay) descDisplay.classList.toggle('hidden', enabled);
+        if (descInput) descInput.classList.toggle('hidden', !enabled);
+
+        const editBtn = item.querySelector('.tt-action-edit');
+        const saveBtn = item.querySelector('.tt-action-save');
+        const cancelBtn = item.querySelector('.tt-action-cancel');
+        if (editBtn) editBtn.classList.toggle('hidden', enabled);
+        if (saveBtn) saveBtn.classList.toggle('hidden', !enabled);
+        if (cancelBtn) cancelBtn.classList.toggle('hidden', !enabled);
+
+        if (enabled && titleInput) titleInput.focus();
+    }
+
+    window.enterInlineEdit = function (todoId) {
+        // Only enable inline edit in Full view
+        if (document.documentElement.getAttribute('data-tt-view') !== 'full') return;
+        if (editingTodoId && editingTodoId !== todoId) {
+            window.cancelInlineEdit(editingTodoId);
+        }
+        editingTodoId = todoId;
+        setEditMode(todoId, true);
+    };
+
+    window.cancelInlineEdit = function (todoId) {
+        setEditMode(todoId, false);
+        if (editingTodoId === todoId) editingTodoId = null;
+    };
+
+    window.saveInlineEdit = async function (todoId) {
+        const item = getTodoEl(todoId);
+        if (!item) return;
+
+        const titleInput = item.querySelector('[data-role="titleInput"]');
+        const descInput = item.querySelector('[data-role="descInput"]');
+        const newTitle = titleInput ? titleInput.value.trim() : '';
+        const newDesc = descInput ? descInput.value : '';
+
+        if (!newTitle) {
+            alert('Title is required.');
+            if (titleInput) titleInput.focus();
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('title', newTitle);
+        formData.append('description', newDesc);
+
+        try {
+            const resp = await fetch(`/api/todos/${todoId}/update`, {
+                method: 'POST',
+                body: formData,
+                redirect: 'manual'
+            });
+
+            const ok = resp.ok || resp.status === 303 || resp.status === 302;
+            if (!ok) throw new Error(`Update failed (${resp.status})`);
+
+            const titleDisplay = item.querySelector('[data-role="titleDisplay"]');
+            const descDisplay = item.querySelector('[data-role="descDisplay"]');
+
+            if (titleDisplay) titleDisplay.textContent = newTitle;
+            if (descDisplay) {
+                descDisplay.classList.remove('markdown-content');
+                descDisplay.textContent = newDesc || '';
+                if (typeof renderMarkdown === 'function') {
+                    renderMarkdown(descDisplay);
+                }
+            }
+
+            // Keep raw textarea in sync for future edits.
+            if (descInput) descInput.value = newDesc || '';
+
+            setEditMode(todoId, false);
+            if (editingTodoId === todoId) editingTodoId = null;
+        } catch (e) {
+            console.error(e);
+            alert('Failed to save changes. Please try again.');
+        }
+    };
+
+    function getEventPath(event) {
+        if (!event) return [];
+        if (typeof event.composedPath === 'function') {
+            return event.composedPath();
+        }
+        const path = [];
+        let node = event.target;
+        while (node) {
+            path.push(node);
+            node = node.parentNode;
+        }
+        return path;
+    }
+
+    function findElementInPath(path, selector) {
+        for (const node of path) {
+            if (node instanceof Element && node.matches(selector)) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    function isInteractiveTarget(path) {
+        const selectors = [
+            'a',
+            'button',
+            'input',
+            'select',
+            'textarea',
+            'label',
+            'form',
+            '.tt-no-nav',
+            'calcite-button',
+            'calcite-link',
+            'calcite-select',
+            'calcite-switch',
+            'calcite-segmented-control',
+            'calcite-segmented-control-item',
+            'calcite-dropdown',
+            'calcite-dropdown-item',
+            '[data-action]'
+        ];
+        return path.some(node => node instanceof Element && selectors.some(sel => node.matches(sel)));
+    }
+
+    function handleTodoClick(e) {
+        const list = document.getElementById('todoList');
+        if (!list) return;
+
+        const path = getEventPath(e);
+        const item = findElementInPath(path, '.todo-item[data-todo-id]');
+        if (!item || !list.contains(item)) return;
+
+        if (isCompact()) {
+            const toggle = findElementInPath(path, '.tt-accordion-toggle-btn, [data-action="toggle-accordion"]');
+            if (toggle) {
+                const expanded = item.getAttribute('data-tt-expanded') === '1';
+                setExpandedByElement(item, !expanded, true);
+                return;
+            }
+        }
+
+        if (isInteractiveTarget(path)) return;
+
+        const url = item.getAttribute('data-url');
+        if (url) window.location.href = url;
+    }
+
+    // Wait for Calcite components to be defined
+    function waitForCalcite(callback) {
+        if (customElements.get('calcite-segmented-control')) {
+            callback();
+        } else {
+            customElements.whenDefined('calcite-segmented-control').then(callback);
+        }
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', function () {
+        waitForCalcite(function() {
+            // Wire view mode toggle UI
+            const toggle = document.getElementById('ttViewModeToggle');
+            if (toggle) {
+                // Handle change event (standard DOM event)
+                toggle.addEventListener('change', function (e) {
+                    const mode = e.target.value;
+                    if (mode && window.setViewMode) {
+                        window.setViewMode(mode);
+                        if (window.rerenderTodos) {
+                            window.rerenderTodos();
+                        }
+                    }
+                });
+                // Handle Calcite-specific event as fallback
+                toggle.addEventListener('calciteSegmentedControlChange', function (e) {
+                    const mode = e.target.selectedItem?.value || e.target.value || e.detail?.value;
+                    if (mode && window.setViewMode) {
+                        window.setViewMode(mode);
+                        if (window.rerenderTodos) {
+                            window.rerenderTodos();
+                        }
+                    }
+                });
+                // Also handle direct clicks on items as fallback
+                toggle.querySelectorAll('calcite-segmented-control-item[data-view]').forEach(item => {
+                    item.addEventListener('click', function (e) {
+                        const mode = item.getAttribute('data-view') || item.value;
+                        if (mode && window.setViewMode) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.setViewMode(mode);
+                            toggle.value = mode;
+                            if (window.rerenderTodos) {
+                                window.rerenderTodos();
+                            }
+                        }
+                    });
+                });
+            }
+
+            const colsToggle = document.getElementById('ttDescColumnsToggle');
+            if (colsToggle) {
+                // Handle change event (standard DOM event)
+                colsToggle.addEventListener('change', function (e) {
+                    const cols = e.target.value;
+                    if (cols) {
+                        const colsNum = parseInt(cols, 10);
+                        if (Number.isFinite(colsNum)) setDescCols(colsNum);
+                    }
+                });
+                // Handle Calcite-specific event as fallback
+                colsToggle.addEventListener('calciteSegmentedControlChange', function (e) {
+                    const cols = e.target.selectedItem?.value || e.target.value || e.detail?.value;
+                    if (cols) {
+                        const colsNum = parseInt(cols, 10);
+                        if (Number.isFinite(colsNum)) setDescCols(colsNum);
+                    }
+                });
+                // Also handle direct clicks on items as fallback
+                colsToggle.querySelectorAll('calcite-segmented-control-item[data-cols]').forEach(item => {
+                    item.addEventListener('click', function (e) {
+                        const cols = item.getAttribute('data-cols') || item.value;
+                        if (cols) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const colsNum = parseInt(cols, 10);
+                            if (Number.isFinite(colsNum)) {
+                                setDescCols(colsNum);
+                                colsToggle.value = cols;
+                            }
+                        }
+                    });
+                });
+            }
+
+            // Apply persisted settings
+            const initialView = getViewMode();
+            const initialCols = getDescCols();
+            setDescCols(initialCols);
+            setViewMode(initialView);
+            
+            // Set initial selected values on segmented controls
+            if (toggle) {
+                toggle.value = initialView;
+            }
+            if (colsToggle) {
+                colsToggle.value = String(initialCols);
+            }
+        });
+
+        // Click handler for row click navigation / accordion toggle
+        const list = document.getElementById('todoList');
+        if (list) {
+            // Row click navigation / accordion toggle (ignores interactive targets)
+            list.addEventListener('click', handleTodoClick);
+
+            // Action buttons inside rows (avoid inline JS in templates)
+            list.addEventListener('click', function (e) {
+                const path = getEventPath(e);
+                const actionEl = findElementInPath(path, '[data-action]');
+                if (!actionEl) return;
+                const item = actionEl.closest('.todo-item[data-todo-id]');
+                if (!item) return;
+                const todoId = item.getAttribute('data-todo-id');
+                const action = actionEl.getAttribute('data-action');
+
+                if (action === 'toggle-accordion') {
+                    window.toggleTodoAccordion(todoId);
+                } else if (action === 'copy-id') {
+                    copyTodoId(todoId);
+                } else if (action === 'edit') {
+                    window.enterInlineEdit(Number(todoId));
+                } else if (action === 'save') {
+                    window.saveInlineEdit(Number(todoId));
+                } else if (action === 'cancel') {
+                    window.cancelInlineEdit(Number(todoId));
+                } else if (action === 'set-task-size') {
+                    const val = actionEl.getAttribute('data-value') || '';
+                    updateTodoField(todoId, 'task_size', val);
+                }
+            });
+
+            // Priority dropdown change (AJAX update + reload)
+            list.addEventListener('change', function (e) {
+                const path = getEventPath(e);
+                const el = path.find(node => node instanceof Element && node.matches('[data-field="priority_class"]'));
+                if (!el) return;
+                const item = el.closest('.todo-item[data-todo-id]');
+                if (!item) return;
+                const todoId = item.getAttribute('data-todo-id');
+                const value = el.value || '';
+                updateTodoField(todoId, 'priority_class', value);
+            });
+        }
+    });
+})();
+
 // Handle search - navigate to search results page on Enter
 function handleSearch(event) {
     event.preventDefault();

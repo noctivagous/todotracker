@@ -52,9 +52,11 @@ You can use AI to update the todo list for you in whatever way you need.  It wil
 fill in the provided "work completed", "work remaining", and "implementation issues" after
 doing work, and this allows you to keep track of a partially completed or larger task.  
 
-For AI research that shouldn't turn immediately into a todo item, you can have it add its research 
-to the "notes" section, such as a generated report on how to execute a feature or the status
+For AI research that shouldn't turn immediately into a todo item, you can have it do research
+add the results to the "notes" section, such as a generated report on how to execute a feature or the status
 of the code base.  This allows you to come back later.
+
+Reference multiple todo items in an instruction and the AI can update them.
 
 
 ## 🌟 Key Features
@@ -474,15 +476,47 @@ The AI can use these tools:
 |------|-------------|
 | `list_todos` | Get hierarchical list of all todos |
 | `get_todo` | Get detailed info about a specific todo |
+| `get_todos_batch` | Get detailed info about multiple todos by ID in one call |
 | `create_todo` | Create a new todo or subtask |
 | `create_todos_batch` | Create multiple todos/subtasks in one call |
 | `add_concern` | Add a concern under a todo |
 | `update_todo` | Update todo status, progress, etc. |
 | `update_todos_batch` | Update multiple todos in one call |
 | `create_note` | Create a note (linked or standalone) |
+| `get_notes_batch` | Get multiple notes by ID in one call |
+| `create_notes_batch` | Create multiple notes in one call |
+| `update_note` | Update a note's content (and/or associated todo_id) |
+| `delete_note` | Delete a note by ID |
 | `search_todos` | Search/filter todos by criteria |
 | `add_dependency` | Create dependency between todos |
+| `add_dependencies_batch` | Create multiple dependency relationships in one call |
 | `check_dependencies` | Check if todo dependencies are met |
+
+### MCP batch “get” examples
+
+```json
+// Get several todos at once (reduces repetitive get_todo calls)
+{
+  "tool": "get_todos_batch",
+  "args": {
+    "project_root": "/path/to/project",
+    "todo_ids": [10, 13, 14],
+    "include_dependency_status": true,
+    "include_dependencies": true
+  }
+}
+```
+
+```json
+// Get several notes at once (reduces repetitive get_note/get_notes calls)
+{
+  "tool": "get_notes_batch",
+  "args": {
+    "project_root": "/path/to/project",
+    "note_ids": [1, 4, 7]
+  }
+}
+```
 
 ### MCP Resources
 

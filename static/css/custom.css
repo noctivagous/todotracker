@@ -1,135 +1,238 @@
-/* Custom styles for TodoTracker */
+/* Custom styles for TodoTracker using Calcite Design Tokens */
 
-/* Smooth transitions */
-* {
+/* Ensure Calcite Shell provides proper spacing and doesn't touch viewport */
+calcite-shell {
+    --calcite-shell-border-color: var(--calcite-color-border-1);
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Ensure main content area has proper spacing */
+calcite-shell main {
+    /* Padding is handled by view containers; keep shell content flush. */
+    padding: 0;
+    overflow-y: auto;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Minimal utility classes used by SPA templates (Calcite-token based)         */
+/* -------------------------------------------------------------------------- */
+
+.flex { display: flex; }
+.grid { display: grid; }
+.block { display: block; }
+.inline-block { display: inline-block; }
+.flex-1 { flex: 1 1 0%; }
+.flex-wrap { flex-wrap: wrap; }
+.min-w-0 { min-width: 0; }
+
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+
+.gap-1\.5 { gap: var(--calcite-spacing-sm); }
+.gap-2 { gap: var(--calcite-spacing-sm); }
+.gap-3 { gap: var(--calcite-spacing-md); }
+.gap-4 { gap: var(--calcite-spacing-lg); }
+
+.space-y-2 > * + * { margin-top: var(--calcite-spacing-sm); }
+.space-y-3 > * + * { margin-top: var(--calcite-spacing-md); }
+.space-y-4 > * + * { margin-top: var(--calcite-spacing-lg); }
+
+.p-3 { padding: var(--calcite-spacing-md); }
+.p-4 { padding: var(--calcite-spacing-lg); }
+.p-6 { padding: var(--calcite-spacing-xl); }
+
+.pt-2 { padding-top: var(--calcite-spacing-sm); }
+.pt-3 { padding-top: var(--calcite-spacing-md); }
+.py-4 { padding-top: var(--calcite-spacing-lg); padding-bottom: var(--calcite-spacing-lg); }
+.py-12 { padding-top: calc(var(--calcite-spacing-xxl) * 2); padding-bottom: calc(var(--calcite-spacing-xxl) * 2); }
+
+.mb-1 { margin-bottom: var(--calcite-spacing-xxs); }
+.mb-2 { margin-bottom: var(--calcite-spacing-sm); }
+.mb-3 { margin-bottom: var(--calcite-spacing-md); }
+.mb-4 { margin-bottom: var(--calcite-spacing-lg); }
+.mb-6 { margin-bottom: var(--calcite-spacing-xl); }
+.mb-8 { margin-bottom: var(--calcite-spacing-xxl); }
+
+.mt-1 { margin-top: var(--calcite-spacing-xxs); }
+.mt-2 { margin-top: var(--calcite-spacing-sm); }
+.mt-6 { margin-top: var(--calcite-spacing-xl); }
+
+.text-center { text-align: center; }
+.underline { text-decoration: underline; }
+.cursor-pointer { cursor: pointer; }
+
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.5rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+
+.truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.border-t { border-top-width: 1px; border-top-style: solid; }
+.border-color-1 { border-color: var(--calcite-color-border-1); }
+.border-color-2 { border-color: var(--calcite-color-border-2); }
+.border-color-3 { border-color: var(--calcite-color-border-3); }
+
+.text-color-1 { color: var(--calcite-color-text-1); }
+.text-color-2 { color: var(--calcite-color-text-2); }
+.text-color-3 { color: var(--calcite-color-text-3); }
+.text-color-danger { color: var(--calcite-color-status-danger); }
+.text-muted-foreground { color: var(--calcite-color-text-2); }
+
+/* Basic grid helpers used in templates */
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (min-width: 768px) {
+    .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* -------------------------------------------------------------------------- */
+/* SPA-specific polish                                                        */
+/* -------------------------------------------------------------------------- */
+
+#tt-panel-start,
+#tt-panel-end {
+    height: 100%;
+    overflow: auto;
+}
+
+/* Make the master-detail layout feel intentional on desktop (avoid huge empty center) */
+#tt-panel-start-shell {
+    --calcite-shell-panel-width: 360px;
+}
+
+#tt-panel-end-shell {
+    --calcite-shell-panel-width: 440px;
+}
+
+@media (max-width: 768px) {
+    #tt-panel-start-shell {
+        --calcite-shell-panel-width: 100vw;
+    }
+    #tt-panel-end-shell {
+        --calcite-shell-panel-width: 100vw;
+    }
+}
+
+.tt-surface {
+    background: var(--calcite-color-foreground-1);
+    border: 1px solid var(--calcite-color-border-1);
+    border-radius: var(--calcite-corner-radius-md);
+}
+
+.status-pending { --calcite-chip-background-color: var(--calcite-color-foreground-2); }
+.status-in_progress { --calcite-chip-background-color: var(--calcite-color-status-info); }
+.status-completed { --calcite-chip-background-color: var(--calcite-color-status-success); }
+.status-cancelled { --calcite-chip-background-color: var(--calcite-color-status-danger); }
+
+.category-feature { --calcite-chip-background-color: var(--calcite-color-status-info); }
+.category-issue { --calcite-chip-background-color: var(--calcite-color-status-warning); }
+.category-bug { --calcite-chip-background-color: var(--calcite-color-status-danger); }
+
+/* Smooth transitions - scoped to avoid interfering with Calcite components */
+.todo-item,
+.status-indicator,
+.spinner {
     transition: all 0.2s ease-in-out;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar using Calcite tokens */
+/* Note: Scrollbar width uses fixed 8px for better UX visibility, 
+   as Calcite spacing tokens are too small for scrollbars */
 ::-webkit-scrollbar {
     width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--calcite-color-background);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
+    background: var(--calcite-color-border-2);
+    border-radius: var(--calcite-corner-radius-sm); /* Use sm (4px) for rounded scrollbar */
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    background: var(--calcite-color-border-3);
 }
 
-/* Todo animations */
+/* Todo animations using Calcite spacing tokens */
 .todo-item:hover {
-    transform: translateX(4px);
+    transform: translateX(var(--calcite-spacing-xxs)); /* 0.25rem = 4px */
 }
 
-/* Modal animations */
-.modal-enter {
-    animation: fadeIn 0.2s ease-in;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-/* Status indicators */
+/* Status indicators using Calcite color tokens */
 .status-indicator {
     display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    margin-right: 8px;
+    width: var(--calcite-spacing-md);
+    height: var(--calcite-spacing-md);
+    border-radius: var(--calcite-corner-radius-pill); /* Use pill for circular elements */
+    margin-right: var(--calcite-spacing-md);
 }
 
 .status-indicator.pending {
-    background-color: #9ca3af;
+    background-color: var(--calcite-color-text-3);
 }
 
 .status-indicator.in_progress {
-    background-color: #3b82f6;
+    background-color: var(--calcite-color-status-info);
     animation: pulse 2s infinite;
 }
 
 .status-indicator.completed {
-    background-color: #10b981;
+    background-color: var(--calcite-color-status-success);
 }
 
 .status-indicator.cancelled {
-    background-color: #ef4444;
+    background-color: var(--calcite-color-status-danger);
 }
 
 @keyframes pulse {
     0%, 100% {
-        opacity: 1;
+        opacity: var(--calcite-opacity-full); /* 1 */
     }
     50% {
-        opacity: 0.5;
+        opacity: var(--calcite-opacity-half); /* 0.5 */
     }
 }
 
-/* Button hover effects */
-button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-button:active:not(:disabled) {
-    transform: translateY(0);
-}
-
-/* Queue control buttons - explicit hover styles */
-button[title="Move up in queue"]:hover:not(:disabled),
-button[title="Move down in queue"]:hover:not(:disabled) {
-    background-color: #d1d5db !important; /* gray-300 */
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-button[title="Move up in queue"]:active:not(:disabled),
-button[title="Move down in queue"]:active:not(:disabled) {
-    transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-/* Ensure all buttons with bg-gray-200 have hover effect */
-button.bg-gray-200:hover:not(:disabled) {
-    background-color: #d1d5db !important; /* gray-300 */
-}
-
-/* Generic button hover for buttons without specific classes */
-button:not(.tt-btn):not([class*="tt-"]):hover:not(:disabled) {
-    opacity: 0.9;
+/* Calcite components handle their own hover/focus states, 
+   but we can add subtle enhancements for custom buttons */
+button:not(calcite-button):hover:not(:disabled) {
+    opacity: 0.9; /* No exact Calcite token for 0.9, using value directly */
     cursor: pointer;
 }
 
-/* Form focus effects */
+/* Form focus effects using Calcite tokens */
 input:focus,
 textarea:focus,
 select:focus {
     outline: none;
-    ring: 2px;
-    ring-color: #6366f1;
+    box-shadow: 0 0 0 var(--calcite-border-width-md) var(--calcite-color-brand);
 }
 
-/* Loading spinner */
+/* Loading spinner using Calcite tokens */
 .spinner {
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #6366f1;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
+    border: var(--calcite-border-width-md) solid var(--calcite-color-foreground-1); /* 2px */
+    border-top: var(--calcite-border-width-md) solid var(--calcite-color-brand);
+    border-radius: var(--calcite-corner-radius-pill); /* Use pill for circular spinner */
+    width: var(--calcite-spacing-lg);
+    height: var(--calcite-spacing-lg);
     animation: spin 1s linear infinite;
 }
 
@@ -149,3 +252,33 @@ select:focus {
     }
 }
 
+/* View modes: Compact, Medium, Full */
+/* Compact view uses Calcite Accordion for expandable items */
+/* Medium view shows truncated descriptions */
+/* Full view shows all details with two-column description layout */
+
+/* Two-column description layout for full view */
+.tt-desc-columns {
+    column-count: var(--tt-desc-columns, 2);
+    column-gap: var(--calcite-spacing-md);
+    column-rule: 1px solid var(--calcite-color-border-1);
+}
+
+/* Ensure proper spacing in accordion items */
+calcite-accordion-item .tt-todo-details-content {
+    padding: var(--calcite-spacing-sm);
+}
+
+/* Medium view: truncated description styling */
+.tt-todo-description-display {
+    line-height: 1.6;
+}
+
+/* Loader visibility - hidden by default, shown when needed */
+#app-loader {
+    display: none;
+}
+
+#app-loader:not([hidden]) {
+    display: block;
+}

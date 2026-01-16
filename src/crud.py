@@ -210,6 +210,24 @@ def search_todos(db: Session, search: TodoSearch) -> List[Todo]:
 
     if getattr(search, "priority_class", None):
         query = query.filter(Todo.priority_class == search.priority_class)
+
+    # Dependency readiness filters
+    dep_status = getattr(search, "dependency_status", None)
+    if dep_status and dep_status != "any":
+        from sqlalchemy import exists
+        from sqlalchemy.orm import aliased
+        DependsOn = aliased(Todo)
+        unmet_dep_exists = exists().where(
+            and_(
+                TodoDependency.todo_id == Todo.id,
+                TodoDependency.depends_on_id == DependsOn.id,
+                DependsOn.status != TodoStatus.COMPLETED,
+            )
+        )
+        if dep_status == "ready":
+            query = query.filter(~unmet_dep_exists)
+        elif dep_status == "blocked":
+            query = query.filter(unmet_dep_exists)
     
     return query.all()
 
@@ -443,12 +461,41 @@ def delete_note(db: Session, note_id: int) -> bool:
 
 def create_dependency(db: Session, todo_id: int, depends_on_id: int) -> Optional[TodoDependency]:
     """Create a dependency relationship between todos."""
+    if todo_id == depends_on_id:
+        raise ValueError("A todo cannot depend on itself")
+
     # Check if both todos exist
     todo = get_todo(db, todo_id)
     depends_on = get_todo(db, depends_on_id)
     
     if not todo or not depends_on:
         return None
+
+    # Detect circular dependencies (would this edge create a cycle?)
+    def _would_create_cycle(start_id: int, target_id: int) -> bool:
+        """
+        Returns True if there is already a dependency path start_id -> ... -> target_id.
+        If so, adding target_id depends_on start_id would create a cycle.
+        """
+        visited: set[int] = set()
+        stack: list[int] = [start_id]
+        while stack:
+            current = stack.pop()
+            if current == target_id:
+                return True
+            if current in visited:
+                continue
+            visited.add(current)
+            next_deps = db.query(TodoDependency.depends_on_id).filter(TodoDependency.todo_id == current).all()
+            stack.extend([row[0] for row in next_deps if row and row[0] is not None])
+        return False
+
+    # We are adding: todo_id depends on depends_on_id
+    # Cycle exists if depends_on_id already (directly/indirectly) depends on todo_id.
+    if _would_create_cycle(depends_on_id, todo_id):
+        raise ValueError(
+            f"Circular dependency detected: adding {todo_id} depends on {depends_on_id} would create a cycle"
+        )
     
     # Check if dependency already exists
     existing = db.query(TodoDependency).filter(
@@ -473,7 +520,22 @@ def create_dependency(db: Session, todo_id: int, depends_on_id: int) -> Optional
 
 def get_dependencies(db: Session, todo_id: int) -> List[TodoDependency]:
     """Get all dependencies for a todo."""
-    return db.query(TodoDependency).filter(TodoDependency.todo_id == todo_id).all()
+    return (
+        db.query(TodoDependency)
+        .options(joinedload(TodoDependency.depends_on), joinedload(TodoDependency.todo))
+        .filter(TodoDependency.todo_id == todo_id)
+        .all()
+    )
+
+
+def get_dependents(db: Session, todo_id: int) -> List[TodoDependency]:
+    """Get all dependents (todos that depend on this todo)."""
+    return (
+        db.query(TodoDependency)
+        .options(joinedload(TodoDependency.depends_on), joinedload(TodoDependency.todo))
+        .filter(TodoDependency.depends_on_id == todo_id)
+        .all()
+    )
 
 
 def delete_dependency(db: Session, dependency_id: int) -> bool:

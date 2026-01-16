@@ -11,49 +11,60 @@
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <link rel="stylesheet" href="/static/css/shadcn.css">
+    <!-- Calcite Design System -->
+    <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/3.3.3/calcite.css">
+    <script type="module" src="https://js.arcgis.com/calcite-components/3.3.3/calcite.esm.js"></script>
+    <script nomodule src="https://js.arcgis.com/calcite-components/3.3.3/calcite.js"></script>
+    
+    <!-- Custom TodoTracker styles -->
+    <link rel="stylesheet" href="/static/css/custom.css">
     <script>
         (function () {
             try {
                 var t = localStorage.getItem("tt-theme");
-                if (t === "dark") document.documentElement.classList.add("dark");
-            } catch (e) {}
+                if (t === "dark") document.body.classList.add("calcite-mode-dark");
+                else if (t === "light") document.body.classList.add("calcite-mode-light");
+                else document.body.classList.add("calcite-mode-auto");
+            } catch (e) {
+                document.body.classList.add("calcite-mode-auto");
+            }
         })();
     </script>
 </head>
-<body class="min-h-screen bg-background text-foreground">
-    <nav class="tt-nav">
-        <div class="tt-container">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-3">
-                    <a href="/" class="tt-brand text-lg">📊 Dashboard</a>
-                    <span class="text-sm text-muted-foreground hidden sm:inline">
-                        Multi-project server manager
-                    </span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button onclick="location.reload()" class="tt-btn tt-btn-outline">
+<body class="calcite-mode-auto">
+    <calcite-shell>
+        <!-- Header -->
+        <header slot="header">
+            <calcite-navigation>
+                <calcite-navigation-logo slot="logo" heading="Dashboard" description="Multi-project server manager">
+                    📊
+                </calcite-navigation-logo>
+
+                <calcite-navigation-user slot="user">
+                    <calcite-button slot="user-menu-actions" onclick="location.reload()" appearance="outline" scale="s">
                         🔄 Refresh
-                    </button>
-                    <button id="ttThemeToggle" type="button" class="tt-btn tt-btn-ghost" title="Toggle theme">
+                    </calcite-button>
+                    <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
                         <span id="ttThemeLabel">🌙 Dark</span>
-                    </button>
-                </div>
+                    </calcite-button>
+                </calcite-navigation-user>
+            </calcite-navigation>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <div class="p-6">
+                {% block content %}{% endblock %}
             </div>
-        </div>
-    </nav>
+        </main>
 
-    <main class="tt-container py-8">
-        {% block content %}{% endblock %}
-    </main>
-
-    <footer class="border-t border-border mt-12">
-        <div class="tt-container py-6">
-            <p class="text-center text-sm text-muted-foreground">
+        <!-- Footer -->
+        <footer slot="footer">
+            <p class="text-center text-sm text-color-2 py-4">
                 TodoTracker Dashboard - Multi-Project Server Manager
             </p>
-        </div>
-    </footer>
+        </footer>
+    </calcite-shell>
 
     <script>
         (function () {
@@ -61,14 +72,23 @@
             if (!btn) return;
             var label = document.getElementById("ttThemeLabel");
             function syncLabel() {
-                var isDark = document.documentElement.classList.contains("dark");
+                var body = document.body;
+                var isDark = body.classList.contains("calcite-mode-dark");
                 if (label) label.textContent = isDark ? "☀️ Light" : "🌙 Dark";
             }
             syncLabel();
             btn.addEventListener("click", function () {
-                var root = document.documentElement;
-                var isDark = root.classList.toggle("dark");
-                try { localStorage.setItem("tt-theme", isDark ? "dark" : "light"); } catch (e) {}
+                var body = document.body;
+                var isDark = body.classList.contains("calcite-mode-dark");
+                if (isDark) {
+                    body.classList.remove("calcite-mode-dark");
+                    body.classList.add("calcite-mode-light");
+                    try { localStorage.setItem("tt-theme", "light"); } catch (e) {}
+                } else {
+                    body.classList.remove("calcite-mode-light");
+                    body.classList.add("calcite-mode-dark");
+                    try { localStorage.setItem("tt-theme", "dark"); } catch (e) {}
+                }
                 syncLabel();
             });
         })();

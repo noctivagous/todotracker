@@ -172,6 +172,45 @@ class DependencyInDB(DependencyCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
+# -----------------------------------------------------------------------------
+# Expanded Todo detail schemas (SPA detail/inspector)
+# -----------------------------------------------------------------------------
+
+class TodoSummary(BaseModel):
+    """Lightweight todo shape for dependency UI."""
+    id: int
+    title: str
+    status: TodoStatus
+    category: TodoCategory
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TodoDependencyEdge(BaseModel):
+    """Dependency edge with optional resolved endpoints."""
+    id: int
+    todo_id: int
+    depends_on_id: int
+    created_at: datetime
+
+    # When loaded via ORM relationships, these provide quick UI display.
+    todo: Optional[TodoSummary] = None          # dependent todo
+    depends_on: Optional[TodoSummary] = None    # prerequisite todo
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TodoDetail(TodoInDB):
+    """
+    Full todo detail payload for SPA inspector.
+    Includes related notes and dependency info.
+    """
+    notes: List[NoteInDB] = []
+    dependencies: List[TodoDependencyEdge] = []  # prerequisites for this todo
+    dependents: List[TodoDependencyEdge] = []    # todos that depend on this todo
+    dependencies_met: bool = True
+
+
 # Search/Filter Schemas
 
 class TodoSearch(BaseModel):
@@ -188,6 +227,7 @@ class TodoSearch(BaseModel):
     queue: Optional[int] = Field(None, ge=0)
     task_size: Optional[int] = Field(None, ge=1, le=5)
     priority_class: Optional[str] = None
+    dependency_status: Optional[str] = None  # "ready" | "blocked" | "any"
 
     @field_validator("priority_class", mode="before")
     @classmethod
@@ -202,6 +242,20 @@ class TodoSearch(BaseModel):
                 raise ValueError("priority_class must be one of A, B, C, D, E")
             return s
         raise ValueError("priority_class must be a string")
+
+    @field_validator("dependency_status", mode="before")
+    @classmethod
+    def _normalize_dependency_status_search(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip().lower()
+            if s == "":
+                return None
+            if s not in {"ready", "blocked", "any"}:
+                raise ValueError("dependency_status must be one of ready, blocked, any")
+            return s
+        raise ValueError("dependency_status must be a string")
 
 
 # Response Schemas

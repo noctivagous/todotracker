@@ -21,6 +21,7 @@ from .db import init_db, get_db, get_db_path, TodoCategory, TodoStatus, Note, To
 from .schemas import (
     TodoCreate, TodoUpdate, TodoInDB, TodoWithChildren,
     NoteCreate, NoteUpdate, NoteInDB,
+    DependencyCreate, DependencyInDB, TodoDetail,
     TodoSearch, MessageResponse
 )
 from . import crud
@@ -80,439 +81,37 @@ def _redirect_back(request: Request, default: str = "/") -> RedirectResponse:
 
 
 # ============================================================================
-# WEB UI ROUTES (HTML)
+# WEB UI ROUTES (HTML) - SPA Mode
 # ============================================================================
 
 @app.get("/", response_class=HTMLResponse)
-async def home(
-    request: Request,
-    status: Optional[str] = None,
-    queued: Optional[bool] = None,
-    sort_by: Optional[str] = None,
-    sort_dir: Optional[str] = None,
-    db: Session = Depends(get_db),
-):
-    """Home page showing todo tree, optionally filtered by status. Defaults to 'pending'."""
-    todos = crud.get_todo_tree(db)
-    
-    # Default to 'pending' if no status is provided
-    if status is None:
-        status = "pending"
-    
-    # Filter by status if provided (skip if status is 'all')
-    if status and status != "all":
-        try:
-            status_enum = TodoStatus(status)
-            # Filter todos recursively to only show those matching the status
-            def filter_by_status(todo_list):
-                filtered = []
-                for todo in todo_list:
-                    if todo.status == status_enum:
-                        # Create a copy with filtered children
-                        filtered_todo = todo
-                        if todo.children:
-                            filtered_todo.children = filter_by_status(todo.children)
-                        filtered.append(filtered_todo)
-                    else:
-                        # Check children even if parent doesn't match
-                        if todo.children:
-                            filtered_children = filter_by_status(todo.children)
-                            if filtered_children:
-                                # Create a copy with filtered children
-                                filtered_todo = todo
-                                filtered_todo.children = filtered_children
-                                filtered.append(filtered_todo)
-                return filtered
-            todos = filter_by_status(todos)
-        except ValueError:
-            # Invalid status, ignore filter
-            pass
-
-    # Optional queue-only filter
-    if queued is True:
-        def filter_in_queue(todo_list):
-            filtered = []
-            for todo in todo_list:
-                if (getattr(todo, "queue", 0) or 0) > 0:
-                    filtered_todo = todo
-                    if todo.children:
-                        filtered_todo.children = filter_in_queue(todo.children)
-                    filtered.append(filtered_todo)
-                else:
-                    if todo.children:
-                        filtered_children = filter_in_queue(todo.children)
-                        if filtered_children:
-                            filtered_todo = todo
-                            filtered_todo.children = filtered_children
-                            filtered.append(filtered_todo)
-            return filtered
-        todos = filter_in_queue(todos)
-
-    # Sort (within each sibling group) while preserving hierarchy.
-    # Supported: activity/updated_at/created_at/title/status/category/queue/task_size/priority_class, asc / desc.
-    sort_by_norm = (sort_by or "").strip().lower()
-    sort_dir_norm = (sort_dir or "").strip().lower()
-
-    sort_field_map = {
-        "activity": "activity",
-        "created": "created_at",
-        "created_at": "created_at",
-        "updated": "updated_at",
-        "updated_at": "updated_at",
-        "title": "title",
-        "status": "status",
-        "category": "category",
-        "queue": "queue",
-        "task_size": "task_size",
-        "priority": "priority_class",
-        "priority_class": "priority_class",
-    }
-    sort_field = sort_field_map.get(sort_by_norm, "updated_at")
-    reverse = sort_dir_norm != "asc"  # default to desc
-
-    status_order = {
-        TodoStatus.PENDING: 0,
-        TodoStatus.IN_PROGRESS: 1,
-        TodoStatus.COMPLETED: 2,
-        TodoStatus.CANCELLED: 3,
-    }
-    category_order = {
-        TodoCategory.FEATURE: 0,
-        TodoCategory.ISSUE: 1,
-        TodoCategory.BUG: 2,
-    }
-    priority_order = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4}
-
-    def _get_status_value(todo_obj):
-        st = getattr(todo_obj, "status", None)
-        # could be enum or str (defensive)
-        if isinstance(st, TodoStatus):
-            return st
-        try:
-            return TodoStatus(str(st))
-        except Exception:
-            return None
-
-    def _get_category_value(todo_obj):
-        cat = getattr(todo_obj, "category", None)
-        if isinstance(cat, TodoCategory):
-            return cat
-        try:
-            return TodoCategory(str(cat))
-        except Exception:
-            return None
-
-    def _sort_key(todo_obj):
-        """
-        Return a tuple that sorts consistently and keeps 'None' values last where it makes sense.
-        Always ends with id as a stable tie-breaker.
-        """
-        tid = getattr(todo_obj, "id", 0) or 0
-
-        if sort_field == "activity":
-            # Updated first, but if updated is missing use created.
-            u = getattr(todo_obj, "updated_at", None)
-            c = getattr(todo_obj, "created_at", None)
-            primary = u or c
-            secondary = c or u
-            return (primary, secondary, tid)
-
-        if sort_field in {"created_at", "updated_at"}:
-            primary = getattr(todo_obj, sort_field, None)
-            secondary = getattr(todo_obj, "created_at" if sort_field == "updated_at" else "updated_at", None)
-            return (primary, secondary, tid)
-
-        if sort_field == "title":
-            title = (getattr(todo_obj, "title", "") or "").lower()
-            return (title, tid)
-
-        if sort_field == "status":
-            st = _get_status_value(todo_obj)
-            ordv = status_order.get(st, 999)
-            return (ordv, tid)
-
-        if sort_field == "category":
-            cat = _get_category_value(todo_obj)
-            ordv = category_order.get(cat, 999)
-            return (ordv, tid)
-
-        if sort_field == "priority_class":
-            pc = (getattr(todo_obj, "priority_class", None) or "").strip().upper()
-            if pc == "":
-                return (1, 999, tid)  # missing last
-            return (0, priority_order.get(pc, 998), tid)
-
-        if sort_field == "task_size":
-            ts = getattr(todo_obj, "task_size", None)
-            if ts is None:
-                return (1, 999, tid)  # missing last
-            return (0, int(ts), tid)
-
-        if sort_field == "queue":
-            qv = getattr(todo_obj, "queue", 0) or 0
-            # Keep "not queued" last regardless of direction; within queued, sort by queue value.
-            if qv <= 0:
-                return (1, 999999, tid)
-            return (0, int(qv), tid)
-
-        # Fallback: sort by id
-        return (tid,)
-
-    def sort_tree(todo_list):
-        if not todo_list:
-            return todo_list
-        try:
-            todo_list.sort(key=_sort_key, reverse=reverse)
-        except Exception:
-            # Defensive: never break the page due to unexpected datetime types.
-            todo_list.sort(key=lambda t: getattr(t, "id", 0) or 0, reverse=False)
-        for t in todo_list:
-            children = getattr(t, "children", None)
-            if children:
-                sort_tree(children)
-        return todo_list
-
-    todos = sort_tree(todos)
-    
-    # Calculate statistics (always show all todos for stats)
-    all_todos = crud.get_todos(db, limit=10000)
-    max_queue = crud.get_max_queue(db)
-    stats = {
-        "total": len(all_todos),
-        "pending": sum(1 for t in all_todos if t.status == TodoStatus.PENDING),
-        "in_progress": sum(1 for t in all_todos if t.status == TodoStatus.IN_PROGRESS),
-        "completed": sum(1 for t in all_todos if t.status == TodoStatus.COMPLETED),
-        "queued": sum(1 for t in all_todos if (getattr(t, "queue", 0) or 0) > 0),
-    }
-    
-    return templates.TemplateResponse(
-        "todos.html",
-        {
-            "request": request,
-            "todos": todos,
-            "stats": stats,
-            "categories": [c.value for c in TodoCategory],
-            "statuses": [s.value for s in TodoStatus],
-            "current_status_filter": status,
-            "queued_filter": queued,
-            "max_queue": max_queue,
-            "current_sort_by": sort_field,
-            "current_sort_dir": "asc" if not reverse else "desc",
-        }
-    )
+async def spa_index(request: Request):
+    """Serve SPA entry point."""
+    return templates.TemplateResponse("spa.html", {"request": request})
 
 
+# Legacy routes kept for backward compatibility, but redirect to SPA
 @app.get("/search", response_class=HTMLResponse)
-async def search_page(
-    request: Request,
-    q: Optional[str] = None,
-    status: Optional[str] = None,
-    queued: Optional[bool] = None,
-    sort_by: Optional[str] = None,
-    sort_dir: Optional[str] = None,
-    db: Session = Depends(get_db),
-):
-    """Search results page showing todos matching the query."""
-    if not q or not q.strip():
-        # No search query, redirect to home
-        return RedirectResponse(url="/", status_code=303)
-    
-    # Create search object
-    search = TodoSearch(query=q.strip())
-    
-    # Apply status filter if provided
-    if status and status != "all":
-        try:
-            search.status = TodoStatus(status)
-        except ValueError:
-            pass
-    
-    # Apply queue filter if provided
-    if queued is True:
-        search.in_queue = True
-    elif queued is False:
-        search.in_queue = False
-    
-    # Perform search
-    search_results = crud.search_todos(db, search)
-    
-    # Build tree structure from search results (preserve parent-child relationships)
-    def build_tree_from_results(results):
-        """Build a tree structure from flat search results."""
-        # Create a map of all todos
-        todo_map = {todo.id: todo for todo in results}
-        
-        # Find root todos (no parent or parent not in results)
-        root_todos = []
-        for todo in results:
-            if todo.parent_id is None or todo.parent_id not in todo_map:
-                root_todos.append(todo)
-            else:
-                # Add to parent's children if parent is in results
-                parent = todo_map.get(todo.parent_id)
-                if parent:
-                    if not hasattr(parent, 'children') or parent.children is None:
-                        parent.children = []
-                    parent.children.append(todo)
-        
-        return root_todos
-    
-    todos = build_tree_from_results(search_results)
-    
-    # Sort (reuse sorting logic from home route)
-    sort_by_norm = (sort_by or "").strip().lower()
-    sort_dir_norm = (sort_dir or "").strip().lower()
-    
-    sort_field_map = {
-        "activity": "activity",
-        "created": "created_at",
-        "created_at": "created_at",
-        "updated": "updated_at",
-        "updated_at": "updated_at",
-        "title": "title",
-        "status": "status",
-        "category": "category",
-        "queue": "queue",
-        "priority_class": "priority_class",
-        "task_size": "task_size",
-    }
-    sort_field = sort_field_map.get(sort_by_norm, "activity")
-    reverse = sort_dir_norm != "asc"
-    
-    # Reuse sorting logic from home route
-    status_order = {TodoStatus.PENDING: 0, TodoStatus.IN_PROGRESS: 1, TodoStatus.COMPLETED: 2, TodoStatus.CANCELLED: 3}
-    category_order = {TodoCategory.FEATURE: 0, TodoCategory.ISSUE: 1, TodoCategory.BUG: 2}
-    priority_order = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4}
-    
-    def _get_status_value(todo_obj):
-        st = getattr(todo_obj, "status", None)
-        if isinstance(st, TodoStatus):
-            return st.value
-        return str(st) if st else ""
-    
-    def _get_category_value(todo_obj):
-        cat = getattr(todo_obj, "category", None)
-        if isinstance(cat, TodoCategory):
-            return cat.value
-        try:
-            return TodoCategory(str(cat))
-        except Exception:
-            return None
-    
-    def _sort_key(todo_obj):
-        tid = getattr(todo_obj, "id", 0) or 0
-        if sort_field == "activity":
-            u = getattr(todo_obj, "updated_at", None)
-            c = getattr(todo_obj, "created_at", None)
-            primary = u or c
-            secondary = c or u
-            return (primary, secondary, tid)
-        if sort_field in {"created_at", "updated_at"}:
-            primary = getattr(todo_obj, sort_field, None)
-            secondary = getattr(todo_obj, "created_at" if sort_field == "updated_at" else "updated_at", None)
-            return (primary, secondary, tid)
-        if sort_field == "title":
-            title = (getattr(todo_obj, "title", "") or "").lower()
-            return (title, tid)
-        if sort_field == "status":
-            st = _get_status_value(todo_obj)
-            ordv = status_order.get(st, 999)
-            return (ordv, tid)
-        if sort_field == "category":
-            cat = _get_category_value(todo_obj)
-            ordv = category_order.get(cat, 999)
-            return (ordv, tid)
-        if sort_field == "priority_class":
-            pc = (getattr(todo_obj, "priority_class", None) or "").strip().upper()
-            if pc == "":
-                return (1, 999, tid)
-            return (0, priority_order.get(pc, 998), tid)
-        if sort_field == "task_size":
-            ts = getattr(todo_obj, "task_size", None)
-            if ts is None:
-                return (1, 999, tid)
-            return (0, int(ts), tid)
-        if sort_field == "queue":
-            qv = getattr(todo_obj, "queue", 0) or 0
-            if qv <= 0:
-                return (1, 999999, tid)
-            return (0, int(qv), tid)
-        return (tid,)
-    
-    def sort_tree(todo_list):
-        if not todo_list:
-            return todo_list
-        try:
-            todo_list.sort(key=_sort_key, reverse=reverse)
-        except Exception:
-            todo_list.sort(key=lambda t: getattr(t, "id", 0) or 0, reverse=False)
-        for t in todo_list:
-            children = getattr(t, "children", None)
-            if children:
-                sort_tree(children)
-        return todo_list
-    
-    todos = sort_tree(todos)
-    
-    # Calculate statistics
-    all_todos = crud.get_todos(db, limit=10000)
-    max_queue = crud.get_max_queue(db)
-    stats = {
-        "total": len(all_todos),
-        "pending": sum(1 for t in all_todos if t.status == TodoStatus.PENDING),
-        "in_progress": sum(1 for t in all_todos if t.status == TodoStatus.IN_PROGRESS),
-        "completed": sum(1 for t in all_todos if t.status == TodoStatus.COMPLETED),
-        "queued": sum(1 for t in all_todos if (getattr(t, "queue", 0) or 0) > 0),
-    }
-    
-    return templates.TemplateResponse(
-        "todos.html",
-        {
-            "request": request,
-            "todos": todos,
-            "stats": stats,
-            "categories": [c.value for c in TodoCategory],
-            "statuses": [s.value for s in TodoStatus],
-            "current_status_filter": status or "all",
-            "queued_filter": queued,
-            "max_queue": max_queue,
-            "current_sort_by": sort_field,
-            "current_sort_dir": "asc" if not reverse else "desc",
-            "search_query": q,
-            "is_search_page": True,
-        }
-    )
+async def search_page_legacy(request: Request):
+    """Legacy search page - redirects to SPA."""
+    return RedirectResponse(url="/", status_code=303)
 
 
 @app.get("/notes", response_class=HTMLResponse)
-async def notes_page(request: Request, db: Session = Depends(get_db)):
-    """Notes page showing all notes."""
-    notes = crud.get_notes(db, limit=1000)
-    return templates.TemplateResponse(
-        "notes.html",
-        {
-            "request": request,
-            "notes": notes,
-        }
-    )
+async def notes_page_legacy(request: Request):
+    """Legacy notes page - redirects to SPA."""
+    return RedirectResponse(url="/#/notes", status_code=303)
 
 
 @app.get("/todo/{todo_id}", response_class=HTMLResponse)
-async def todo_detail(request: Request, todo_id: int, db: Session = Depends(get_db)):
-    """Detail view for a specific todo."""
-    todo = crud.get_todo(db, todo_id)
-    if not todo:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    
-    return templates.TemplateResponse(
-        "todo_detail.html",
-        {
-            "request": request,
-            "todo": todo,
-            "categories": [c.value for c in TodoCategory],
-            "statuses": [s.value for s in TodoStatus],
-        }
-    )
+async def todo_detail_legacy(request: Request, todo_id: int):
+    """Legacy todo detail page - redirects to SPA."""
+    return RedirectResponse(url=f"/#/todo/{todo_id}", status_code=303)
+
+
+# Legacy multi-page routes have been removed - SPA mode is now active
+# The old templates (todos.html, notes.html, todo_detail.html) are kept for reference
+# but are no longer served by the web server
 
 
 # ============================================================================
@@ -534,6 +133,32 @@ async def api_get_todo(todo_id: int, db: Session = Depends(get_db)):
     if not todo:
         raise HTTPException(status_code=404, detail="Todo not found")
     return todo
+
+
+@app.get("/api/todos/{todo_id}/detail", response_model=TodoDetail)
+async def api_get_todo_detail(todo_id: int, db: Session = Depends(get_db)):
+    """
+    Get a specific todo with related entities for the SPA inspector:
+    - notes
+    - dependency prerequisites + dependents
+    - dependency readiness status
+    """
+    todo = crud.get_todo(db, todo_id)
+    if not todo:
+        raise HTTPException(status_code=404, detail="Todo not found")
+
+    prerequisites = crud.get_dependencies(db, todo_id)
+    dependents = crud.get_dependents(db, todo_id)
+    deps_met = crud.check_dependencies_met(db, todo_id)
+
+    # Base todo fields/tags
+    data = TodoInDB.model_validate(todo).model_dump()
+    # Related collections
+    data["notes"] = [NoteInDB.model_validate(n).model_dump() for n in getattr(todo, "notes", []) or []]
+    data["dependencies"] = prerequisites
+    data["dependents"] = dependents
+    data["dependencies_met"] = bool(deps_met)
+    return data
 
 
 @app.post("/api/todos", response_model=TodoInDB)
@@ -858,10 +483,34 @@ async def api_create_dependency(
     db: Session = Depends(get_db)
 ):
     """Create a dependency relationship."""
-    dependency = crud.create_dependency(db, todo_id, depends_on_id)
+    try:
+        dependency = crud.create_dependency(db, todo_id, depends_on_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not dependency:
-        raise HTTPException(status_code=400, detail="Failed to create dependency")
+        raise HTTPException(status_code=400, detail="Failed to create dependency (one or both todos not found)")
     return RedirectResponse(url=f"/todo/{todo_id}", status_code=303)
+
+
+@app.post("/api/dependencies/json", response_model=DependencyInDB)
+async def api_create_dependency_json(dep: DependencyCreate, db: Session = Depends(get_db)):
+    """Create a dependency relationship (JSON, SPA-friendly)."""
+    try:
+        dependency = crud.create_dependency(db, dep.todo_id, dep.depends_on_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not dependency:
+        raise HTTPException(status_code=400, detail="Failed to create dependency (one or both todos not found)")
+    return dependency
+
+
+@app.delete("/api/dependencies/{dependency_id}", response_model=MessageResponse)
+async def api_delete_dependency(dependency_id: int, db: Session = Depends(get_db)):
+    """Delete a dependency relationship (SPA-friendly)."""
+    ok = crud.delete_dependency(db, dependency_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Dependency not found")
+    return MessageResponse(message="Dependency deleted successfully")
 
 
 # Export endpoints

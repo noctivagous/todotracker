@@ -4,59 +4,59 @@
 
 {% block content %}
 <div class="mb-6">
-    <a href="/" class="tt-btn tt-btn-secondary">
+    <calcite-button href="/" appearance="outline">
         ← Back to todos
-    </a>
+    </calcite-button>
 </div>
 
 <!-- Queue Switch and Priority/Task Size Controls at Top -->
-<div class="mb-4 tt-card">
-    <div class="tt-card-content">
+<calcite-panel class="mb-4">
+    <div slot="header">Todo Controls</div>
     <div class="flex items-center justify-between gap-4">
         <!-- Queue Switch -->
         <div>
-            <form action="{% if todo.queue and todo.queue > 0 %}/api/todos/{{ todo.id }}/queue/remove{% else %}/api/todos/{{ todo.id }}/queue/add{% endif %}" method="POST" class="inline">
-                <label class="flex items-center cursor-pointer">
-                    <input type="checkbox" {% if todo.queue and todo.queue > 0 %}checked{% endif %}
-                           onchange="this.form.submit()"
-                           class="sr-only peer">
-                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                    <span class="ml-3 text-base font-medium text-muted-foreground">Queued</span>
+            <form action="{% if todo.queue and todo.queue > 0 %}/api/todos/{{ todo.id }}/queue/remove{% else %}/api/todos/{{ todo.id }}/queue/add{% endif %}" method="POST">
+                <calcite-label>
+                    <calcite-switch {% if todo.queue and todo.queue > 0 %}checked{% endif %}
+                                    onchange="this.closest('form').submit()"></calcite-switch>
+                    Queued
                     {% if todo.queue and todo.queue > 0 %}
-                        <span class="ml-2 text-base font-semibold">(#{{ todo.queue }})</span>
+                        <span class="ml-2 font-semibold text-color-brand">(#{{ todo.queue }})</span>
                     {% endif %}
-                </label>
+                </calcite-label>
             </form>
         </div>
-        
-        <!-- Priority and Task Size Dropdowns -->
+
+        <!-- Priority and Task Size Controls -->
         <div class="flex gap-3 items-center">
             <!-- Priority Dropdown -->
-            <select name="priority_class" 
-                    class="priority-dropdown tt-select text-sm"
-                    title="Priority class"
-                    onchange="updateTodoFieldDetail({{ todo.id }}, 'priority_class', this.value)">
-                <option value="" {% if not todo.priority_class %}selected{% endif %}>Priority: —</option>
-                {% for p in ['A','B','C','D','E'] %}
-                    <option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>Priority: {{ p }}</option>
-                {% endfor %}
-            </select>
-            
+            <calcite-label>
+                Priority
+                <calcite-select name="priority_class"
+                                scale="s"
+                                onchange="updateTodoFieldDetail({{ todo.id }}, 'priority_class', this.value)">
+                    <calcite-option value="" {% if not todo.priority_class %}selected{% endif %}></calcite-option>
+                    {% for p in ['A','B','C','D','E'] %}
+                        <calcite-option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>{{ p }}</calcite-option>
+                    {% endfor %}
+                </calcite-select>
+            </calcite-label>
+
             <!-- Task Size Segmented Control -->
-            <div class="tt-segmented-control" title="Task size (1-5)">
-                {% for s in range(1, 6) %}
-                    <button type="button"
-                            class="{% if todo.task_size == s %}active{% endif %}"
-                            onclick="updateTodoFieldDetail({{ todo.id }}, 'task_size', '{{ s }}')"
-                            title="Task size: {{ s }}/5">
-                        {{ s }}
-                    </button>
-                {% endfor %}
-            </div>
+            <calcite-label>
+                Task Size (1-5)
+                <calcite-segmented-control onchange="updateTodoFieldDetail({{ todo.id }}, 'task_size', this.value)">
+                    {% for s in range(1, 6) %}
+                        <calcite-segmented-control-item value="{{ s }}"
+                                                       {% if todo.task_size == s %}checked{% endif %}>
+                            {{ s }}
+                        </calcite-segmented-control-item>
+                    {% endfor %}
+                </calcite-segmented-control>
+            </calcite-label>
         </div>
     </div>
-    </div>
-</div>
+</calcite-panel>
 
 <div class="tt-card mb-6">
     <div class="tt-card-content">

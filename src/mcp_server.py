@@ -21,8 +21,8 @@ from mcp.types import (
 )
 from pydantic import ValidationError
 
-from .db import init_db, SessionLocal, TodoCategory, TodoStatus, get_db_path
-from .schemas import TodoCreate, TodoUpdate, NoteCreate, TodoSearch
+from .db import init_db, SessionLocal, TodoCategory, TodoStatus, TodoDependency, get_db_path
+from .schemas import TodoCreate, TodoUpdate, NoteCreate, NoteUpdate, TodoSearch
 from . import crud
 
 
@@ -172,12 +172,26 @@ async def list_tools() -> list[Tool]:
             description="Get hierarchical list of all todos. Returns the complete todo tree with nested children.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
-                "properties": {},
+                "properties": {
+                    "include_dependencies": {
+                        "type": "boolean",
+                        "description": "If true, include dependency relationships (prerequisites + dependents) for each todo.",
+                        "default": False,
+                    },
+                    "include_dependency_status": {
+                        "type": "boolean",
+                        "description": "If true, include computed dependency readiness status (ready/blocked) for each todo.",
+                        "default": False,
+                    },
+                },
             }),
         ),
         Tool(
             name="get_todo",
-            description="Get detailed information about a specific todo by ID, including all children and notes.",
+            description="""Get detailed information about a specific todo by ID, including all children and notes.
+            
+Note: If you're starting work on this todo, use update_todo to set status='in_progress' and update 
+work_completed/work_remaining/implementation_issues fields to track your progress.""",
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
@@ -185,8 +199,47 @@ async def list_tools() -> list[Tool]:
                         "type": "integer",
                         "description": "The ID of the todo to retrieve",
                     },
+                    "include_dependencies": {
+                        "type": "boolean",
+                        "description": "If true, include dependency relationships (prerequisites + dependents).",
+                        "default": False,
+                    },
+                    "include_dependency_status": {
+                        "type": "boolean",
+                        "description": "If true, include computed dependency readiness status (ready/blocked).",
+                        "default": False,
+                    },
                 },
                 "required": ["todo_id"],
+            }),
+        ),
+        Tool(
+            name="get_todos_batch",
+            description="""Get detailed information about multiple todos by ID in one call.
+            
+Note: If you're starting work on any returned todo, use update_todo to set status='in_progress' and 
+update work_completed/work_remaining/implementation_issues fields to track your progress.""",
+            inputSchema=_with_project_context_schema({
+                "type": "object",
+                "properties": {
+                    "todo_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "minItems": 1,
+                        "description": "The todo IDs to retrieve",
+                    },
+                    "include_dependencies": {
+                        "type": "boolean",
+                        "description": "If true, include dependency relationships (prerequisites + dependents).",
+                        "default": False,
+                    },
+                    "include_dependency_status": {
+                        "type": "boolean",
+                        "description": "If true, include computed dependency readiness status (ready/blocked).",
+                        "default": False,
+                    },
+                },
+                "required": ["todo_ids"],
             }),
         ),
         Tool(
@@ -277,6 +330,10 @@ async def list_tools() -> list[Tool]:
                                 "parent_id": {"type": "integer", "description": "Parent todo ID (for creating subtasks)"},
                                 "topic": {"type": "string", "description": "Optional topic/theme"},
                                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional list of tags"},
+                                "depends_on_id": {
+                                    "type": "integer",
+                                    "description": "Optional: create a dependency so the new todo depends on this existing todo ID.",
+                                },
                                 "work_completed": {"type": "string", "description": "PROGRESS TRACKING: What has been done so far"},
                                 "work_remaining": {"type": "string", "description": "PROGRESS TRACKING: What still needs to be done"},
                                 "implementation_issues": {"type": "string", "description": "PROGRESS TRACKING: Known problems, blockers, or concerns"},
@@ -489,7 +546,10 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="execute_queue_next",
-            description="Get (and optionally mark in progress) the next N todos in queue order (queue > 0, ascending).",
+            description="""Get (and optionally mark in progress) the next N todos in queue order (queue > 0, ascending).
+            
+IMPORTANT: When starting work on a returned todo, call update_todo to update progress tracking fields 
+(work_completed, work_remaining, implementation_issues) to maintain context for future sessions.""",
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
@@ -509,7 +569,10 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_queued_todos",
-            description="Get all todos that are in the queue (queue > 0), sorted by queue value (ascending). Optionally filter by task_size range (min_size, max_size) and limit results.",
+            description="""Get all todos that are in the queue (queue > 0), sorted by queue value (ascending). Optionally filter by task_size range (min_size, max_size) and limit results.
+            
+Note: When starting work on any returned todo, call update_todo to update progress tracking fields 
+(work_completed, work_remaining, implementation_issues) to maintain context for future sessions.""",
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
@@ -535,7 +598,10 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_queue_top",
-            description="Convenience wrapper for getting the next X items in queue order. Takes count parameter (default: 10). Optionally filter by task_size range (min_size, max_size). Returns todos in execution order.",
+            description="""Convenience wrapper for getting the next X items in queue order. Takes count parameter (default: 10). Optionally filter by task_size range (min_size, max_size). Returns todos in execution order.
+            
+Note: When starting work on any returned todo, call update_todo to update progress tracking fields 
+(work_completed, work_remaining, implementation_issues) to maintain context for future sessions.""",
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
@@ -576,6 +642,80 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": ["content"],
+            }),
+        ),
+        Tool(
+            name="get_notes_batch",
+            description="Get multiple notes by ID in one call.",
+            inputSchema=_with_project_context_schema({
+                "type": "object",
+                "properties": {
+                    "note_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "minItems": 1,
+                        "description": "The note IDs to retrieve",
+                    },
+                },
+                "required": ["note_ids"],
+            }),
+        ),
+        Tool(
+            name="create_notes_batch",
+            description="Create multiple notes in one call. Each item can optionally be attached to a todo via todo_id.",
+            inputSchema=_with_project_context_schema({
+                "type": "object",
+                "properties": {
+                    "notes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "content": {"type": "string", "description": "The note content"},
+                                "todo_id": {"type": "integer", "description": "Optional: Todo ID to attach the note to"},
+                            },
+                            "required": ["content"],
+                        },
+                        "description": "List of notes to create",
+                    }
+                },
+                "required": ["notes"],
+            }),
+        ),
+        Tool(
+            name="update_note",
+            description="Update a note's content (and/or associated todo_id).",
+            inputSchema=_with_project_context_schema({
+                "type": "object",
+                "properties": {
+                    "note_id": {
+                        "type": "integer",
+                        "description": "The ID of the note to update",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "New note content",
+                    },
+                    "todo_id": {
+                        "type": "integer",
+                        "description": "Optional: (re)attach the note to a todo (or set null via omit; standalone notes are allowed)",
+                    },
+                },
+                "required": ["note_id"],
+            }),
+        ),
+        Tool(
+            name="delete_note",
+            description="Delete a note by ID.",
+            inputSchema=_with_project_context_schema({
+                "type": "object",
+                "properties": {
+                    "note_id": {
+                        "type": "integer",
+                        "description": "The ID of the note to delete",
+                    },
+                },
+                "required": ["note_id"],
             }),
         ),
         Tool(
@@ -625,6 +765,11 @@ async def list_tools() -> list[Tool]:
                     "priority_class": {
                         "type": "string",
                         "description": "Filter by priority class (A-E).",
+                    },
+                    "dependency_status": {
+                        "type": "string",
+                        "enum": ["ready", "blocked", "any"],
+                        "description": "Filter by dependency readiness: ready (all deps met), blocked (has unmet deps), any (no filter).",
                     },
                 },
             }),
@@ -677,6 +822,28 @@ async def list_tools() -> list[Tool]:
             }),
         ),
         Tool(
+            name="add_dependencies_batch",
+            description="Create multiple dependency relationships in one call (array of {todo_id, depends_on_id}).",
+            inputSchema=_with_project_context_schema({
+                "type": "object",
+                "properties": {
+                    "dependencies": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "todo_id": {"type": "integer"},
+                                "depends_on_id": {"type": "integer"},
+                            },
+                            "required": ["todo_id", "depends_on_id"],
+                        },
+                    }
+                },
+                "required": ["dependencies"],
+            }),
+        ),
+        Tool(
             name="check_dependencies",
             description="Check if all dependencies for a todo are met (all dependency todos completed).",
             inputSchema=_with_project_context_schema({
@@ -716,12 +883,19 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     
     try:
         if name == "list_todos":
+            include_dependencies = bool(arguments.get("include_dependencies", False))
+            include_dependency_status = bool(arguments.get("include_dependency_status", False))
             todos = crud.get_todo_tree(db)
             if todos is None:
                 todos = []
             result = []
             for todo in todos:
-                result.append(_serialize_todo_tree(todo))
+                result.append(_serialize_todo_tree(
+                    todo,
+                    db=db,
+                    include_dependencies=include_dependencies,
+                    include_dependency_status=include_dependency_status,
+                ))
             return [TextContent(
                 type="text",
                 text=json.dumps({
@@ -732,13 +906,54 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         
         elif name == "get_todo":
             todo_id = arguments["todo_id"]
+            include_dependencies = bool(arguments.get("include_dependencies", False))
+            include_dependency_status = bool(arguments.get("include_dependency_status", False))
             todo = crud.get_todo(db, todo_id)
             if not todo:
                 return [TextContent(type="text", text=f"Todo with ID {todo_id} not found")]
             
             return [TextContent(
                 type="text",
-                text=json.dumps(_serialize_todo_tree(todo), indent=2)
+                text=json.dumps(_serialize_todo_tree(
+                    todo,
+                    db=db,
+                    include_dependencies=include_dependencies,
+                    include_dependency_status=include_dependency_status,
+                ), indent=2)
+            )]
+
+        elif name == "get_todos_batch":
+            todo_ids = arguments.get("todo_ids") or []
+            include_dependencies = bool(arguments.get("include_dependencies", False))
+            include_dependency_status = bool(arguments.get("include_dependency_status", False))
+
+            found: list[dict] = []
+            errors: list[dict] = []
+            for idx, raw_id in enumerate(todo_ids):
+                try:
+                    todo_id = int(raw_id)
+                    todo = crud.get_todo(db, todo_id)
+                    if not todo:
+                        errors.append({"index": idx, "todo_id": todo_id, "error": "Todo not found"})
+                        continue
+                    found.append(_serialize_todo_tree(
+                        todo,
+                        db=db,
+                        include_dependencies=include_dependencies,
+                        include_dependency_status=include_dependency_status,
+                    ))
+                except Exception as e:
+                    errors.append({"index": idx, "todo_id": raw_id, "error": str(e)})
+
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "requested_count": len(todo_ids),
+                    "found_count": len(found),
+                    "error_count": len(errors),
+                    "todos": found,
+                    "errors": errors,
+                }, indent=2)
             )]
         
         elif name == "create_todo":
@@ -773,6 +988,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             items = arguments.get("todos") or []
             created: list[dict] = []
             errors: list[dict] = []
+            dependencies_created: list[dict] = []
+            dependency_errors: list[dict] = []
             for idx, item in enumerate(items):
                 try:
                     todo_create = TodoCreate(
@@ -791,6 +1008,30 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     )
                     todo = crud.create_todo(db, todo_create)
                     created.append(_serialize_todo(todo))
+                    depends_on_id = item.get("depends_on_id")
+                    if depends_on_id is not None:
+                        try:
+                            dep = crud.create_dependency(db, todo_id=todo.id, depends_on_id=int(depends_on_id))
+                            if dep:
+                                dependencies_created.append({
+                                    "id": dep.id,
+                                    "todo_id": dep.todo_id,
+                                    "depends_on_id": dep.depends_on_id,
+                                })
+                            else:
+                                dependency_errors.append({
+                                    "index": idx,
+                                    "todo_id": todo.id,
+                                    "depends_on_id": depends_on_id,
+                                    "error": "Failed to create dependency (one or both todos not found)",
+                                })
+                        except Exception as e:
+                            dependency_errors.append({
+                                "index": idx,
+                                "todo_id": todo.id,
+                                "depends_on_id": depends_on_id,
+                                "error": str(e),
+                            })
                 except Exception as e:
                     errors.append({
                         "index": idx,
@@ -805,6 +1046,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     "error_count": len(errors),
                     "todos": created,
                     "errors": errors,
+                    "dependencies_created": dependencies_created,
+                    "dependency_errors": dependency_errors,
                 }, indent=2)
             )]
         
@@ -969,6 +1212,104 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     }
                 }, indent=2)
             )]
+
+        elif name == "get_notes_batch":
+            note_ids = arguments.get("note_ids") or []
+            found: list[dict] = []
+            errors: list[dict] = []
+            for idx, raw_id in enumerate(note_ids):
+                try:
+                    note_id = int(raw_id)
+                    note = crud.get_note(db, note_id)
+                    if not note:
+                        errors.append({"index": idx, "note_id": note_id, "error": "Note not found"})
+                        continue
+                    found.append({
+                        "id": note.id,
+                        "content": note.content,
+                        "todo_id": note.todo_id,
+                        "created_at": note.created_at.isoformat() if note.created_at else None,
+                    })
+                except Exception as e:
+                    errors.append({"index": idx, "note_id": raw_id, "error": str(e)})
+
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "requested_count": len(note_ids),
+                    "found_count": len(found),
+                    "error_count": len(errors),
+                    "notes": found,
+                    "errors": errors,
+                }, indent=2)
+            )]
+
+        elif name == "create_notes_batch":
+            items = arguments.get("notes") or []
+            created: list[dict] = []
+            errors: list[dict] = []
+            for idx, item in enumerate(items):
+                try:
+                    note_create = NoteCreate(
+                        content=item["content"],
+                        todo_id=item.get("todo_id"),
+                    )
+                    note = crud.create_note(db, note_create)
+                    created.append({
+                        "id": note.id,
+                        "content": note.content,
+                        "todo_id": note.todo_id,
+                        "created_at": note.created_at.isoformat() if note.created_at else None,
+                    })
+                except Exception as e:
+                    errors.append({
+                        "index": idx,
+                        "todo_id": item.get("todo_id"),
+                        "error": str(e),
+                    })
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "message": "Bulk note create complete",
+                    "created_count": len(created),
+                    "error_count": len(errors),
+                    "notes": created,
+                    "errors": errors,
+                }, indent=2)
+            )]
+
+        elif name == "update_note":
+            note_id = int(arguments["note_id"])
+            update_data = {k: v for k, v in arguments.items() if k != "note_id" and v is not None}
+            note_update = NoteUpdate(**update_data)
+            note = crud.update_note(db, note_id, note_update)
+            if not note:
+                return [TextContent(type="text", text=f"Note with ID {note_id} not found")]
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "message": "Note updated successfully",
+                    "note": {
+                        "id": note.id,
+                        "content": note.content,
+                        "todo_id": note.todo_id,
+                        "created_at": note.created_at.isoformat() if note.created_at else None,
+                    }
+                }, indent=2)
+            )]
+
+        elif name == "delete_note":
+            note_id = int(arguments["note_id"])
+            success = crud.delete_note(db, note_id)
+            if not success:
+                return [TextContent(type="text", text=f"Note with ID {note_id} not found")]
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "message": "Note deleted successfully",
+                    "note_id": note_id,
+                }, indent=2)
+            )]
         
         elif name == "search_todos":
             search = TodoSearch(
@@ -981,6 +1322,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 queue=arguments.get("queue"),
                 task_size=arguments.get("task_size"),
                 priority_class=arguments.get("priority_class"),
+                dependency_status=arguments.get("dependency_status"),
             )
             todos = crud.search_todos(db, search)
             return [TextContent(
@@ -1076,11 +1418,14 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             )]
         
         elif name == "add_dependency":
-            dependency = crud.create_dependency(
-                db,
-                todo_id=arguments["todo_id"],
-                depends_on_id=arguments["depends_on_id"]
-            )
+            try:
+                dependency = crud.create_dependency(
+                    db,
+                    todo_id=arguments["todo_id"],
+                    depends_on_id=arguments["depends_on_id"]
+                )
+            except ValueError as e:
+                return [TextContent(type="text", text=str(e))]
             if not dependency:
                 return [TextContent(type="text", text="Failed to create dependency (one or both todos not found)")]
             
@@ -1093,6 +1438,48 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         "todo_id": dependency.todo_id,
                         "depends_on_id": dependency.depends_on_id
                     }
+                }, indent=2)
+            )]
+
+        elif name == "add_dependencies_batch":
+            items = arguments.get("dependencies") or []
+            created: list[dict] = []
+            errors: list[dict] = []
+            for idx, item in enumerate(items):
+                try:
+                    dep = crud.create_dependency(
+                        db,
+                        todo_id=int(item["todo_id"]),
+                        depends_on_id=int(item["depends_on_id"]),
+                    )
+                    if not dep:
+                        errors.append({
+                            "index": idx,
+                            "todo_id": item.get("todo_id"),
+                            "depends_on_id": item.get("depends_on_id"),
+                            "error": "Failed to create dependency (one or both todos not found)",
+                        })
+                    else:
+                        created.append({
+                            "id": dep.id,
+                            "todo_id": dep.todo_id,
+                            "depends_on_id": dep.depends_on_id,
+                        })
+                except Exception as e:
+                    errors.append({
+                        "index": idx,
+                        "todo_id": item.get("todo_id"),
+                        "depends_on_id": item.get("depends_on_id"),
+                        "error": str(e),
+                    })
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "message": "Bulk dependency create complete",
+                    "created_count": len(created),
+                    "error_count": len(errors),
+                    "dependencies": created,
+                    "errors": errors,
                 }, indent=2)
             )]
         
@@ -1407,7 +1794,13 @@ def _serialize_todo(todo) -> dict:
     }
 
 
-def _serialize_todo_tree(todo) -> dict:
+def _serialize_todo_tree(
+    todo,
+    *,
+    db=None,
+    include_dependencies: bool = False,
+    include_dependency_status: bool = False,
+) -> dict:
     """Recursively serialize a todo with all its children."""
     def _as_list(value):
         if value is None:
@@ -1417,7 +1810,15 @@ def _serialize_todo_tree(todo) -> dict:
         return [value]
 
     data = _serialize_todo(todo)
-    data["children"] = [_serialize_todo_tree(child) for child in _as_list(getattr(todo, "children", None))]
+    data["children"] = [
+        _serialize_todo_tree(
+            child,
+            db=db,
+            include_dependencies=include_dependencies,
+            include_dependency_status=include_dependency_status,
+        )
+        for child in _as_list(getattr(todo, "children", None))
+    ]
     data["notes"] = [
         {
             "id": note.id,
@@ -1426,6 +1827,42 @@ def _serialize_todo_tree(todo) -> dict:
         }
         for note in _as_list(getattr(todo, "notes", None))
     ]
+
+    if db is not None and include_dependency_status:
+        try:
+            data["dependency_status"] = "ready" if crud.check_dependencies_met(db, todo.id) else "blocked"
+        except Exception:
+            data["dependency_status"] = None
+
+    if db is not None and include_dependencies:
+        prereqs = []
+        for dep in _as_list(getattr(todo, "dependencies", None)):
+            depends_on = getattr(dep, "depends_on", None)
+            prereqs.append({
+                "id": dep.id,
+                "todo_id": dep.todo_id,
+                "depends_on_id": dep.depends_on_id,
+                "depends_on": {
+                    "id": depends_on.id,
+                    "title": depends_on.title,
+                    "status": depends_on.status.value if depends_on.status else None,
+                } if depends_on is not None else None,
+                "created_at": dep.created_at.isoformat() if getattr(dep, "created_at", None) else None,
+            })
+
+        dependents = db.query(TodoDependency).filter(TodoDependency.depends_on_id == todo.id).all()
+        data["dependencies"] = {
+            "prerequisites": prereqs,
+            "dependents": [
+                {
+                    "id": d.id,
+                    "todo_id": d.todo_id,
+                    "depends_on_id": d.depends_on_id,
+                    "created_at": d.created_at.isoformat() if getattr(d, "created_at", None) else None,
+                }
+                for d in dependents
+            ],
+        }
     return data
 
 

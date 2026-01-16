@@ -79,3 +79,6 @@ temp/
 
 # TodoTracker database
 .todos/
+
+# Calcite Design System repository
+designsys/
