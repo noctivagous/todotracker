@@ -1,0 +1,556 @@
+{% extends "base.html" %}
+
+{% block title %}Todos - TodoTracker{% endblock %}
+
+{# ------------------------------------------------------------------------- #}
+{# Macros                                                                    #}
+{# NOTE: Keep macros OUTSIDE blocks so they are defined before block renders. #}
+{# ------------------------------------------------------------------------- #}
+
+{% macro render_todo(todo, index=0) %}
+<div class="todo-item {{ todo.status.value }} tt-surface tt-hover-surface mb-2 rounded-lg p-2 cursor-pointer" 
+     onclick="window.location.href='/todo/{{ todo.id }}'">
+    <div class="flex items-start justify-between gap-2">
+        <div class="flex-1 space-y-1.5">
+            <!-- Header Section: Title, ID, Badges -->
+            <div class="border border-gray-200 rounded-md p-1.5 bg-gray-50/50">
+                <div class="flex items-center flex-wrap gap-1.5">
+                    <span class="text-lg font-semibold text-gray-900">
+                        {{ todo.title }}
+                    </span>
+                    <div class="flex items-center gap-0.5 text-xs text-gray-400" onclick="event.stopPropagation()">
+                        <span>#{{ todo.id }}</span>
+                        <button onclick="event.stopPropagation(); copyTodoId({{ todo.id }});" 
+                                class="text-gray-400 hover:text-indigo-600 transition-colors"
+                                title="Copy todo ID to clipboard"
+                                id="copyBtn{{ todo.id }}">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    <span class="status-badge status-{{ todo.status.value }}">
+                        {{ todo.status.value.replace('_', ' ') }}
+                    </span>
+                    <span class="category-badge category-{{ todo.category.value }}">
+                        {{ todo.category.value }}
+                    </span>
+                    {% if todo.queue and todo.queue > 0 %}
+                    <span class="tt-badge tt-badge-info">⏯️ Queue {{ todo.queue }}</span>
+                    {% endif %}
+                    {% if todo.priority_class %}
+                    <span class="tt-badge tt-badge-warning">🔺 Priority {{ todo.priority_class }}</span>
+                    {% endif %}
+                    {% if todo.task_size %}
+                    <span class="tt-badge tt-badge-muted">📏 Size {{ todo.task_size }}/5</span>
+                    {% endif %}
+                    {% if todo.topic %}
+                    <span class="tt-badge tt-badge-muted">📁 {{ todo.topic }}</span>
+                    {% endif %}
+                    {% for tag in todo.tags %}
+                    <span class="tt-badge tt-badge-muted">🏷️ {{ tag.name }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Description Section -->
+            {% if todo.description %}
+                <div class="border border-gray-200 rounded-md p-1.5 bg-gray-50/30">
+                    <div class="text-sm text-muted-foreground markdown-render">{{ todo.description }}</div>
+                </div>
+            {% endif %}
+            
+            <!-- Progress Sections -->
+            {% if todo.progress_summary or todo.remaining_work %}
+                <div class="border border-gray-200 rounded-md p-1.5 bg-gray-50/30 space-y-1">
+                    {% if todo.progress_summary %}
+                        <div class="text-sm">
+                            <strong>Progress:</strong>
+                            <span class="text-muted-foreground">{{ todo.progress_summary }}</span>
+                        </div>
+                    {% endif %}
+                    {% if todo.remaining_work %}
+                        <div class="text-sm">
+                            <strong>Remaining:</strong>
+                            <span class="text-muted-foreground">{{ todo.remaining_work }}</span>
+                        </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+            
+            <!-- Metadata Section: Timestamps -->
+            <div class="border border-gray-200 rounded-md p-1 bg-gray-50/50">
+                <div class="text-xs text-muted-foreground">
+                    Created: {{ todo.created_at.strftime('%b %d %Y %H:%M') }}
+                    {% if todo.updated_at != todo.created_at %}
+                        | Updated: {{ todo.updated_at.strftime('%b %d %Y %H:%M') }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Side: Actions and Controls -->
+        <div class="flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
+            <!-- Action Buttons -->
+            <div class="border border-gray-200 rounded-md p-1 bg-gray-50/50">
+                <div class="flex space-x-1.5">
+                    <a href="/todo/{{ todo.id }}" 
+                       class="tt-btn tt-btn-secondary tt-btn-sm"
+                       onclick="event.stopPropagation()">
+                        View
+                    </a>
+                    <form action="/api/todos/{{ todo.id }}/delete" method="POST" class="inline"
+                          onsubmit="return confirm('Delete this todo and all subtasks?')"
+                          onclick="event.stopPropagation()">
+                        <button type="submit" class="tt-btn tt-btn-destructive tt-btn-sm">
+                            Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Queue Controls -->
+            <div class="border border-gray-200 rounded-md p-1 bg-gray-50/50">
+                <div class="flex flex-col items-end gap-1 text-xs">
+                    <div class="flex items-center gap-1.5">
+                        <form action="{% if todo.queue and todo.queue > 0 %}/api/todos/{{ todo.id }}/queue/remove{% else %}/api/todos/{{ todo.id }}/queue/add{% endif %}" method="POST" class="inline">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" {% if todo.queue and todo.queue > 0 %}checked{% endif %}
+                                       onchange="this.form.submit()"
+                                       class="sr-only peer">
+                                <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <span class="ml-2 text-sm font-medium text-gray-700">Queued</span>
+                            </label>
+                        </form>
+                        {% if todo.queue and todo.queue > 0 %}
+                            <span class="font-semibold text-indigo-700">#{{ todo.queue }}</span>
+                            <form action="/api/todos/{{ todo.id }}/queue/up" method="POST" class="inline">
+                                <button type="submit"
+                                        {% if todo.queue <= 1 %}disabled{% endif %}
+                                        class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 disabled:hover:bg-gray-200"
+                                        title="Move up in queue">
+                                    ↑
+                                </button>
+                            </form>
+                            <form action="/api/todos/{{ todo.id }}/queue/down" method="POST" class="inline">
+                                <button type="submit"
+                                        {% if max_queue and todo.queue >= max_queue %}disabled{% endif %}
+                                        class="px-2 py-1 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-40 disabled:hover:bg-gray-200"
+                                        title="Move down in queue">
+                                    ↓
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Priority and Task Size Controls -->
+            <div class="border border-gray-200 rounded-md p-1 bg-gray-50/50">
+                <div class="flex gap-1.5 items-center text-xs">
+                    <!-- Priority Dropdown -->
+                    <select name="priority_class" 
+                            data-todo-id="{{ todo.id }}"
+                            class="priority-dropdown tt-select text-xs px-2 py-1"
+                            title="Priority class"
+                            onclick="event.stopPropagation()"
+                            onchange="updateTodoField({{ todo.id }}, 'priority_class', this.value)">
+                        <option value="" {% if not todo.priority_class %}selected{% endif %}>Priority: —</option>
+                        {% for p in ['A','B','C','D','E'] %}
+                            <option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>Priority: {{ p }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <!-- Task Size Segmented Control -->
+                    <div class="tt-segmented-control" onclick="event.stopPropagation()" title="Task size (1-5)">
+                        {% for s in range(1, 6) %}
+                            <button type="button"
+                                    class="{% if todo.task_size == s %}active{% endif %}"
+                                    onclick="updateTodoField({{ todo.id }}, 'task_size', '{{ s }}')"
+                                    title="Task size: {{ s }}/5">
+                                {{ s }}
+                            </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Render children recursively -->
+    {% if todo.children %}
+        <div class="ml-6 mt-3 space-y-2">
+            {% for child in todo.children %}
+                {{ render_todo(child, loop.index0) }}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-3xl font-bold">
+        {% if is_search_page %}
+            Search Results{% if search_query %}: "{{ search_query }}"{% endif %}
+        {% else %}
+            Todo List
+        {% endif %}
+    </h2>
+    <div class="flex space-x-3">
+        <!-- Search Box -->
+        <div class="hidden sm:flex items-center gap-2">
+            <input type="text" 
+                   id="searchInput" 
+                   placeholder="Search todos..." 
+                   class="tt-input w-64"
+                   value="{{ search_query or '' }}"
+                   onkeydown="if(event.key === 'Enter') { handleSearch(event); }">
+        </div>
+
+        <!-- Sort Controls (preserve filters) -->
+        <form method="GET" action="{% if is_search_page %}/search{% else %}/{% endif %}" class="hidden sm:flex items-center gap-2">
+            {% if is_search_page and search_query %}
+                <input type="hidden" name="q" value="{{ search_query }}">
+            {% endif %}
+            <input type="hidden" name="status" value="{{ current_status_filter or 'pending' }}">
+            {% if queued_filter %}
+                <input type="hidden" name="queued" value="true">
+            {% endif %}
+            <label class="text-sm text-muted-foreground font-medium">Sort</label>
+            <select name="sort_by" class="tt-select w-52" onchange="this.form.submit()">
+                <option value="activity" {% if current_sort_by == 'activity' %}selected{% endif %}>Activity</option>
+                <option value="updated_at" {% if current_sort_by == 'updated_at' %}selected{% endif %}>Updated</option>
+                <option value="created_at" {% if current_sort_by == 'created_at' %}selected{% endif %}>Created</option>
+                <option value="title" {% if current_sort_by == 'title' %}selected{% endif %}>Title</option>
+                <option value="status" {% if current_sort_by == 'status' %}selected{% endif %}>Status</option>
+                <option value="category" {% if current_sort_by == 'category' %}selected{% endif %}>Category</option>
+                <option value="queue" {% if current_sort_by == 'queue' %}selected{% endif %}>Queue</option>
+                <option value="priority_class" {% if current_sort_by == 'priority_class' %}selected{% endif %}>Priority</option>
+                <option value="task_size" {% if current_sort_by == 'task_size' %}selected{% endif %}>Task Size</option>
+            </select>
+            <select name="sort_dir" class="tt-select w-28" onchange="this.form.submit()">
+                <option value="desc" {% if current_sort_dir == 'desc' %}selected{% endif %}>Desc</option>
+                <option value="asc" {% if current_sort_dir == 'asc' %}selected{% endif %}>Asc</option>
+            </select>
+        </form>
+
+        <!-- Export Dropdown -->
+        <div class="relative inline-block">
+            <button onclick="document.getElementById('exportMenu').classList.toggle('hidden')" 
+                    class="tt-btn tt-btn-secondary">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export
+            </button>
+            <div id="exportMenu" class="hidden absolute right-0 mt-2 w-48 tt-menu z-10">
+                <a href="/api/export/json" 
+                   class="tt-menu-item">
+                    📄 Export as JSON
+                </a>
+                <a href="/api/export/csv" 
+                   class="tt-menu-item">
+                    📊 Export as CSV
+                </a>
+                <a href="/api/export/markdown" 
+                   class="tt-menu-item">
+                    📝 Export as Markdown
+                </a>
+            </div>
+        </div>
+        
+        <!-- New Todo Button -->
+        <button onclick="document.getElementById('createModal').classList.remove('hidden')" 
+                class="tt-btn tt-btn-primary">
+            + New Todo
+        </button>
+    </div>
+</div>
+
+<div class="flex flex-wrap gap-2 mb-4">
+    {% if is_search_page %}
+        <a href="/?status={{ current_status_filter or 'pending' }}&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
+           class="tt-btn tt-btn-sm tt-btn-secondary">
+            ← Back to All Todos
+        </a>
+    {% else %}
+        <a href="/?status={{ current_status_filter or 'pending' }}&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
+           class="tt-btn tt-btn-sm {% if not queued_filter %}tt-btn-primary{% else %}tt-btn-secondary{% endif %}">
+            All (current status filter)
+        </a>
+        <a href="/?status={{ current_status_filter or 'pending' }}&queued=true&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
+           class="tt-btn tt-btn-sm {% if queued_filter %}tt-btn-primary{% else %}tt-btn-secondary{% endif %}">
+            In queue ({{ stats.queued }})
+        </a>
+    {% endif %}
+</div>
+
+<!-- Statistics -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+    <a href="/?status=all&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="tt-card p-4 cursor-pointer {% if current_status_filter == 'all' %}tt-ring{% endif %}">
+        <div class="text-sm text-muted-foreground">Total</div>
+        <div class="text-2xl font-bold">{{ stats.total }}</div>
+    </a>
+    <div class="tt-card p-4 {% if not current_status_filter or current_status_filter == 'pending' %}tt-ring{% endif %}">
+        <div class="flex items-center justify-between">
+            <a href="/?status=pending&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="flex-1 cursor-pointer">
+                <div class="text-sm text-muted-foreground">Pending</div>
+                <div class="text-2xl font-bold">{{ stats.pending }}</div>
+            </a>
+            <a href="/?status={{ current_status_filter or 'pending' }}&queued=true&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}"
+               class="tt-btn tt-btn-sm {% if queued_filter %}tt-btn-primary{% else %}tt-btn-secondary{% endif %}"
+               onclick="event.stopPropagation()">
+                {{ stats.queued }}
+            </a>
+        </div>
+    </div>
+    <a href="/?status=in_progress&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="tt-card p-4 cursor-pointer {% if current_status_filter == 'in_progress' %}tt-ring{% endif %}">
+        <div class="text-sm text-muted-foreground">In Progress</div>
+        <div class="text-2xl font-bold">{{ stats.in_progress }}</div>
+    </a>
+    <a href="/?status=completed&sort_by={{ current_sort_by }}&sort_dir={{ current_sort_dir }}" class="tt-card p-4 cursor-pointer {% if current_status_filter == 'completed' %}tt-ring{% endif %}">
+        <div class="text-sm text-muted-foreground">Completed</div>
+        <div class="text-2xl font-bold">{{ stats.completed }}</div>
+    </a>
+</div>
+
+<!-- Todo Tree -->
+<div class="tt-card">
+    <div class="tt-card-content">
+    {% if todos %}
+        {% for todo in todos %}
+            {{ render_todo(todo, loop.index0) }}
+        {% endfor %}
+    {% else %}
+        <div class="text-center py-12 text-muted-foreground">
+            {% if is_search_page %}
+                <p class="text-lg">No todos found matching "{{ search_query }}".</p>
+                <p class="text-sm mt-2">Try a different search term or <a href="/" class="text-indigo-600 hover:underline">view all todos</a>.</p>
+            {% else %}
+                <p class="text-lg">No todos yet.</p>
+                <p class="text-sm mt-2">Create your first todo to get started!</p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+</div>
+
+<!-- Create Modal -->
+<div id="createModal" class="hidden fixed inset-0 tt-modal-backdrop flex items-center justify-center z-50">
+    <div class="tt-card w-full max-w-md">
+        <div class="flex justify-between items-center mb-4">
+            <div class="tt-card-header w-full flex items-center justify-between">
+                <h3 class="text-xl font-bold">Create New Todo</h3>
+            <button onclick="document.getElementById('createModal').classList.add('hidden')" 
+                    class="tt-btn tt-btn-ghost tt-btn-sm">✕</button>
+            </div>
+        </div>
+        
+        <form action="/api/todos/form" method="POST" class="space-y-4 tt-card-content">
+            <div>
+                <label class="block text-sm font-medium mb-1">Title*</label>
+                <input type="text" name="title" required 
+                       class="tt-input">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium mb-1">Description</label>
+                <textarea name="description" rows="3"
+                          class="tt-textarea"></textarea>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium mb-1">Category</label>
+                <select name="category" 
+                        class="tt-select">
+                    {% for cat in categories %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium mb-1">
+                    Topic <span class="text-muted-foreground text-xs">(optional, e.g., "window layout")</span>
+                </label>
+                <input type="text" name="topic" id="topicInput" list="topicList"
+                       class="tt-input">
+                <datalist id="topicList"></datalist>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium mb-1">
+                    Tags <span class="text-muted-foreground text-xs">(optional, comma-separated)</span>
+                </label>
+                <input type="text" name="tags" id="tagsInput" 
+                       placeholder="e.g., ui, frontend, urgent"
+                       class="tt-input">
+                <div id="tagSuggestions" class="mt-2 flex flex-wrap gap-2"></div>
+            </div>
+            
+            <div class="flex space-x-3">
+                <button type="submit" 
+                        class="tt-btn tt-btn-primary flex-1">
+                    Create
+                </button>
+                <button type="button" 
+                        onclick="document.getElementById('createModal').classList.add('hidden')"
+                        class="tt-btn tt-btn-secondary flex-1">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Handle search - navigate to search results page on Enter
+function handleSearch(event) {
+    event.preventDefault();
+    const searchTerm = document.getElementById('searchInput').value.trim();
+    if (searchTerm) {
+        window.location.href = `/search?q=${encodeURIComponent(searchTerm)}`;
+    }
+}
+
+// Persist sort preference and apply it as default when params are missing.
+(function () {
+    try {
+        const url = new URL(window.location.href);
+        const hasSort = url.searchParams.has('sort_by') || url.searchParams.has('sort_dir');
+
+        // Save current sort to localStorage (if present in URL or already rendered by server).
+        const curBy = "{{ current_sort_by }}";
+        const curDir = "{{ current_sort_dir }}";
+        if (curBy) localStorage.setItem('tt-sort-by', curBy);
+        if (curDir) localStorage.setItem('tt-sort-dir', curDir);
+
+        // If URL does not specify sort, apply saved prefs (without dropping other params).
+        if (!hasSort) {
+            const savedBy = localStorage.getItem('tt-sort-by');
+            const savedDir = localStorage.getItem('tt-sort-dir');
+            if (savedBy) url.searchParams.set('sort_by', savedBy);
+            if (savedDir) url.searchParams.set('sort_dir', savedDir);
+            if (savedBy || savedDir) {
+                window.location.replace(url.toString());
+            }
+        }
+    } catch (e) {
+        // ignore storage/url errors
+    }
+})();
+
+// Update todo field via AJAX
+async function updateTodoField(todoId, fieldName, fieldValue) {
+    const formData = new FormData();
+    formData.append(fieldName, fieldValue);
+    
+    try {
+        const response = await fetch(`/api/todos/${todoId}/update`, {
+            method: 'POST',
+            body: formData,
+            redirect: 'manual' // Don't follow redirect, we'll reload the current page instead
+        });
+        
+        // Any success status (2xx) or redirect (3xx) means the update worked
+        if (response.ok || response.status === 303 || response.status === 302) {
+            // Success - reload the current page to show updated values
+            // This preserves query params (like ?status=pending) and keeps us on the list view
+            window.location.reload();
+        } else {
+            console.error('Failed to update todo:', response.statusText);
+            // Revert on error by reloading
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error('Error updating todo:', error);
+        // Revert on error by reloading
+        window.location.reload();
+    }
+}
+
+// Copy todo ID to clipboard
+function copyTodoId(todoId) {
+    const text = `#${todoId}`;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById(`copyBtn${todoId}`);
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+            btn.title = 'Copied!';
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.title = 'Copy todo ID to clipboard';
+            }, 2000);
+        }
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
+}
+
+// Load topics and tags for autocomplete
+let allTags = [];
+let allTopics = [];
+
+// Fetch tags
+fetch('/api/tags')
+    .then(res => res.json())
+    .then(tags => {
+        allTags = tags.map(t => t.name);
+        renderTagSuggestions();
+    });
+
+// Fetch topics
+fetch('/api/topics')
+    .then(res => res.json())
+    .then(topics => {
+        allTopics = topics;
+        const datalist = document.getElementById('topicList');
+        topics.forEach(topic => {
+            const option = document.createElement('option');
+            option.value = topic;
+            datalist.appendChild(option);
+        });
+    });
+
+// Render tag suggestions as clickable chips
+function renderTagSuggestions() {
+    const container = document.getElementById('tagSuggestions');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-xs text-gray-500 w-full">Click to add:</div>';
+    
+    // Show first 20 tags
+    allTags.slice(0, 20).forEach(tagName => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 transition';
+        chip.textContent = tagName;
+        chip.onclick = () => {
+            const input = document.getElementById('tagsInput');
+            const current = input.value.trim();
+            if (current) {
+                input.value = current + ', ' + tagName;
+            } else {
+                input.value = tagName;
+            }
+        };
+        container.appendChild(chip);
+    });
+}
+
+// Close export menu when clicking outside
+document.addEventListener('click', function(event) {
+    const exportMenu = document.getElementById('exportMenu');
+    const exportButton = event.target.closest('button');
+    
+    if (exportMenu && !exportMenu.contains(event.target) && 
+        (!exportButton || !exportButton.textContent.includes('Export'))) {
+        exportMenu.classList.add('hidden');
+    }
+});
+</script>
+
+{% endblock %}
+

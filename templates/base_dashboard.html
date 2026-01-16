@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}TodoTracker Dashboard{% endblock %}</title>
+    <script>
+        // Tailwind CDN: use class-based dark mode so `.dark` works with `dark:*` utilities.
+        tailwind = window.tailwind || {};
+        tailwind.config = { darkMode: 'class' };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <link rel="stylesheet" href="/static/css/shadcn.css">
+    <script>
+        (function () {
+            try {
+                var t = localStorage.getItem("tt-theme");
+                if (t === "dark") document.documentElement.classList.add("dark");
+            } catch (e) {}
+        })();
+    </script>
+</head>
+<body class="min-h-screen bg-background text-foreground">
+    <nav class="tt-nav">
+        <div class="tt-container">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <a href="/" class="tt-brand text-lg">📊 Dashboard</a>
+                    <span class="text-sm text-muted-foreground hidden sm:inline">
+                        Multi-project server manager
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="location.reload()" class="tt-btn tt-btn-outline">
+                        🔄 Refresh
+                    </button>
+                    <button id="ttThemeToggle" type="button" class="tt-btn tt-btn-ghost" title="Toggle theme">
+                        <span id="ttThemeLabel">🌙 Dark</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="tt-container py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-border mt-12">
+        <div class="tt-container py-6">
+            <p class="text-center text-sm text-muted-foreground">
+                TodoTracker Dashboard - Multi-Project Server Manager
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            var btn = document.getElementById("ttThemeToggle");
+            if (!btn) return;
+            var label = document.getElementById("ttThemeLabel");
+            function syncLabel() {
+                var isDark = document.documentElement.classList.contains("dark");
+                if (label) label.textContent = isDark ? "☀️ Light" : "🌙 Dark";
+            }
+            syncLabel();
+            btn.addEventListener("click", function () {
+                var root = document.documentElement;
+                var isDark = root.classList.toggle("dark");
+                try { localStorage.setItem("tt-theme", isDark ? "dark" : "light"); } catch (e) {}
+                syncLabel();
+            });
+        })();
+    </script>
+</body>
+</html>
+
+

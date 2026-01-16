@@ -1,0 +1,796 @@
+{% extends "base.html" %}
+
+{% block title %}{{ todo.title }} - TodoTracker{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="/" class="tt-btn tt-btn-secondary">
+        ← Back to todos
+    </a>
+</div>
+
+<!-- Queue Switch and Priority/Task Size Controls at Top -->
+<div class="mb-4 tt-card">
+    <div class="tt-card-content">
+    <div class="flex items-center justify-between gap-4">
+        <!-- Queue Switch -->
+        <div>
+            <form action="{% if todo.queue and todo.queue > 0 %}/api/todos/{{ todo.id }}/queue/remove{% else %}/api/todos/{{ todo.id }}/queue/add{% endif %}" method="POST" class="inline">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" {% if todo.queue and todo.queue > 0 %}checked{% endif %}
+                           onchange="this.form.submit()"
+                           class="sr-only peer">
+                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    <span class="ml-3 text-base font-medium text-muted-foreground">Queued</span>
+                    {% if todo.queue and todo.queue > 0 %}
+                        <span class="ml-2 text-base font-semibold">(#{{ todo.queue }})</span>
+                    {% endif %}
+                </label>
+            </form>
+        </div>
+        
+        <!-- Priority and Task Size Dropdowns -->
+        <div class="flex gap-3 items-center">
+            <!-- Priority Dropdown -->
+            <select name="priority_class" 
+                    class="priority-dropdown tt-select text-sm"
+                    title="Priority class"
+                    onchange="updateTodoFieldDetail({{ todo.id }}, 'priority_class', this.value)">
+                <option value="" {% if not todo.priority_class %}selected{% endif %}>Priority: —</option>
+                {% for p in ['A','B','C','D','E'] %}
+                    <option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>Priority: {{ p }}</option>
+                {% endfor %}
+            </select>
+            
+            <!-- Task Size Segmented Control -->
+            <div class="tt-segmented-control" title="Task size (1-5)">
+                {% for s in range(1, 6) %}
+                    <button type="button"
+                            class="{% if todo.task_size == s %}active{% endif %}"
+                            onclick="updateTodoFieldDetail({{ todo.id }}, 'task_size', '{{ s }}')"
+                            title="Task size: {{ s }}/5">
+                        {{ s }}
+                    </button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+
+<div class="tt-card mb-6">
+    <div class="tt-card-content">
+    <div class="flex justify-between items-start mb-4">
+        <div class="flex-1">
+            <!-- Title - Inline Editable -->
+            <div class="mb-2">
+                <h2 id="titleDisplay" class="text-3xl font-bold">{{ todo.title }}</h2>
+                <input type="text" id="titleInput" name="title" value="{{ todo.title }}"
+                       class="hidden w-full text-3xl font-bold tt-input">
+            </div>
+            
+            <!-- Category and Tags - Inline Editable -->
+            <div class="flex flex-wrap gap-2 mb-4">
+                <span class="status-badge status-{{ todo.status.value }}">
+                    {{ todo.status.value.replace('_', ' ') }}
+                </span>
+                
+                <!-- Category Display -->
+                <span id="categoryDisplay" class="category-badge category-{{ todo.category.value }}">
+                    {{ todo.category.value }}
+                </span>
+                <!-- Category Edit -->
+                <select id="categoryInput" name="category" 
+                        class="hidden tt-select text-xs px-3 py-1 font-semibold">
+                    {% for cat in categories %}
+                        <option value="{{ cat }}" {% if cat == todo.category.value %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+                
+                <!-- Topic Display -->
+                {% if todo.topic %}
+                <span id="topicDisplay" class="tt-badge tt-badge-muted">
+                    📁 {{ todo.topic }}
+                </span>
+                {% else %}
+                <span id="topicDisplay" class="hidden"></span>
+                {% endif %}
+                <!-- Topic Edit -->
+                <div id="topicEdit" class="hidden">
+                    <input type="text" id="topicInput" name="topic" value="{{ todo.topic or '' }}" 
+                           placeholder="Topic" list="topicListDetail"
+                           class="tt-input text-sm px-3 py-1 rounded-full">
+                    <datalist id="topicListDetail"></datalist>
+                </div>
+                
+                <!-- Tags Display -->
+                <div id="tagsDisplay" class="flex flex-wrap gap-2">
+                    {% for tag in todo.tags %}
+                    <span class="tt-badge tt-badge-muted">
+                        🏷️ {{ tag.name }}
+                    </span>
+                    {% endfor %}
+                </div>
+                <!-- Tags Edit -->
+                <div id="tagsEdit" class="hidden">
+                    <input type="text" id="tagsInput" name="tags" 
+                           value="{{ todo.tags | map(attribute='name') | join(', ') }}"
+                           placeholder="Tags (comma-separated)" 
+                           class="tt-input text-sm px-3 py-1 rounded-full">
+                    <div id="tagSuggestionsDetail" class="mt-2 flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+            
+            <!-- Status Change Control -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2">Status</label>
+                <div class="inline-flex tt-surface rounded-lg p-1" role="group">
+                    {% for stat in statuses %}
+                    <button type="button" 
+                            onclick="changeStatus('{{ stat }}')"
+                            class="tt-btn tt-btn-sm {% if stat == todo.status.value %}tt-btn-primary{% else %}tt-btn-ghost{% endif %}">
+                        {{ stat.replace('_', ' ') }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Execution & Priority -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-muted-foreground mb-2">Execution & Priority</label>
+                <div class="flex flex-wrap gap-3 items-center">
+                    <!-- Queue -->
+                    <div>
+                        <span class="text-sm text-muted-foreground font-semibold">Queue:</span>
+                        <span id="queueDisplay" class="text-sm">
+                            {% if todo.queue and todo.queue > 0 %}{{ todo.queue }}{% else %}0 (not queued){% endif %}
+                        </span>
+                        <input type="number" min="0" id="queueInput" name="queue" value="{{ todo.queue or 0 }}"
+                               class="hidden w-28 tt-input">
+                    </div>
+
+                    <!-- Task Size -->
+                    <div>
+                        <span class="text-sm text-muted-foreground font-semibold">Task size:</span>
+                        <div id="taskSizeDisplay" class="inline-block">
+                            {% if todo.task_size %}
+                                <div class="tt-segmented-control inline-flex">
+                                    {% for s in range(1, 6) %}
+                                        <button type="button"
+                                                class="{% if todo.task_size == s %}active{% endif %}"
+                                                onclick="updateTodoFieldDetail({{ todo.id }}, 'task_size', '{{ s }}')"
+                                                title="Task size: {{ s }}/5">
+                                            {{ s }}
+                                        </button>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="tt-segmented-control inline-flex">
+                                    {% for s in range(1, 6) %}
+                                        <button type="button"
+                                                class=""
+                                                onclick="updateTodoFieldDetail({{ todo.id }}, 'task_size', '{{ s }}')"
+                                                title="Task size: {{ s }}/5">
+                                            {{ s }}
+                                        </button>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <input type="number" min="1" max="5" id="taskSizeInput" name="task_size" value="{{ todo.task_size or '' }}"
+                               class="hidden w-24 tt-input"
+                               placeholder="1-5">
+                    </div>
+
+                    <!-- Priority Class -->
+                    <div>
+                        <span class="text-sm text-muted-foreground font-semibold">Priority:</span>
+                        <span id="priorityClassDisplay" class="text-sm">
+                            {% if todo.priority_class %}{{ todo.priority_class }}{% else %}—{% endif %}
+                        </span>
+                        <select id="priorityClassInput" name="priority_class"
+                                class="hidden w-24 tt-select">
+                            <option value="" {% if not todo.priority_class %}selected{% endif %}>—</option>
+                            {% for p in ['A','B','C','D','E'] %}
+                                <option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Update Toggle Button - Top Right -->
+        <div class="ml-4 flex flex-col items-end">
+            <button id="toggleEditBtn" onclick="toggleEditMode()" 
+                    class="tt-btn tt-btn-primary mb-2">
+                Update Todo
+            </button>
+            <!-- Save Button (hidden by default) -->
+            <div id="saveCancelButtons" class="hidden">
+                <button onclick="saveChanges()" 
+                        class="tt-btn tt-btn-primary w-full">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Description - Inline Editable -->
+    <div class="mb-4">
+        <h3 class="text-sm font-semibold text-muted-foreground mb-2">Description</h3>
+        <div id="descriptionDisplay" class="{% if not todo.description %}text-muted-foreground italic{% endif %} markdown-render">
+            {{ todo.description or 'No description' }}
+        </div>
+        <textarea id="descriptionInput" name="description" rows="3"
+                  class="hidden tt-textarea">{{ todo.description or '' }}</textarea>
+    </div>
+    
+    <!-- Progress Tracking (AI and User) - Always shown, inline editable - Horizontal Layout -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <!-- Work Completed -->
+        <div class="tt-card">
+            <div class="tt-card-content">
+            <h3 class="text-sm font-semibold mb-2">✅ Work Completed</h3>
+            <div id="workCompletedDisplay" class="{% if not todo.work_completed %}text-muted-foreground italic{% endif %} markdown-render">
+                {{ todo.work_completed or 'No work completed yet' }}
+            </div>
+            <textarea id="workCompletedInput" name="work_completed" rows="3"
+                      class="hidden tt-textarea">{{ todo.work_completed or '' }}</textarea>
+            </div>
+        </div>
+        
+        <!-- Work Remaining -->
+        <div class="tt-card">
+            <div class="tt-card-content">
+            <h3 class="text-sm font-semibold mb-2">📋 Work Remaining</h3>
+            <div id="workRemainingDisplay" class="{% if not todo.work_remaining %}text-muted-foreground italic{% endif %} markdown-render">
+                {{ todo.work_remaining or 'No remaining work specified' }}
+            </div>
+            <textarea id="workRemainingInput" name="work_remaining" rows="3"
+                      class="hidden tt-textarea">{{ todo.work_remaining or '' }}</textarea>
+            </div>
+        </div>
+        
+        <!-- Implementation Issues -->
+        <div class="tt-card">
+            <div class="tt-card-content">
+            <h3 class="text-sm font-semibold mb-2">⚠️ Implementation Issues</h3>
+            <div id="implementationIssuesDisplay" class="{% if not todo.implementation_issues %}text-muted-foreground italic{% endif %} markdown-render">
+                {{ todo.implementation_issues or 'No implementation issues' }}
+            </div>
+            <textarea id="implementationIssuesInput" name="implementation_issues" rows="3"
+                      class="hidden tt-textarea">{{ todo.implementation_issues or '' }}</textarea>
+            </div>
+        </div>
+    </div>
+    
+    <div class="text-sm text-muted-foreground mb-4">
+        <div class="flex items-center gap-3 flex-wrap">
+            <div>Created: {{ todo.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+            <div>Updated: {{ todo.updated_at.strftime('%Y-%m-%d %H:%M') }}</div>
+            <div class="flex items-center gap-1">
+                <span>ID: #{{ todo.id }}</span>
+                <button onclick="copyTodoId({{ todo.id }})" 
+                        class="tt-btn tt-btn-ghost tt-btn-sm"
+                        title="Copy todo ID to clipboard"
+                        id="copyBtn{{ todo.id }}">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        {% if todo.parent_id %}
+            <div class="mt-1">Parent: <a href="/todo/{{ todo.parent_id }}" class="underline underline-offset-2">#{{ todo.parent_id }}</a></div>
+        {% endif %}
+    </div>
+    
+    <!-- Hidden form for submission -->
+    <form id="updateForm" action="/api/todos/{{ todo.id }}/update" method="POST" style="display: none;">
+        <input type="hidden" id="formTitle" name="title" value="{{ todo.title }}">
+        <input type="hidden" id="formDescription" name="description" value="{{ todo.description or '' }}">
+        <input type="hidden" id="formCategory" name="category" value="{{ todo.category.value }}">
+        <input type="hidden" id="formTopic" name="topic" value="{{ todo.topic or '' }}">
+        <input type="hidden" id="formTags" name="tags" value="{{ todo.tags | map(attribute='name') | join(', ') }}">
+        <input type="hidden" id="formWorkCompleted" name="work_completed" value="{{ todo.work_completed or '' }}">
+        <input type="hidden" id="formWorkRemaining" name="work_remaining" value="{{ todo.work_remaining or '' }}">
+        <input type="hidden" id="formImplementationIssues" name="implementation_issues" value="{{ todo.implementation_issues or '' }}">
+        <input type="hidden" id="formQueue" name="queue" value="{{ todo.queue or 0 }}">
+        <input type="hidden" id="formTaskSize" name="task_size" value="{{ todo.task_size or '' }}">
+        <input type="hidden" id="formPriorityClass" name="priority_class" value="{{ todo.priority_class or '' }}">
+    </form>
+</div>
+</div>
+
+<!-- Subtasks -->
+{% if todo.children %}
+<div class="tt-card mb-6">
+    <div class="tt-card-content">
+    <h3 class="text-xl font-bold mb-4">Subtasks ({{ todo.children|length }})</h3>
+    <div class="space-y-3">
+        {% for child in todo.children %}
+        <div class="todo-item {{ child.status.value }} tt-surface p-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <a href="/todo/{{ child.id }}" class="font-semibold underline underline-offset-2">
+                        {{ child.title }}
+                    </a>
+                    <span class="status-badge status-{{ child.status.value }}">
+                        {{ child.status.value.replace('_', ' ') }}
+                    </span>
+                    <span class="category-badge category-{{ child.category.value }}">
+                        {{ child.category.value }}
+                    </span>
+                </div>
+                <a href="/todo/{{ child.id }}" class="tt-btn tt-btn-secondary tt-btn-sm">
+                    View
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Notes -->
+<div class="tt-card">
+    <div class="tt-card-content">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold">Notes ({{ todo.notes|length }})</h3>
+            <button onclick="document.getElementById('noteForm').classList.toggle('hidden')" 
+                    class="tt-btn tt-btn-primary tt-btn-sm">
+                + Add Note
+            </button>
+        </div>
+    
+        <form id="noteForm" action="/api/notes/form" method="POST" class="hidden mb-4 space-y-2">
+            <textarea name="content" rows="3" placeholder="Write a note..." required
+                      class="tt-textarea"></textarea>
+            <input type="hidden" name="todo_id" value="{{ todo.id }}">
+            <button type="submit" class="tt-btn tt-btn-primary">
+                Add Note
+            </button>
+        </form>
+    
+        {% if todo.notes %}
+            <div class="space-y-3">
+                {% for note in todo.notes %}
+                <div class="tt-surface p-4">
+                    <div class="flex justify-between items-start gap-3">
+                        <div class="flex-1 markdown-render">{{ note.content }}</div>
+                        <form action="/api/notes/{{ note.id }}/delete" method="POST"
+                              onsubmit="return confirm('Delete this note?')">
+                            <button type="submit" class="tt-btn tt-btn-destructive tt-btn-sm">
+                                Delete
+                            </button>
+                        </form>
+                    </div>
+                    <div class="text-xs text-muted-foreground mt-2">
+                        {{ note.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-muted-foreground text-sm">No notes yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+let isEditMode = false;
+let originalValues = {};
+
+// Update todo field via AJAX (for dropdowns at top of page)
+async function updateTodoFieldDetail(todoId, fieldName, fieldValue) {
+    const formData = new FormData();
+    formData.append(fieldName, fieldValue);
+    
+    try {
+        const response = await fetch(`/api/todos/${todoId}/update`, {
+            method: 'POST',
+            body: formData,
+            redirect: 'manual' // Don't follow redirect, we'll reload instead
+        });
+        
+        // Any success status (2xx) or redirect (3xx) means the update worked
+        if (response.ok || response.status === 303 || response.status === 302) {
+            // Success - reload the page to show updated values
+            window.location.reload();
+        } else {
+            console.error('Failed to update todo:', response.statusText);
+            // Revert on error by reloading
+            window.location.reload();
+        }
+    } catch (error) {
+        console.error('Error updating todo:', error);
+        // Revert on error by reloading
+        window.location.reload();
+    }
+}
+
+// Toggle edit mode
+function toggleEditMode() {
+    isEditMode = !isEditMode;
+    
+    if (isEditMode) {
+        // Enter edit mode
+        enterEditMode();
+    } else {
+        // Exit edit mode
+        exitEditMode();
+    }
+}
+
+// Enter edit mode
+function enterEditMode() {
+    // Store original values
+    originalValues = {
+        title: document.getElementById('titleInput').value,
+        description: document.getElementById('descriptionInput').value,
+        category: document.getElementById('categoryInput').value,
+        topic: document.getElementById('topicInput').value,
+        tags: document.getElementById('tagsInput').value,
+        workCompleted: document.getElementById('workCompletedInput').value,
+        workRemaining: document.getElementById('workRemainingInput').value,
+        implementationIssues: document.getElementById('implementationIssuesInput').value,
+        queue: document.getElementById('queueInput').value,
+        taskSize: (() => {
+            const display = document.getElementById('taskSizeDisplay');
+            if (display) {
+                const activeBtn = display.querySelector('.tt-segmented-control button.active');
+                return activeBtn ? activeBtn.textContent.trim() : '';
+            }
+            return document.getElementById('taskSizeInput').value;
+        })(),
+        priorityClass: document.getElementById('priorityClassInput').value
+    };
+    
+    // Hide display elements, show input elements
+    document.getElementById('titleDisplay').classList.add('hidden');
+    document.getElementById('titleInput').classList.remove('hidden');
+    
+    document.getElementById('descriptionDisplay').classList.add('hidden');
+    document.getElementById('descriptionInput').classList.remove('hidden');
+    
+    document.getElementById('categoryDisplay').classList.add('hidden');
+    document.getElementById('categoryInput').classList.remove('hidden');
+    
+    // Topic
+    const topicDisplay = document.getElementById('topicDisplay');
+    const topicEdit = document.getElementById('topicEdit');
+    if (topicDisplay) {
+        topicDisplay.classList.add('hidden');
+    }
+    topicEdit.classList.remove('hidden');
+    
+    // Tags
+    document.getElementById('tagsDisplay').classList.add('hidden');
+    document.getElementById('tagsEdit').classList.remove('hidden');
+    
+    // Progress tracking
+    document.getElementById('workCompletedDisplay').classList.add('hidden');
+    document.getElementById('workCompletedInput').classList.remove('hidden');
+    
+    document.getElementById('workRemainingDisplay').classList.add('hidden');
+    document.getElementById('workRemainingInput').classList.remove('hidden');
+    
+    document.getElementById('implementationIssuesDisplay').classList.add('hidden');
+    document.getElementById('implementationIssuesInput').classList.remove('hidden');
+
+    // Execution & priority
+    document.getElementById('queueDisplay').classList.add('hidden');
+    document.getElementById('queueInput').classList.remove('hidden');
+    // Task size uses segmented control, no need to toggle
+    // document.getElementById('taskSizeDisplay').classList.add('hidden');
+    // document.getElementById('taskSizeInput').classList.remove('hidden');
+    document.getElementById('priorityClassDisplay').classList.add('hidden');
+    document.getElementById('priorityClassInput').classList.remove('hidden');
+    
+    // Update button text and show save/cancel
+    document.getElementById('toggleEditBtn').textContent = 'Cancel Edit';
+    document.getElementById('toggleEditBtn').classList.remove('tt-btn-primary');
+    document.getElementById('toggleEditBtn').classList.add('tt-btn-secondary');
+    document.getElementById('saveCancelButtons').classList.remove('hidden');
+}
+
+// Exit edit mode
+function exitEditMode() {
+    // Restore original values to inputs (discard any changes)
+    document.getElementById('titleInput').value = originalValues.title;
+    document.getElementById('descriptionInput').value = originalValues.description;
+    document.getElementById('categoryInput').value = originalValues.category;
+    document.getElementById('topicInput').value = originalValues.topic;
+    document.getElementById('tagsInput').value = originalValues.tags;
+    document.getElementById('workCompletedInput').value = originalValues.workCompleted;
+    document.getElementById('workRemainingInput').value = originalValues.workRemaining;
+    document.getElementById('implementationIssuesInput').value = originalValues.implementationIssues;
+    document.getElementById('queueInput').value = originalValues.queue;
+    // Task size uses segmented control, update active state via JavaScript
+    // document.getElementById('taskSizeInput').value = originalValues.taskSize;
+    document.getElementById('priorityClassInput').value = originalValues.priorityClass;
+    
+    // Update display values from inputs (now restored to originals)
+    updateDisplayValues();
+    
+    // Show display elements, hide input elements
+    document.getElementById('titleDisplay').classList.remove('hidden');
+    document.getElementById('titleInput').classList.add('hidden');
+    
+    document.getElementById('descriptionDisplay').classList.remove('hidden');
+    document.getElementById('descriptionInput').classList.add('hidden');
+    
+    document.getElementById('categoryDisplay').classList.remove('hidden');
+    document.getElementById('categoryInput').classList.add('hidden');
+    
+    // Topic
+    const topicDisplay = document.getElementById('topicDisplay');
+    const topicEdit = document.getElementById('topicEdit');
+    topicEdit.classList.add('hidden');
+    
+    // Tags
+    document.getElementById('tagsDisplay').classList.remove('hidden');
+    document.getElementById('tagsEdit').classList.add('hidden');
+    
+    // Progress tracking
+    document.getElementById('workCompletedDisplay').classList.remove('hidden');
+    document.getElementById('workCompletedInput').classList.add('hidden');
+    
+    document.getElementById('workRemainingDisplay').classList.remove('hidden');
+    document.getElementById('workRemainingInput').classList.add('hidden');
+    
+    document.getElementById('implementationIssuesDisplay').classList.remove('hidden');
+    document.getElementById('implementationIssuesInput').classList.add('hidden');
+
+    // Execution & priority
+    document.getElementById('queueDisplay').classList.remove('hidden');
+    document.getElementById('queueInput').classList.add('hidden');
+    // Task size uses segmented control, always visible
+    // document.getElementById('taskSizeDisplay').classList.remove('hidden');
+    // document.getElementById('taskSizeInput').classList.add('hidden');
+    document.getElementById('priorityClassDisplay').classList.remove('hidden');
+    document.getElementById('priorityClassInput').classList.add('hidden');
+    
+    // Update button text and hide save/cancel
+    document.getElementById('toggleEditBtn').textContent = 'Update Todo';
+    document.getElementById('toggleEditBtn').classList.remove('tt-btn-secondary');
+    document.getElementById('toggleEditBtn').classList.add('tt-btn-primary');
+    document.getElementById('saveCancelButtons').classList.add('hidden');
+}
+
+// Save changes
+function saveChanges() {
+    // Update form values
+    document.getElementById('formTitle').value = document.getElementById('titleInput').value;
+    document.getElementById('formDescription').value = document.getElementById('descriptionInput').value;
+    document.getElementById('formCategory').value = document.getElementById('categoryInput').value;
+    document.getElementById('formTopic').value = document.getElementById('topicInput').value;
+    document.getElementById('formTags').value = document.getElementById('tagsInput').value;
+    document.getElementById('formWorkCompleted').value = document.getElementById('workCompletedInput').value;
+    document.getElementById('formWorkRemaining').value = document.getElementById('workRemainingInput').value;
+    document.getElementById('formImplementationIssues').value = document.getElementById('implementationIssuesInput').value;
+    document.getElementById('formQueue').value = document.getElementById('queueInput').value;
+    // Get task size from segmented control
+    const taskSizeDisplay = document.getElementById('taskSizeDisplay');
+    let taskSizeValue = '';
+    if (taskSizeDisplay) {
+        const activeBtn = taskSizeDisplay.querySelector('.tt-segmented-control button.active');
+        taskSizeValue = activeBtn ? activeBtn.textContent.trim() : '';
+    }
+    if (!taskSizeValue) {
+        taskSizeValue = document.getElementById('taskSizeInput').value;
+    }
+    document.getElementById('formTaskSize').value = taskSizeValue;
+    document.getElementById('formPriorityClass').value = document.getElementById('priorityClassInput').value;
+    
+    // Submit form
+    document.getElementById('updateForm').submit();
+}
+
+
+    // Update display values from inputs
+function updateDisplayValues() {
+    document.getElementById('titleDisplay').textContent = document.getElementById('titleInput').value;
+    
+    const desc = document.getElementById('descriptionInput').value;
+    const descDisplay = document.getElementById('descriptionDisplay');
+    if (desc.trim()) {
+        descDisplay.textContent = desc;
+        descDisplay.classList.remove('text-muted-foreground', 'italic');
+        renderMarkdown(descDisplay);
+    } else {
+        descDisplay.textContent = 'No description';
+        descDisplay.classList.add('text-muted-foreground', 'italic');
+        descDisplay.classList.remove('markdown-content');
+    }
+    
+    // Update category display
+    const categoryValue = document.getElementById('categoryInput').value;
+    const categoryDisplay = document.getElementById('categoryDisplay');
+    categoryDisplay.textContent = categoryValue;
+    categoryDisplay.className = 'category-badge category-' + categoryValue;
+    
+    // Update topic display
+    const topicValue = document.getElementById('topicInput').value.trim();
+    const topicDisplay = document.getElementById('topicDisplay');
+    if (topicValue) {
+        topicDisplay.textContent = '📁 ' + topicValue;
+        topicDisplay.className = 'px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-full';
+        topicDisplay.classList.remove('hidden');
+    } else {
+        topicDisplay.classList.add('hidden');
+    }
+    
+    // Update tags display
+    const tagsValue = document.getElementById('tagsInput').value;
+    const tagsDisplay = document.getElementById('tagsDisplay');
+    if (tagsValue.trim()) {
+        const tags = tagsValue.split(',').map(t => t.trim()).filter(t => t);
+        tagsDisplay.innerHTML = tags.map(tag => 
+            `<span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">🏷️ ${tag}</span>`
+        ).join('');
+    } else {
+        tagsDisplay.innerHTML = '';
+    }
+    
+    // Update progress tracking displays
+    const workCompleted = document.getElementById('workCompletedInput').value;
+    const workCompletedDisplay = document.getElementById('workCompletedDisplay');
+    if (workCompleted.trim()) {
+        workCompletedDisplay.textContent = workCompleted;
+        workCompletedDisplay.classList.remove('text-muted-foreground', 'italic');
+        renderMarkdown(workCompletedDisplay);
+    } else {
+        workCompletedDisplay.textContent = 'No work completed yet';
+        workCompletedDisplay.classList.add('text-muted-foreground', 'italic');
+        workCompletedDisplay.classList.remove('markdown-content');
+    }
+    
+    const workRemaining = document.getElementById('workRemainingInput').value;
+    const workRemainingDisplay = document.getElementById('workRemainingDisplay');
+    if (workRemaining.trim()) {
+        workRemainingDisplay.textContent = workRemaining;
+        workRemainingDisplay.classList.remove('text-muted-foreground', 'italic');
+        renderMarkdown(workRemainingDisplay);
+    } else {
+        workRemainingDisplay.textContent = 'No remaining work specified';
+        workRemainingDisplay.classList.add('text-muted-foreground', 'italic');
+        workRemainingDisplay.classList.remove('markdown-content');
+    }
+    
+    const implementationIssues = document.getElementById('implementationIssuesInput').value;
+    const implementationIssuesDisplay = document.getElementById('implementationIssuesDisplay');
+    if (implementationIssues.trim()) {
+        implementationIssuesDisplay.textContent = implementationIssues;
+        implementationIssuesDisplay.classList.remove('text-muted-foreground', 'italic');
+        renderMarkdown(implementationIssuesDisplay);
+    } else {
+        implementationIssuesDisplay.textContent = 'No implementation issues';
+        implementationIssuesDisplay.classList.add('text-muted-foreground', 'italic');
+        implementationIssuesDisplay.classList.remove('markdown-content');
+    }
+
+    // Update execution & priority displays
+    const queueVal = (document.getElementById('queueInput').value || '').trim();
+    const queueDisplay = document.getElementById('queueDisplay');
+    if (queueVal && parseInt(queueVal, 10) > 0) {
+        queueDisplay.textContent = parseInt(queueVal, 10);
+    } else {
+        queueDisplay.textContent = '0 (not queued)';
+    }
+
+    const taskSizeVal = (document.getElementById('taskSizeInput').value || '').trim();
+    const taskSizeDisplay = document.getElementById('taskSizeDisplay');
+    // Update task size segmented control active state
+    if (taskSizeDisplay) {
+        const buttons = taskSizeDisplay.querySelectorAll('.tt-segmented-control button');
+        buttons.forEach((btn, index) => {
+            const value = (index + 1).toString();
+            if (value === taskSizeVal) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+
+    const priorityVal = (document.getElementById('priorityClassInput').value || '').trim();
+    const priorityDisplay = document.getElementById('priorityClassDisplay');
+    priorityDisplay.textContent = priorityVal ? priorityVal : '—';
+}
+
+// Change status function
+function changeStatus(newStatus) {
+    if (newStatus === '{{ todo.status.value }}') {
+        return; // Already this status
+    }
+    
+    // Create a form and submit it
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/todos/{{ todo.id }}/update';
+    
+    const statusInput = document.createElement('input');
+    statusInput.type = 'hidden';
+    statusInput.name = 'status';
+    statusInput.value = newStatus;
+    form.appendChild(statusInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Load topics and tags for autocomplete
+let allTags = [];
+let allTopics = [];
+
+// Fetch tags
+fetch('/api/tags')
+    .then(res => res.json())
+    .then(tags => {
+        allTags = tags.map(t => t.name);
+        renderTagSuggestionsDetail();
+    });
+
+// Fetch topics
+fetch('/api/topics')
+    .then(res => res.json())
+    .then(topics => {
+        allTopics = topics;
+        const datalist = document.getElementById('topicListDetail');
+        topics.forEach(topic => {
+            const option = document.createElement('option');
+            option.value = topic;
+            datalist.appendChild(option);
+        });
+    });
+
+// Copy todo ID to clipboard
+function copyTodoId(todoId) {
+    const text = `#${todoId}`;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.getElementById(`copyBtn${todoId}`);
+        if (btn) {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+            btn.title = 'Copied!';
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.title = 'Copy todo ID to clipboard';
+            }, 2000);
+        }
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+    });
+}
+
+// Render tag suggestions as clickable chips
+function renderTagSuggestionsDetail() {
+    const container = document.getElementById('tagSuggestionsDetail');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="text-xs text-muted-foreground w-full">Click to add:</div>';
+    
+    // Show first 20 tags
+    allTags.slice(0, 20).forEach(tagName => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 transition';
+        chip.textContent = tagName;
+        chip.onclick = () => {
+            const input = document.getElementById('tagsInput');
+            const current = input.value.trim();
+            if (current) {
+                input.value = current + ', ' + tagName;
+            } else {
+                input.value = tagName;
+            }
+        };
+        container.appendChild(chip);
+    });
+}
+</script>
+
+{% endblock %}
+

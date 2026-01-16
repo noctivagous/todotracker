@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Notes - TodoTracker{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-3xl font-bold">Notes</h2>
+    <button onclick="document.getElementById('createModal').classList.remove('hidden')" 
+            class="tt-btn tt-btn-primary">
+        + New Note
+    </button>
+</div>
+
+<!-- Notes List -->
+<div class="space-y-4">
+    {% if notes %}
+        {% for note in notes %}
+        <div class="tt-card">
+            <div class="flex justify-between items-start">
+                <div class="flex-1 tt-card-content">
+                    <div class="mb-3 markdown-render">{{ note.content }}</div>
+                    
+                    <div class="flex items-center space-x-4 text-sm text-muted-foreground">
+                        <span>{{ note.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+                        {% if note.todo_id %}
+                            <a href="/todo/{{ note.todo_id }}" class="underline underline-offset-2">
+                                → Linked to todo #{{ note.todo_id }}
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <form action="/api/notes/{{ note.id }}/delete" method="POST" 
+                      onsubmit="return confirm('Delete this note?')">
+                    <button type="submit" class="tt-btn tt-btn-destructive tt-btn-sm">
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="tt-card tt-card-content text-center text-muted-foreground">
+            <p class="text-lg">No notes yet.</p>
+            <p class="text-sm mt-2">Create your first note to get started!</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Create Modal -->
+<div id="createModal" class="hidden fixed inset-0 tt-modal-backdrop flex items-center justify-center z-50">
+    <div class="tt-card w-full max-w-md">
+        <div class="tt-card-header flex items-center justify-between">
+            <h3 class="text-xl font-bold">Create New Note</h3>
+            <button onclick="document.getElementById('createModal').classList.add('hidden')" 
+                    class="tt-btn tt-btn-ghost tt-btn-sm">✕</button>
+        </div>
+        
+        <form action="/api/notes/form" method="POST" class="space-y-4 tt-card-content">
+            <div>
+                <label class="block text-sm font-medium mb-1">Content*</label>
+                <textarea name="content" rows="5" required
+                          class="tt-textarea"></textarea>
+            </div>
+            
+            <div class="flex space-x-3">
+                <button type="submit" 
+                        class="tt-btn tt-btn-primary flex-1">
+                    Create
+                </button>
+                <button type="button" 
+                        onclick="document.getElementById('createModal').classList.add('hidden')"
+                        class="tt-btn tt-btn-secondary flex-1">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

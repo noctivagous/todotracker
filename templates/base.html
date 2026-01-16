@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}TodoTracker{% endblock %}</title>
+    <script>
+        // Tailwind CDN: use class-based dark mode so `.dark` works with `dark:*` utilities.
+        tailwind = window.tailwind || {};
+        tailwind.config = { darkMode: 'class' };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="/static/css/shadcn.css">
+    <script>
+        // Set theme ASAP to avoid flash. (Default: light)
+        (function () {
+            try {
+                var t = localStorage.getItem("tt-theme");
+                if (t === "dark") document.documentElement.classList.add("dark");
+            } catch (e) {}
+        })();
+    </script>
+</head>
+<body class="min-h-screen bg-background text-foreground">
+    <!-- Navigation -->
+    <nav class="tt-nav">
+        <div class="tt-container">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center gap-4">
+                    <a href="/" class="tt-brand text-lg">
+                        📋 TodoTracker
+                    </a>
+                    {% if project_name %}
+                        <span class="tt-kbd truncate max-w-[28ch]" title="{{ project_name }}">
+                            {{ project_name }}
+                        </span>
+                    {% endif %}
+                    <div class="hidden sm:flex items-center gap-1 ml-2">
+                        <a href="/" class="tt-nav-link {% if request.url.path == '/' %}tt-nav-link-active{% endif %}">
+                            Todos
+                        </a>
+                        <a href="/notes" class="tt-nav-link {% if request.url.path == '/notes' %}tt-nav-link-active{% endif %}">
+                            Notes
+                        </a>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="ttThemeToggle" type="button" class="tt-btn tt-btn-ghost" title="Toggle theme">
+                        <span id="ttThemeLabel">🌙 Dark</span>
+                    </button>
+                    <span class="hidden md:inline text-sm text-muted-foreground">MCP Server Ready</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="tt-container py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Markdown rendering utility -->
+    <script>
+        // Configure marked options
+        if (typeof marked !== 'undefined') {
+            marked.setOptions({
+                breaks: true,
+                gfm: true,
+                sanitize: false, // We'll sanitize on our own if needed
+            });
+        }
+        
+        // Function to render markdown content
+        function renderMarkdown(element) {
+            if (!element || typeof marked === 'undefined') return;
+            
+            const markdownText = element.textContent || element.innerText;
+            if (!markdownText || markdownText.trim() === '') return;
+            
+            try {
+                const html = marked.parse(markdownText);
+                element.innerHTML = html;
+                element.classList.add('markdown-content');
+            } catch (e) {
+                console.error('Markdown rendering error:', e);
+                // Fallback to original text if rendering fails
+            }
+        }
+        
+        // Auto-render markdown when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.markdown-render').forEach(function(el) {
+                renderMarkdown(el);
+            });
+        });
+
+        // Theme toggle
+        (function () {
+            var btn = document.getElementById("ttThemeToggle");
+            if (!btn) return;
+            var label = document.getElementById("ttThemeLabel");
+            function syncLabel() {
+                var isDark = document.documentElement.classList.contains("dark");
+                if (label) label.textContent = isDark ? "☀️ Light" : "🌙 Dark";
+            }
+            syncLabel();
+            btn.addEventListener("click", function () {
+                var root = document.documentElement;
+                var isDark = root.classList.toggle("dark");
+                try { localStorage.setItem("tt-theme", isDark ? "dark" : "light"); } catch (e) {}
+                syncLabel();
+            });
+        })();
+    </script>
+
+    <!-- Footer -->
+    <footer class="border-t border-border mt-12">
+        <div class="tt-container py-6">
+            <p class="text-center text-sm text-muted-foreground">
+                TodoTracker - AI-powered todo management with Model Context Protocol
+            </p>
+        </div>
+    </footer>
+</body>
+</html>
+

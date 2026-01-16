@@ -1,0 +1,506 @@
+"""
+CRUD (Create, Read, Update, Delete) operations for the database.
+These functions are used by both the MCP server and web server.
+"""
+
+from typing import List, Optional
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import or_, and_, func
+from .db import Todo, Note, TodoDependency, TodoStatus, TodoCategory, Tag, TodoTag
+from .schemas import TodoCreate, TodoUpdate, NoteCreate, NoteUpdate, TodoSearch
+
+
+# Todo CRUD operations
+
+def get_todo(db: Session, todo_id: int) -> Optional[Todo]:
+    """Get a single todo by ID with all relationships loaded."""
+    return db.query(Todo).options(
+        joinedload(Todo.children),
+        joinedload(Todo.notes),
+        joinedload(Todo.dependencies)
+    ).filter(Todo.id == todo_id).first()
+
+
+def get_todos(db: Session, skip: int = 0, limit: int = 100) -> List[Todo]:
+    """Get all todos with pagination."""
+    return db.query(Todo).offset(skip).limit(limit).all()
+
+
+def get_root_todos(db: Session) -> List[Todo]:
+    """Get all top-level todos (no parent)."""
+    return db.query(Todo).filter(Todo.parent_id == None).all()
+
+
+def get_todo_tree(db: Session) -> List[Todo]:
+    """
+    Get hierarchical todo tree (root todos with all children loaded).
+    Uses recursive loading through relationships.
+    """
+    def _as_children_list(children_value):
+        """
+        Normalize `Todo.children` to a list.
+        Defensive: misconfigured ORM relationships or older mappings can yield
+        `None` (no children) or a scalar Todo (single child).
+        """
+        if children_value is None:
+            return []
+        # SQLAlchemy's InstrumentedList is list-like; keep it as-is.
+        if isinstance(children_value, (list, tuple)):
+            return list(children_value)
+        # Scalar relationship (unexpected) — wrap.
+        return [children_value]
+
+    def load_children(todo: Todo):
+        """Recursively load children."""
+        for child in _as_children_list(getattr(todo, "children", None)):
+            load_children(child)
+        return todo
+    
+    root_todos = get_root_todos(db)
+    if root_todos is None:
+        return []
+    return [load_children(todo) for todo in root_todos]
+
+
+def create_todo(db: Session, todo: TodoCreate) -> Todo:
+    """Create a new todo with optional tags."""
+    db_todo = Todo(
+        title=todo.title,
+        description=todo.description,
+        category=todo.category,
+        status=todo.status,
+        parent_id=todo.parent_id,
+        topic=todo.topic,
+        queue=getattr(todo, "queue", 0) or 0,
+        task_size=getattr(todo, "task_size", None),
+        priority_class=getattr(todo, "priority_class", None),
+        work_completed=todo.work_completed,
+        work_remaining=todo.work_remaining,
+        implementation_issues=todo.implementation_issues,
+    )
+    db.add(db_todo)
+    db.flush()  # Get the ID before adding tags
+    
+    # Add tags if provided
+    if todo.tag_names:
+        for tag_name in todo.tag_names:
+            tag = db.query(Tag).filter(Tag.name == tag_name).first()
+            if not tag:
+                # Create new tag if it doesn't exist
+                tag = Tag(name=tag_name)
+                db.add(tag)
+                db.flush()
+            db_todo.tags.append(tag)
+    
+    db.commit()
+    db.refresh(db_todo)
+    return db_todo
+
+
+def update_todo(db: Session, todo_id: int, todo_update: TodoUpdate) -> Optional[Todo]:
+    """Update an existing todo with optional tags."""
+    db_todo = get_todo(db, todo_id)
+    if not db_todo:
+        return None
+    
+    update_data = todo_update.model_dump(exclude_unset=True)
+    
+    # Handle tags separately
+    tag_names = update_data.pop('tag_names', None)
+    
+    # Update regular fields
+    for field, value in update_data.items():
+        setattr(db_todo, field, value)
+    
+    # Update tags if provided
+    if tag_names is not None:
+        # Clear existing tags
+        db_todo.tags.clear()
+        # Add new tags
+        for tag_name in tag_names:
+            tag = db.query(Tag).filter(Tag.name == tag_name).first()
+            if not tag:
+                tag = Tag(name=tag_name)
+                db.add(tag)
+                db.flush()
+            db_todo.tags.append(tag)
+    
+    db.commit()
+    db.refresh(db_todo)
+    return db_todo
+
+
+def delete_todo(db: Session, todo_id: int) -> bool:
+    """Delete a todo (cascades to children and notes)."""
+    db_todo = get_todo(db, todo_id)
+    if not db_todo:
+        return False
+    
+    db.delete(db_todo)
+    db.commit()
+    return True
+
+
+def search_todos(db: Session, search: TodoSearch) -> List[Todo]:
+    """
+    Search/filter todos based on query, category, status, parent_id, topic, and tags.
+    Deep search includes title, description, progress fields, notes content, and tag names.
+    """
+    query = db.query(Todo)
+    
+    if search.query:
+        search_term = f"%{search.query}%"
+        # Deep search: include notes content and tag names
+        # Use subqueries to avoid complex joins that might cause duplicates
+        from sqlalchemy import exists
+        notes_match = exists().where(
+            and_(Note.todo_id == Todo.id, Note.content.ilike(search_term))
+        )
+        tags_match = exists().where(
+            and_(
+                TodoTag.todo_id == Todo.id,
+                TodoTag.tag_id == Tag.id,
+                Tag.name.ilike(search_term)
+            )
+        )
+        query = query.filter(
+            or_(
+                Todo.title.ilike(search_term),
+                Todo.description.ilike(search_term),
+                Todo.progress_summary.ilike(search_term),
+                Todo.remaining_work.ilike(search_term),
+                Todo.work_completed.ilike(search_term),
+                Todo.work_remaining.ilike(search_term),
+                Todo.implementation_issues.ilike(search_term),
+                Todo.topic.ilike(search_term),
+                notes_match,
+                tags_match,
+            )
+        ).distinct()  # Use distinct to avoid duplicates from subqueries
+    
+    if search.category:
+        query = query.filter(Todo.category == search.category)
+    
+    if search.status:
+        query = query.filter(Todo.status == search.status)
+    
+    if search.parent_id is not None:
+        query = query.filter(Todo.parent_id == search.parent_id)
+    
+    if search.topic:
+        topic_term = f"%{search.topic}%"
+        query = query.filter(Todo.topic.ilike(topic_term))
+    
+    if search.tags:
+        # Filter by tags (todos that have ALL specified tags)
+        for tag_name in search.tags:
+            query = query.join(Todo.tags).filter(Tag.name == tag_name)
+
+    # Execution & priority filters
+    if getattr(search, "in_queue", None) is True:
+        query = query.filter(Todo.queue > 0)
+    elif getattr(search, "in_queue", None) is False:
+        query = query.filter(Todo.queue == 0)
+
+    if getattr(search, "queue", None) is not None:
+        query = query.filter(Todo.queue == search.queue)
+
+    if getattr(search, "task_size", None) is not None:
+        query = query.filter(Todo.task_size == search.task_size)
+
+    if getattr(search, "priority_class", None):
+        query = query.filter(Todo.priority_class == search.priority_class)
+    
+    return query.all()
+
+
+# -----------------------------------------------------------------------------
+# Queue helpers
+# -----------------------------------------------------------------------------
+
+def get_queued_todos(db: Session, limit: Optional[int] = None, min_size: Optional[int] = None, max_size: Optional[int] = None) -> List[Todo]:
+    """
+    Get todos in the execution queue (queue > 0), ordered by queue ascending.
+    
+    Args:
+        db: Database session
+        limit: Optional limit on number of results
+        min_size: Optional minimum task_size (1-5, inclusive)
+        max_size: Optional maximum task_size (1-5, inclusive)
+    
+    Returns:
+        List of todos sorted by queue value (ascending)
+    
+    Note:
+        If task_size filtering is used, todos with null task_size are excluded.
+    """
+    q = db.query(Todo).filter(Todo.queue > 0).order_by(Todo.queue.asc(), Todo.id.asc())
+    
+    # Apply task_size filtering if provided
+    if min_size is not None or max_size is not None:
+        # When filtering by task_size, exclude nulls
+        q = q.filter(Todo.task_size.isnot(None))
+        if min_size is not None:
+            q = q.filter(Todo.task_size >= min_size)
+        if max_size is not None:
+            q = q.filter(Todo.task_size <= max_size)
+    
+    if limit is not None:
+        q = q.limit(limit)
+    return q.all()
+
+
+def get_max_queue(db: Session) -> int:
+    """Get the current maximum queue value (0 if none)."""
+    max_val = db.query(func.max(Todo.queue)).scalar()
+    return int(max_val or 0)
+
+
+def normalize_queue(db: Session) -> None:
+    """
+    Normalize queue values to be contiguous starting at 1, in current queue order.
+    Leaves non-queued items at 0.
+    """
+    queued = get_queued_todos(db)
+    expected = 1
+    changed = False
+    for todo in queued:
+        if todo.queue != expected:
+            todo.queue = expected
+            changed = True
+        expected += 1
+    if changed:
+        db.commit()
+
+
+def add_to_queue(db: Session, todo_id: int) -> Optional[Todo]:
+    """Add a todo to the end of the queue (sets queue to max+1)."""
+    todo = get_todo(db, todo_id)
+    if not todo:
+        return None
+    if (todo.queue or 0) > 0:
+        return todo
+    todo.queue = get_max_queue(db) + 1
+    db.commit()
+    db.refresh(todo)
+    return todo
+
+
+def remove_from_queue(db: Session, todo_id: int) -> Optional[Todo]:
+    """Remove a todo from the queue (sets queue to 0) and normalizes queue."""
+    todo = get_todo(db, todo_id)
+    if not todo:
+        return None
+    if (todo.queue or 0) == 0:
+        return todo
+    todo.queue = 0
+    db.commit()
+    normalize_queue(db)
+    db.refresh(todo)
+    return todo
+
+
+def move_queue_up(db: Session, todo_id: int) -> Optional[Todo]:
+    """Move a queued todo up by one position (swap with previous)."""
+    todo = get_todo(db, todo_id)
+    if not todo or (todo.queue or 0) <= 1:
+        return todo
+    current_pos = int(todo.queue)
+    prev = db.query(Todo).filter(Todo.queue == current_pos - 1).first()
+    if not prev:
+        normalize_queue(db)
+        return get_todo(db, todo_id)
+    prev.queue, todo.queue = current_pos, current_pos - 1
+    db.commit()
+    db.refresh(todo)
+    return todo
+
+
+def move_queue_down(db: Session, todo_id: int) -> Optional[Todo]:
+    """Move a queued todo down by one position (swap with next)."""
+    todo = get_todo(db, todo_id)
+    if not todo or (todo.queue or 0) == 0:
+        return todo
+    current_pos = int(todo.queue)
+    next_todo = db.query(Todo).filter(Todo.queue == current_pos + 1).first()
+    if not next_todo:
+        # Might already be at bottom or queue is gapped
+        normalize_queue(db)
+        return get_todo(db, todo_id)
+    next_todo.queue, todo.queue = current_pos, current_pos + 1
+    db.commit()
+    db.refresh(todo)
+    return todo
+
+
+def add_concern(db: Session, parent_id: int, title: str, description: str) -> Optional[Todo]:
+    """
+    Convenience function to add a concern (a special type of todo).
+    Prefixes the title with "[Concern]".
+    """
+    parent = get_todo(db, parent_id)
+    if not parent:
+        return None
+    
+    concern_title = f"[Concern] {title}" if not title.startswith("[Concern]") else title
+    
+    concern = TodoCreate(
+        title=concern_title,
+        description=description,
+        category=TodoCategory.ISSUE,
+        status=TodoStatus.PENDING,
+        parent_id=parent_id,
+        topic=None,
+        tag_names=[],
+    )
+    
+    return create_todo(db, concern)
+
+
+# Tag CRUD operations
+
+def get_all_tags(db: Session) -> List[Tag]:
+    """Get all tags, ordered by name."""
+    return db.query(Tag).order_by(Tag.name).all()
+
+
+def get_tag_by_name(db: Session, name: str) -> Optional[Tag]:
+    """Get a tag by name."""
+    return db.query(Tag).filter(Tag.name == name).first()
+
+
+def create_tag(db: Session, name: str, description: Optional[str] = None) -> Tag:
+    """Create a new tag."""
+    tag = Tag(name=name, description=description)
+    db.add(tag)
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+
+def get_all_topics(db: Session) -> List[str]:
+    """Get all unique topics used in todos."""
+    topics = db.query(Todo.topic).filter(Todo.topic.isnot(None)).distinct().all()
+    return sorted([t[0] for t in topics if t[0]])
+
+
+# Note CRUD operations
+
+def get_note(db: Session, note_id: int) -> Optional[Note]:
+    """Get a single note by ID."""
+    return db.query(Note).filter(Note.id == note_id).first()
+
+
+def get_notes(db: Session, todo_id: Optional[int] = None, skip: int = 0, limit: int = 100) -> List[Note]:
+    """Get notes, optionally filtered by todo_id."""
+    query = db.query(Note)
+    
+    if todo_id is not None:
+        query = query.filter(Note.todo_id == todo_id)
+    
+    return query.offset(skip).limit(limit).all()
+
+
+def create_note(db: Session, note: NoteCreate) -> Note:
+    """Create a new note."""
+    db_note = Note(
+        content=note.content,
+        todo_id=note.todo_id,
+    )
+    db.add(db_note)
+    db.commit()
+    db.refresh(db_note)
+    return db_note
+
+
+def update_note(db: Session, note_id: int, note_update: NoteUpdate) -> Optional[Note]:
+    """Update an existing note."""
+    db_note = get_note(db, note_id)
+    if not db_note:
+        return None
+    
+    update_data = note_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_note, field, value)
+    
+    db.commit()
+    db.refresh(db_note)
+    return db_note
+
+
+def delete_note(db: Session, note_id: int) -> bool:
+    """Delete a note."""
+    db_note = get_note(db, note_id)
+    if not db_note:
+        return False
+    
+    db.delete(db_note)
+    db.commit()
+    return True
+
+
+# Dependency CRUD operations
+
+def create_dependency(db: Session, todo_id: int, depends_on_id: int) -> Optional[TodoDependency]:
+    """Create a dependency relationship between todos."""
+    # Check if both todos exist
+    todo = get_todo(db, todo_id)
+    depends_on = get_todo(db, depends_on_id)
+    
+    if not todo or not depends_on:
+        return None
+    
+    # Check if dependency already exists
+    existing = db.query(TodoDependency).filter(
+        and_(
+            TodoDependency.todo_id == todo_id,
+            TodoDependency.depends_on_id == depends_on_id
+        )
+    ).first()
+    
+    if existing:
+        return existing
+    
+    dependency = TodoDependency(
+        todo_id=todo_id,
+        depends_on_id=depends_on_id,
+    )
+    db.add(dependency)
+    db.commit()
+    db.refresh(dependency)
+    return dependency
+
+
+def get_dependencies(db: Session, todo_id: int) -> List[TodoDependency]:
+    """Get all dependencies for a todo."""
+    return db.query(TodoDependency).filter(TodoDependency.todo_id == todo_id).all()
+
+
+def delete_dependency(db: Session, dependency_id: int) -> bool:
+    """Delete a dependency."""
+    dependency = db.query(TodoDependency).filter(TodoDependency.id == dependency_id).first()
+    if not dependency:
+        return False
+    
+    db.delete(dependency)
+    db.commit()
+    return True
+
+
+def check_dependencies_met(db: Session, todo_id: int) -> bool:
+    """
+    Check if all dependencies for a todo are completed.
+    Returns True if all dependencies are met (or if there are no dependencies).
+    """
+    dependencies = get_dependencies(db, todo_id)
+    
+    if not dependencies:
+        return True
+    
+    for dep in dependencies:
+        depends_on_todo = get_todo(db, dep.depends_on_id)
+        if depends_on_todo and depends_on_todo.status != TodoStatus.COMPLETED:
+            return False
+    
+    return True
+

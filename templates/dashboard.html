@@ -1,0 +1,164 @@
+{% extends "base_dashboard.html" %}
+
+{% block title %}TodoTracker Dashboard{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="mb-8">
+    <h2 class="text-3xl font-bold mb-2">Multi-Project Server Manager</h2>
+    <p class="text-muted-foreground">
+        Monitor and manage all running TodoTracker instances across your projects.
+        Each project automatically gets its own port (8070+).
+    </p>
+</div>
+
+<!-- Statistics -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="tt-card">
+        <div class="tt-card-content flex items-center justify-between">
+            <div>
+                <p class="text-muted-foreground text-sm font-medium">Total Servers</p>
+                <p class="text-4xl font-bold mt-2">{{ total_servers }}</p>
+            </div>
+            <div class="text-5xl opacity-50">🌐</div>
+        </div>
+    </div>
+
+    <div class="tt-card">
+        <div class="tt-card-content flex items-center justify-between">
+            <div>
+                <p class="text-muted-foreground text-sm font-medium">Running</p>
+                <p class="text-4xl font-bold mt-2">{{ running_servers }}</p>
+            </div>
+            <div class="text-5xl opacity-50">✅</div>
+        </div>
+    </div>
+
+    <div class="tt-card">
+        <div class="tt-card-content flex items-center justify-between">
+            <div>
+                <p class="text-muted-foreground text-sm font-medium">Port Range</p>
+                <p class="text-2xl font-bold mt-2">8070 - 8170</p>
+            </div>
+            <div class="text-5xl opacity-50">🔌</div>
+        </div>
+    </div>
+</div>
+
+<!-- Server List -->
+<div class="tt-card">
+    <div class="tt-card-header">
+        <h3 class="text-xl font-bold">Active TodoTracker Instances</h3>
+    </div>
+
+    {% if servers %}
+    <div class="divide-y divide-gray-200 dark:divide-gray-800">
+        {% for server in servers %}
+        <div class="p-4">
+            <div class="tt-surface p-6 {% if server.is_running %}border-l-4 border-l-green-500{% endif %} {% if not server.is_running %}opacity-70{% endif %}">
+                <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-3 mb-3 flex-wrap">
+                            <h4 class="text-xl font-bold">{{ server.project_name }}</h4>
+                            {% if server.is_running %}
+                            <span class="tt-badge tt-badge-success">🟢 Running</span>
+                            {% else %}
+                            <span class="tt-badge tt-badge-destructive">🔴 Offline</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p class="text-muted-foreground mb-1">🌐 Port</p>
+                                <p class="font-mono text-lg font-bold">{{ server.port }}</p>
+                            </div>
+                            <div>
+                                <p class="text-muted-foreground mb-1">⏱️ Uptime</p>
+                                <p class="font-semibold">{{ server.uptime }}</p>
+                            </div>
+                            <div class="md:col-span-2">
+                                <p class="text-muted-foreground mb-1">💾 Database</p>
+                                <p class="font-mono text-xs text-muted-foreground break-all">{{ server.db_path }}</p>
+                            </div>
+                            <div>
+                                <p class="text-muted-foreground mb-1">🔢 Process ID</p>
+                                <p class="font-mono">{{ server.pid }}</p>
+                            </div>
+                            <div>
+                                <p class="text-muted-foreground mb-1">🕐 Started</p>
+                                <p>{{ server.started_at[:19] }}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if server.is_running %}
+                    <div class="flex flex-col gap-2">
+                        <a href="http://localhost:{{ server.port }}" target="_blank" class="tt-btn tt-btn-primary text-center">
+                            🚀 Open Web UI
+                        </a>
+                        <a href="http://localhost:{{ server.port }}/docs" target="_blank" class="tt-btn tt-btn-secondary text-center">
+                            📚 API Docs
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="tt-card-content text-center">
+        <div class="text-6xl mb-4">📭</div>
+        <h3 class="text-xl font-semibold mb-2">No Running Servers</h3>
+        <p class="text-muted-foreground mb-6">Start a TodoTracker instance to see it here.</p>
+        <div class="tt-surface p-6 max-w-2xl mx-auto text-left">
+            <p class="font-semibold mb-2">To start a TodoTracker server:</p>
+            <pre class="tt-surface p-4 text-sm overflow-x-auto">cd /path/to/your/project
+python /path/to/todotracker/todotracker_webserver.py</pre>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Info -->
+<div class="mt-8 tt-card">
+    <div class="tt-card-content">
+        <h3 class="text-lg font-semibold mb-3">ℹ️ How It Works</h3>
+        <ul class="space-y-2 text-sm text-muted-foreground">
+            <li class="flex items-start"><span class="mr-2">•</span><span><strong>Adaptive Ports:</strong> Each project automatically gets the next available port starting from 8070.</span></li>
+            <li class="flex items-start"><span class="mr-2">•</span><span><strong>No Conflicts:</strong> If port 8070 is in use, the system tries 8071, 8072, etc.</span></li>
+            <li class="flex items-start"><span class="mr-2">•</span><span><strong>Project Detection:</strong> Running the same project twice opens the existing server instead.</span></li>
+            <li class="flex items-start"><span class="mr-2">•</span><span><strong>Dashboard Port:</strong> This dashboard always runs on port <span class="tt-kbd">8069</span> (reserved).</span></li>
+            <li class="flex items-start"><span class="mr-2">•</span><span><strong>Auto-Cleanup:</strong> Stale server entries are automatically removed.</span></li>
+        </ul>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="tt-card">
+        <div class="tt-card-content">
+            <h3 class="text-lg font-semibold mb-3">🚀 Quick Start</h3>
+            <p class="text-sm text-muted-foreground mb-4">Launch a TodoTracker instance for your project:</p>
+            <pre class="tt-surface p-4 text-sm overflow-x-auto">cd /path/to/your/project
+./todos.sh</pre>
+        </div>
+    </div>
+
+    <div class="tt-card">
+        <div class="tt-card-content">
+            <h3 class="text-lg font-semibold mb-3">📊 Dashboard Access</h3>
+            <p class="text-sm text-muted-foreground mb-4">Run the dashboard from anywhere:</p>
+            <pre class="tt-surface p-4 text-sm overflow-x-auto">python /path/to/todotracker/dashboard.py</pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-refresh every 10 seconds
+    setTimeout(function () {
+        location.reload();
+    }, 10000);
+</script>
+{% endblock %}
+

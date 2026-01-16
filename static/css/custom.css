@@ -1,0 +1,151 @@
+/* Custom styles for TodoTracker */
+
+/* Smooth transitions */
+* {
+    transition: all 0.2s ease-in-out;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Todo animations */
+.todo-item:hover {
+    transform: translateX(4px);
+}
+
+/* Modal animations */
+.modal-enter {
+    animation: fadeIn 0.2s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Status indicators */
+.status-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.status-indicator.pending {
+    background-color: #9ca3af;
+}
+
+.status-indicator.in_progress {
+    background-color: #3b82f6;
+    animation: pulse 2s infinite;
+}
+
+.status-indicator.completed {
+    background-color: #10b981;
+}
+
+.status-indicator.cancelled {
+    background-color: #ef4444;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Button hover effects */
+button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+button:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+/* Queue control buttons - explicit hover styles */
+button[title="Move up in queue"]:hover:not(:disabled),
+button[title="Move down in queue"]:hover:not(:disabled) {
+    background-color: #d1d5db !important; /* gray-300 */
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+button[title="Move up in queue"]:active:not(:disabled),
+button[title="Move down in queue"]:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure all buttons with bg-gray-200 have hover effect */
+button.bg-gray-200:hover:not(:disabled) {
+    background-color: #d1d5db !important; /* gray-300 */
+}
+
+/* Generic button hover for buttons without specific classes */
+button:not(.tt-btn):not([class*="tt-"]):hover:not(:disabled) {
+    opacity: 0.9;
+    cursor: pointer;
+}
+
+/* Form focus effects */
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    ring: 2px;
+    ring-color: #6366f1;
+}
+
+/* Loading spinner */
+.spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #6366f1;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Print styles */
+@media print {
+    nav, button, .no-print {
+        display: none !important;
+    }
+    
+    .todo-item {
+        page-break-inside: avoid;
+    }
+}
+
