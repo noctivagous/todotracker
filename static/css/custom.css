@@ -170,6 +170,8 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
 /* Left panel minimize rail (do not mutate list item internals; just hide overflow). */
 #tt-panel-start-shell[data-tt-minimized="true"] {
     --calcite-shell-panel-width: 15pt;
+    --calcite-shell-panel-min-width: 15pt;
+    --calcite-shell-panel-max-width: 15pt;
 }
 
 #tt-panel-start-shell[data-tt-minimized="true"] #tt-panel-start {

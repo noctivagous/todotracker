@@ -1013,11 +1013,33 @@ function initializeTodosView() {
             const isMin = startShell.getAttribute('data-tt-minimized') === 'true';
             startShell.setAttribute('data-tt-minimized', isMin ? 'false' : 'true');
             if (isMin) {
+                // Clear enforced rail sizing
+                try {
+                    startShell.style.removeProperty('--calcite-shell-panel-width');
+                    startShell.style.removeProperty('--calcite-shell-panel-min-width');
+                    startShell.style.removeProperty('--calcite-shell-panel-max-width');
+                } catch (e) {}
+
+                // Restore resizable state (min width constraints are removed by CSS when not minimized)
+                const prev = startShell.getAttribute('data-tt-resizable-prev');
+                if (prev === 'true') startShell.setAttribute('resizable', '');
+                startShell.removeAttribute('data-tt-resizable-prev');
                 // Expanded state
                 leftToggle.setAttribute('icon-start', 'chevrons-left');
                 leftToggle.innerHTML = 'Minimize';
                 leftToggle.setAttribute('title', 'Minimize left panel');
             } else {
+                // While minimized, remove resizable (it adds internal padding/handle that prevents a true narrow rail)
+                startShell.setAttribute('data-tt-resizable-prev', startShell.hasAttribute('resizable') ? 'true' : 'false');
+                startShell.removeAttribute('resizable');
+
+                // Enforce rail sizing via inline vars to defeat any default Calcite min-width clamps.
+                try {
+                    startShell.style.setProperty('--calcite-shell-panel-width', '15pt');
+                    startShell.style.setProperty('--calcite-shell-panel-min-width', '15pt');
+                    startShell.style.setProperty('--calcite-shell-panel-max-width', '15pt');
+                } catch (e) {}
+
                 // Minimized rail state
                 leftToggle.setAttribute('icon-start', 'dock-left');
                 leftToggle.innerHTML = '';
