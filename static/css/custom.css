@@ -309,6 +309,28 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
 .status-completed { --calcite-chip-background-color: var(--calcite-color-status-success); }
 .status-cancelled { --calcite-chip-background-color: var(--calcite-color-status-danger); }
 
+/* Status chips: sharp corners + light text tinted by the same hue */
+calcite-chip[class^="status-"],
+calcite-chip[class*=" status-"] {
+    --calcite-chip-corner-radius: 0px;
+    /* safe default if color-mix isn't supported */
+    --calcite-chip-text-color: var(--calcite-color-text-inverse);
+}
+
+/* Provide a hue token per status for tinting text */
+.status-pending { --tt-status-hue: var(--calcite-color-text-3); }
+.status-in_progress { --tt-status-hue: var(--calcite-color-status-info); }
+.status-completed { --tt-status-hue: var(--calcite-color-status-success); }
+.status-cancelled { --tt-status-hue: var(--calcite-color-status-danger); }
+
+@supports (color: color-mix(in srgb, white, black)) {
+    calcite-chip[class^="status-"],
+    calcite-chip[class*=" status-"] {
+        /* light, same-hue ink on dark-ish chip fills */
+        --calcite-chip-text-color: color-mix(in srgb, var(--tt-status-hue) 18%, white);
+    }
+}
+
 .category-feature { --calcite-chip-background-color: var(--calcite-color-status-info); }
 .category-issue { --calcite-chip-background-color: var(--calcite-color-status-warning); }
 .category-bug { --calcite-chip-background-color: var(--calcite-color-status-danger); }
