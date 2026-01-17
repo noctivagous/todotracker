@@ -407,6 +407,29 @@ def init_db():
         elif current_version > SCHEMA_VERSION:
             print(f"⚠️  WARNING: Database schema v{current_version} is NEWER than TodoTracker v{SCHEMA_VERSION}")
             print("   Please upgrade TodoTracker to use this database.")
+
+        # Queue is only meaningful for active work (pending/in_progress). Clean up any
+        # stale queue values on completed/cancelled items, and renumber queue contiguously.
+        try:
+            db.execute(text(
+                "UPDATE todos SET queue = 0 "
+                "WHERE status NOT IN ('pending', 'in_progress') AND queue <> 0"
+            ))
+            # Renumber queued items to 1..N in current ordering.
+            db.execute(text("""
+                WITH ranked AS (
+                    SELECT id, ROW_NUMBER() OVER (ORDER BY queue ASC, id ASC) AS rn
+                    FROM todos
+                    WHERE queue > 0 AND status IN ('pending', 'in_progress')
+                )
+                UPDATE todos
+                SET queue = (SELECT rn FROM ranked WHERE ranked.id = todos.id)
+                WHERE id IN (SELECT id FROM ranked)
+            """))
+            db.commit()
+        except Exception:
+            # Best-effort cleanup; if the DB is old/unusual, runtime CRUD enforcement still applies.
+            db.rollback()
         
         # Create stock tags if they don't exist
         existing_tags = db.query(Tag).count()

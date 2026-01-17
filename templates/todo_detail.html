@@ -3,6 +3,7 @@
 {% block title %}{{ todo.title }} - TodoTracker{% endblock %}
 
 {% block content %}
+{% set queue_relevant = todo.status.value in ['pending', 'in_progress'] %}
 <div class="mb-6">
     <calcite-button href="/" appearance="outline">
         ← Back to todos
@@ -17,12 +18,14 @@
     <div class="flex items-center justify-between gap-4">
         <!-- Queue Switch -->
         <div>
-            <form action="{% if todo.queue and todo.queue > 0 %}/api/todos/{{ todo.id }}/queue/remove{% else %}/api/todos/{{ todo.id }}/queue/add{% endif %}" method="POST">
+            <form action="{% if queue_relevant and todo.queue and todo.queue > 0 %}/api/todos/{{ todo.id }}/queue/remove{% else %}/api/todos/{{ todo.id }}/queue/add{% endif %}" method="POST">
                 <calcite-label>
-                    <calcite-switch {% if todo.queue and todo.queue > 0 %}checked{% endif %}
+                    <calcite-switch id="ttQueueSwitch"
+                                    {% if queue_relevant and todo.queue and todo.queue > 0 %}checked{% endif %}
+                                    {% if not queue_relevant %}disabled{% endif %}
                                     onchange="this.closest('form').submit()"></calcite-switch>
                     Queued
-                    {% if todo.queue and todo.queue > 0 %}
+                    {% if queue_relevant and todo.queue and todo.queue > 0 %}
                         <span class="ml-2 font-semibold text-color-brand">(#{{ todo.queue }})</span>
                     {% endif %}
                 </calcite-label>
@@ -165,13 +168,15 @@
                     <div>
                         <span class="text-sm text-muted-foreground font-semibold">Queue:</span>
                         <span id="queueDisplay" class="text-sm">
-                            {% if todo.queue and todo.queue > 0 %}{{ todo.queue }}{% else %}0 (not queued){% endif %}
+                            {% if queue_relevant and todo.queue and todo.queue > 0 %}{{ todo.queue }}{% else %}0 (not queued){% endif %}
+                            {% if not queue_relevant %}<span class="text-color-3"> (disabled for this status)</span>{% endif %}
                         </span>
                         <calcite-input type="number"
                                        min="0"
                                        id="queueInput"
                                        name="queue"
-                                       value="{{ todo.queue or 0 }}"
+                                       value="{% if queue_relevant %}{{ todo.queue or 0 }}{% else %}0{% endif %}"
+                                       {% if not queue_relevant %}disabled{% endif %}
                                        scale="s"
                                        class="hidden"
                                        style="width: 7rem;">
@@ -289,7 +294,7 @@
         <input type="hidden" id="formWorkCompleted" name="work_completed" value="{{ todo.work_completed or '' }}">
         <input type="hidden" id="formWorkRemaining" name="work_remaining" value="{{ todo.work_remaining or '' }}">
         <input type="hidden" id="formImplementationIssues" name="implementation_issues" value="{{ todo.implementation_issues or '' }}">
-        <input type="hidden" id="formQueue" name="queue" value="{{ todo.queue or 0 }}">
+        <input type="hidden" id="formQueue" name="queue" value="{% if queue_relevant %}{{ todo.queue or 0 }}{% else %}0{% endif %}">
         <input type="hidden" id="formTaskSize" name="task_size" value="{{ todo.task_size or '' }}">
         <input type="hidden" id="formPriorityClass" name="priority_class" value="{{ todo.priority_class or '' }}">
     </form>
@@ -366,6 +371,48 @@
 <script>
 let isEditMode = false;
 let originalValues = {};
+
+function isQueueRelevantStatus(status) {
+    const s = (status || '').toString();
+    return s === 'pending' || s === 'in_progress';
+}
+
+function getCurrentStatusValue() {
+    const statusSeg = document.getElementById('ttDetailStatusSeg');
+    return (statusSeg && statusSeg.value ? statusSeg.value.toString() : '{{ todo.status.value }}');
+}
+
+function applyQueueRelevanceUI(status) {
+    const relevant = isQueueRelevantStatus(status);
+
+    const queueSwitch = document.getElementById('ttQueueSwitch');
+    if (queueSwitch) {
+        if (!relevant) {
+            queueSwitch.checked = false;
+        }
+        queueSwitch.disabled = !relevant;
+    }
+
+    const queueInput = document.getElementById('queueInput');
+    if (queueInput) {
+        if (!relevant) {
+            queueInput.value = '0';
+        }
+        queueInput.disabled = !relevant;
+    }
+
+    const formQueue = document.getElementById('formQueue');
+    if (formQueue && !relevant) {
+        formQueue.value = '0';
+    }
+
+    const queueDisplay = document.getElementById('queueDisplay');
+    if (queueDisplay && !relevant) {
+        // Keep the display consistent even if a stale queued value was present.
+        const baseText = '0 (not queued)';
+        queueDisplay.innerHTML = baseText + ' <span class="text-color-3">(disabled for this status)</span>';
+    }
+}
 
 // Update todo field via AJAX (for dropdowns at top of page)
 async function updateTodoFieldDetail(todoId, fieldName, fieldValue) {
@@ -467,6 +514,7 @@ function enterEditMode() {
     // Execution & priority
     document.getElementById('queueDisplay').classList.add('hidden');
     document.getElementById('queueInput').classList.remove('hidden');
+    applyQueueRelevanceUI(getCurrentStatusValue());
     // Task size uses segmented control, no need to toggle
     // document.getElementById('taskSizeDisplay').classList.add('hidden');
     // document.getElementById('taskSizeInput').classList.remove('hidden');
@@ -495,6 +543,7 @@ function exitEditMode() {
     document.getElementById('workRemainingInput').value = originalValues.workRemaining;
     document.getElementById('implementationIssuesInput').value = originalValues.implementationIssues;
     document.getElementById('queueInput').value = originalValues.queue;
+    applyQueueRelevanceUI(getCurrentStatusValue());
     // Task size uses segmented control, update active state via JavaScript
     // document.getElementById('taskSizeInput').value = originalValues.taskSize;
     document.getElementById('priorityClassInput').value = originalValues.priorityClass;
@@ -561,7 +610,8 @@ function saveChanges() {
     document.getElementById('formWorkCompleted').value = document.getElementById('workCompletedInput').value;
     document.getElementById('formWorkRemaining').value = document.getElementById('workRemainingInput').value;
     document.getElementById('formImplementationIssues').value = document.getElementById('implementationIssuesInput').value;
-    document.getElementById('formQueue').value = document.getElementById('queueInput').value;
+    const currentStatus = getCurrentStatusValue();
+    document.getElementById('formQueue').value = isQueueRelevantStatus(currentStatus) ? document.getElementById('queueInput').value : '0';
     // Get task size from Calcite segmented control (or hidden input fallback)
     const taskSizeSeg = document.getElementById('ttDetailTaskSizeSeg');
     let taskSizeValue = '';
@@ -694,6 +744,15 @@ function changeStatus(newStatus) {
     statusInput.name = 'status';
     statusInput.value = newStatus;
     form.appendChild(statusInput);
+
+    // If moving to a non-active status, explicitly clear queue.
+    if (!isQueueRelevantStatus(newStatus)) {
+        const queueInput = document.createElement('input');
+        queueInput.type = 'hidden';
+        queueInput.name = 'queue';
+        queueInput.value = '0';
+        form.appendChild(queueInput);
+    }
     
     document.body.appendChild(form);
     form.submit();
@@ -802,6 +861,9 @@ document.addEventListener('DOMContentLoaded', function () {
         statusSeg.addEventListener('change', handler);
         statusSeg.addEventListener('calciteSegmentedControlChange', handler);
     }
+
+    // Ensure queue controls reflect current status on initial load.
+    applyQueueRelevanceUI(getCurrentStatusValue());
 
     const taskSizeSeg = document.getElementById('ttDetailTaskSizeSeg');
     if (taskSizeSeg) {

@@ -12,6 +12,17 @@ from .schemas import TodoCreate, TodoUpdate, NoteCreate, NoteUpdate, TodoSearch
 
 # Todo CRUD operations
 
+# -----------------------------------------------------------------------------
+# Queue rules
+# -----------------------------------------------------------------------------
+
+QUEUE_RELEVANT_STATUSES = {TodoStatus.PENDING, TodoStatus.IN_PROGRESS}
+
+
+def _is_queue_relevant(status: Optional[TodoStatus]) -> bool:
+    """Queue only applies to active work (pending/in_progress)."""
+    return status in QUEUE_RELEVANT_STATUSES
+
 def get_todo(db: Session, todo_id: int) -> Optional[Todo]:
     """Get a single todo by ID with all relationships loaded."""
     return db.query(Todo).options(
@@ -64,6 +75,10 @@ def get_todo_tree(db: Session) -> List[Todo]:
 
 def create_todo(db: Session, todo: TodoCreate) -> Todo:
     """Create a new todo with optional tags."""
+    requested_queue = getattr(todo, "queue", 0) or 0
+    if not _is_queue_relevant(getattr(todo, "status", None)):
+        requested_queue = 0
+
     db_todo = Todo(
         title=todo.title,
         description=todo.description,
@@ -71,7 +86,7 @@ def create_todo(db: Session, todo: TodoCreate) -> Todo:
         status=todo.status,
         parent_id=todo.parent_id,
         topic=todo.topic,
-        queue=getattr(todo, "queue", 0) or 0,
+        queue=requested_queue,
         task_size=getattr(todo, "task_size", None),
         priority_class=getattr(todo, "priority_class", None),
         work_completed=todo.work_completed,
@@ -103,6 +118,7 @@ def update_todo(db: Session, todo_id: int, todo_update: TodoUpdate) -> Optional[
     if not db_todo:
         return None
     
+    prev_queue = int(getattr(db_todo, "queue", 0) or 0)
     update_data = todo_update.model_dump(exclude_unset=True)
     
     # Handle tags separately
@@ -111,6 +127,13 @@ def update_todo(db: Session, todo_id: int, todo_update: TodoUpdate) -> Optional[
     # Update regular fields
     for field, value in update_data.items():
         setattr(db_todo, field, value)
+
+    # Enforce: queue is only meaningful for pending/in_progress
+    queue_cleared = False
+    if not _is_queue_relevant(getattr(db_todo, "status", None)):
+        if int(getattr(db_todo, "queue", 0) or 0) != 0:
+            db_todo.queue = 0
+            queue_cleared = True
     
     # Update tags if provided
     if tag_names is not None:
@@ -126,6 +149,12 @@ def update_todo(db: Session, todo_id: int, todo_update: TodoUpdate) -> Optional[
             db_todo.tags.append(tag)
     
     db.commit()
+
+    # If this update removed an item from the queue (including status changes),
+    # normalize queue positions so they stay contiguous.
+    if queue_cleared or (prev_queue > 0 and int(getattr(db_todo, "queue", 0) or 0) == 0):
+        normalize_queue(db)
+
     db.refresh(db_todo)
     return db_todo
 
@@ -198,12 +227,12 @@ def search_todos(db: Session, search: TodoSearch) -> List[Todo]:
 
     # Execution & priority filters
     if getattr(search, "in_queue", None) is True:
-        query = query.filter(Todo.queue > 0)
+        query = query.filter(Todo.queue > 0, Todo.status.in_(list(QUEUE_RELEVANT_STATUSES)))
     elif getattr(search, "in_queue", None) is False:
         query = query.filter(Todo.queue == 0)
 
     if getattr(search, "queue", None) is not None:
-        query = query.filter(Todo.queue == search.queue)
+        query = query.filter(Todo.queue == search.queue, Todo.status.in_(list(QUEUE_RELEVANT_STATUSES)))
 
     if getattr(search, "task_size", None) is not None:
         query = query.filter(Todo.task_size == search.task_size)
@@ -252,7 +281,11 @@ def get_queued_todos(db: Session, limit: Optional[int] = None, min_size: Optiona
     Note:
         If task_size filtering is used, todos with null task_size are excluded.
     """
-    q = db.query(Todo).filter(Todo.queue > 0).order_by(Todo.queue.asc(), Todo.id.asc())
+    q = (
+        db.query(Todo)
+        .filter(Todo.queue > 0, Todo.status.in_(list(QUEUE_RELEVANT_STATUSES)))
+        .order_by(Todo.queue.asc(), Todo.id.asc())
+    )
     
     # Apply task_size filtering if provided
     if min_size is not None or max_size is not None:
@@ -270,7 +303,11 @@ def get_queued_todos(db: Session, limit: Optional[int] = None, min_size: Optiona
 
 def get_max_queue(db: Session) -> int:
     """Get the current maximum queue value (0 if none)."""
-    max_val = db.query(func.max(Todo.queue)).scalar()
+    max_val = (
+        db.query(func.max(Todo.queue))
+        .filter(Todo.queue > 0, Todo.status.in_(list(QUEUE_RELEVANT_STATUSES)))
+        .scalar()
+    )
     return int(max_val or 0)
 
 
@@ -296,6 +333,14 @@ def add_to_queue(db: Session, todo_id: int) -> Optional[Todo]:
     todo = get_todo(db, todo_id)
     if not todo:
         return None
+    # Queue only applies to active work.
+    if not _is_queue_relevant(getattr(todo, "status", None)):
+        if int(getattr(todo, "queue", 0) or 0) != 0:
+            todo.queue = 0
+            db.commit()
+            normalize_queue(db)
+            db.refresh(todo)
+        return todo
     if (todo.queue or 0) > 0:
         return todo
     todo.queue = get_max_queue(db) + 1
@@ -323,8 +368,23 @@ def move_queue_up(db: Session, todo_id: int) -> Optional[Todo]:
     todo = get_todo(db, todo_id)
     if not todo or (todo.queue or 0) <= 1:
         return todo
+    if not _is_queue_relevant(getattr(todo, "status", None)):
+        # If it somehow still has a queue value, clear it.
+        if int(getattr(todo, "queue", 0) or 0) != 0:
+            todo.queue = 0
+            db.commit()
+            normalize_queue(db)
+            db.refresh(todo)
+        return todo
     current_pos = int(todo.queue)
-    prev = db.query(Todo).filter(Todo.queue == current_pos - 1).first()
+    prev = (
+        db.query(Todo)
+        .filter(
+            Todo.queue == current_pos - 1,
+            Todo.status.in_(list(QUEUE_RELEVANT_STATUSES)),
+        )
+        .first()
+    )
     if not prev:
         normalize_queue(db)
         return get_todo(db, todo_id)
@@ -339,8 +399,22 @@ def move_queue_down(db: Session, todo_id: int) -> Optional[Todo]:
     todo = get_todo(db, todo_id)
     if not todo or (todo.queue or 0) == 0:
         return todo
+    if not _is_queue_relevant(getattr(todo, "status", None)):
+        # If it somehow still has a queue value, clear it.
+        todo.queue = 0
+        db.commit()
+        normalize_queue(db)
+        db.refresh(todo)
+        return todo
     current_pos = int(todo.queue)
-    next_todo = db.query(Todo).filter(Todo.queue == current_pos + 1).first()
+    next_todo = (
+        db.query(Todo)
+        .filter(
+            Todo.queue == current_pos + 1,
+            Todo.status.in_(list(QUEUE_RELEVANT_STATUSES)),
+        )
+        .first()
+    )
     if not next_todo:
         # Might already be at bottom or queue is gapped
         normalize_queue(db)

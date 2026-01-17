@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Set up router
     router.on('/', renderTodosView);
     router.on('/notes', renderNotesView);
+    router.on('/notes/:id', (params) => renderNoteDetailView(params));
     router.on('/todo/:id', (params) => renderTodoDetailView(params));
     
     // Start router

@@ -66,6 +66,7 @@ Reference multiple todo items in an instruction and the AI can update them.
 - **Multi-Project Dashboard**: Central dashboard on port 8069 to monitor all running TodoTracker instances
 - **AI Integration**: MCP server lets AI assistants manage todos intelligently  
 - **Progress Tracking**: Three dedicated fields for AI to log work completed, remaining, and issues
+- **Execution Queue (Active Work Only)**: The `queue` field only applies to todos in `pending` or `in_progress`. If a todo becomes `completed`/`cancelled`, its `queue` is automatically cleared (set to `0`) and the queue control is disabled on the detail page.
 - **Hierarchical Todos**: Unlimited subtasks and concerns
 - **Modern Web UI**: Beautiful, responsive interface with automatic port selection
 - **Smart Organization**: Categories (feature/functionality, issue, bug), status tracking, topics, and tags.

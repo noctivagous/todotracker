@@ -441,6 +441,49 @@ function isNarrowScreen() {
     }
 }
 
+function isNotesMode() {
+    try {
+        const r = (window.router && typeof window.router.getCurrentRoute === 'function')
+            ? window.router.getCurrentRoute()
+            : ((window.location.hash || '#/').substring(1) || '/');
+        return String(r || '').startsWith('/notes');
+    } catch (e) {
+        return (window.location.hash || '').startsWith('#/notes');
+    }
+}
+
+function setHeaderMode(mode) {
+    const m = mode === 'notes' ? 'notes' : 'todos';
+    const headerStatusSeg = document.getElementById('ttHeaderStatusSeg');
+    const headerStatusSelect = document.getElementById('ttHeaderStatusSelect');
+    const navSearch = document.getElementById('ttNavSearchInput');
+    const navFilter = document.getElementById('ttNavFilterInput');
+    const headerNewBtn = document.getElementById('ttHeaderNewTodoBtn');
+
+    // Status controls are todo-specific for now.
+    const disableStatus = m !== 'todos';
+    if (headerStatusSeg) {
+        if (disableStatus) headerStatusSeg.setAttribute('disabled', '');
+        else headerStatusSeg.removeAttribute('disabled');
+    }
+    if (headerStatusSelect) {
+        if (disableStatus) headerStatusSelect.setAttribute('disabled', '');
+        else headerStatusSelect.removeAttribute('disabled');
+    }
+
+    if (navSearch) {
+        navSearch.placeholder = m === 'notes' ? 'Search notes (Enter)...' : 'Search todos (Enter)...';
+    }
+    if (navFilter) {
+        navFilter.placeholder = m === 'notes' ? 'Filter notes (live)...' : 'Filter (live)...';
+    }
+    if (headerNewBtn) {
+        headerNewBtn.innerHTML = 'New';
+        headerNewBtn.setAttribute('icon-start', 'plus');
+        headerNewBtn.title = m === 'notes' ? 'Create note' : 'Create todo';
+    }
+}
+
 /**
  * Calcite shell panel targets (master-detail layout)
  */
@@ -529,6 +572,37 @@ function navigateTodosWithParamPatch(patch) {
     const next = { ...current, ...(patch || {}) };
     const qs = buildQueryString(next);
     router.navigate('/' + qs);
+}
+
+function getNotesRouteOptions() {
+    const params = getQueryParams();
+    return {
+        searchQuery: (params.q || '').trim(),
+        filterText: (params.filter || '').trim(),
+    };
+}
+
+function navigateNotesWithParamPatch(patch) {
+    const current = getQueryParams();
+    const next = { ...current, ...(patch || {}) };
+    const qs = buildQueryString(next);
+    router.navigate('/notes' + qs);
+}
+
+function filterNotesClientSide(notes, searchQuery, filterText) {
+    const q1 = (searchQuery || '').trim().toLowerCase();
+    const q2 = (filterText || '').trim().toLowerCase();
+    const q = (q1 + ' ' + q2).trim();
+    if (!q) return Array.isArray(notes) ? notes : [];
+    return (Array.isArray(notes) ? notes : []).filter((n) => {
+        const hay = [
+            String(n.id || ''),
+            String(n.todo_id || ''),
+            n.content || '',
+            n.created_at || '',
+        ].join(' ').toLowerCase();
+        return hay.includes(q);
+    });
 }
 
 function applyClientTextFilter(todos, filterText) {
@@ -679,6 +753,7 @@ function setHeaderControlsState(options, stats) {
  */
 async function renderTodosView() {
     showLoading();
+    setHeaderMode('todos');
     const opts = getTodosRouteOptions();
     const status = opts.status || 'pending';
     const queued = !!opts.queued;
@@ -986,6 +1061,15 @@ function initializeTodosView() {
     if (headerNewBtn && !headerNewBtn._ttBound) {
         headerNewBtn._ttBound = true;
         headerNewBtn.addEventListener('click', () => {
+            // Route-aware: in Notes mode, "New" creates a note.
+            if (isNotesMode()) {
+                const m = document.getElementById('createNoteModal');
+                if (m) m.open = true;
+                else addCreateNoteModal();
+                const mm = document.getElementById('createNoteModal');
+                if (mm) mm.open = true;
+                return;
+            }
             const m = document.getElementById('createModal');
             if (m) m.open = true;
         });
@@ -999,7 +1083,11 @@ function initializeTodosView() {
             if (e.key !== 'Enter') return;
             if (navSearch._ttSyncing) return;
             const query = (navSearch.value || '').trim();
-            navigateTodosWithParamPatch({ q: query, page: 1 });
+            if (isNotesMode()) {
+                navigateNotesWithParamPatch({ q: query });
+            } else {
+                navigateTodosWithParamPatch({ q: query, page: 1 });
+            }
         });
     }
 
@@ -1013,7 +1101,11 @@ function initializeTodosView() {
             if (timer) clearTimeout(timer);
             timer = setTimeout(() => {
                 const q = (navFilter.value || '').trim();
-                navigateTodosWithParamPatch({ filter: q, page: 1 });
+                if (isNotesMode()) {
+                    navigateNotesWithParamPatch({ filter: q });
+                } else {
+                    navigateTodosWithParamPatch({ filter: q, page: 1 });
+                }
             }, 150);
         });
     }
@@ -1023,6 +1115,7 @@ function initializeTodosView() {
     if (headerStatusSeg && !headerStatusSeg._ttBound) {
         headerStatusSeg._ttBound = true;
         headerStatusSeg.addEventListener('calciteSegmentedControlChange', () => {
+            if (isNotesMode()) return;
             const v = headerStatusSeg.value || 'pending';
             if (v === 'queue') {
                 navigateTodosWithParamPatch({ status: 'all', queued: 'true', page: 1 });
@@ -1037,6 +1130,7 @@ function initializeTodosView() {
     if (headerStatusSelect && !headerStatusSelect._ttBound) {
         headerStatusSelect._ttBound = true;
         headerStatusSelect.addEventListener('change', () => {
+            if (isNotesMode()) return;
             const v = headerStatusSelect.value || 'pending';
             if (v === 'queue') {
                 navigateTodosWithParamPatch({ status: 'all', queued: 'true', page: 1 });
@@ -1595,7 +1689,7 @@ function renderTodosGridCardsHTML(flatTodos) {
         const status = escapeHtml(t.status || '');
         const category = escapeHtml(t.category || '');
         const meta = `#${t.id} · ${replaceUnderscores(t.status)}`;
-        const topic = t.topic ? `<calcite-chip appearance="outline" scale="s">📁 ${escapeHtml(t.topic)}</calcite-chip>` : '';
+        const topic = t.topic ? `<calcite-chip appearance="outline" scale="s" icon-start="folder" class="tt-topic-chip">${escapeHtml(t.topic)}</calcite-chip>` : '';
         const tags = Array.isArray(t.tags)
             ? t.tags.slice(0, 3).map((x) => `<calcite-chip appearance="outline" scale="s">🏷️ ${escapeHtml(x.name || '')}</calcite-chip>`).join('')
             : '';
@@ -2010,17 +2104,24 @@ async function renderNotesView() {
     showLoading();
 
     try {
+        setHeaderMode('notes');
         const response = await fetch('/api/notes');
         if (!response.ok) throw new Error('Failed to fetch notes');
         const notes = await response.json();
 
-        // Notes uses the main content area; collapse master-detail panels.
-        const { startPanel, mainView } = getShellTargets();
-        if (startPanel) startPanel.innerHTML = '';
+        const opts = getNotesRouteOptions();
+        const filtered = filterNotesClientSide(notes, opts.searchQuery, opts.filterText);
+        window.ttAllNotesCache = notes || [];
+
+        // Notes uses master-detail too: list in panel-start, detail in main.
+        const { startPanel, startShell, mainView } = getShellTargets();
+        if (startShell) startShell.removeAttribute('collapsed');
+        if (startPanel) startPanel.innerHTML = renderNotesBrowserPanelHTML(filtered);
         collapseDetailPanel();
 
         const view = mainView || document.getElementById('app-view');
-        view.innerHTML = await renderNotesHTML(notes);
+        view.innerHTML = renderMainNotesPlaceholderHTML(filtered);
+        syncNotesSelection(null);
         hideLoading();
         
         initializeNotesView();
@@ -2064,6 +2165,8 @@ async function renderNotesHTML(notes) {
  * Initialize notes view
  */
 function initializeNotesView() {
+    setHeaderMode('notes');
+
     // Render markdown
     document.querySelectorAll('.markdown-render').forEach(el => {
         renderMarkdown(el);
@@ -2071,6 +2174,144 @@ function initializeNotesView() {
     
     // Add create note modal
     addCreateNoteModal();
+
+    // Left panel list selection
+    const list = document.getElementById('ttNotesBrowserList');
+    if (list && !list._ttBound) {
+        list._ttBound = true;
+        list.addEventListener('calciteListItemSelect', (e) => {
+            const item = e.target;
+            if (!item) return;
+            const id = parseInt(item.value, 10);
+            if (!id) return;
+            router.navigate(`/notes/${id}`);
+        });
+    }
+
+    // Apply navigation-secondary filter text to the notes list
+    if (list) {
+        const filterText = (document.getElementById('ttNavFilterInput') && document.getElementById('ttNavFilterInput').value) || '';
+        try { list.filterText = filterText; } catch (e) {}
+    }
+}
+
+function syncNotesSelection(selectedNoteId) {
+    const list = document.getElementById('ttNotesBrowserList');
+    if (!list) return;
+    list.querySelectorAll('calcite-list-item').forEach((item) => {
+        const id = parseInt(item.value, 10);
+        if (selectedNoteId && id === selectedNoteId) item.setAttribute('selected', '');
+        else item.removeAttribute('selected');
+    });
+}
+
+function _noteSnippet(content, n) {
+    const t = String(content || '').trim().replace(/\s+/g, ' ');
+    return t.length > n ? (t.slice(0, n - 1) + '…') : t;
+}
+
+function renderNotesBrowserPanelHTML(notes) {
+    const items = (Array.isArray(notes) ? notes : []);
+    const listItems = items.map((n) => {
+        const id = escapeHtml(String(n.id || ''));
+        const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
+        const meta = todoId ? `Note #${id} · Todo #${todoId}` : `Note #${id}`;
+        const created = escapeHtml(formatDate(n.created_at));
+        const snippet = escapeHtml(_noteSnippet(n.content, 140));
+        return `
+            <calcite-list-item value="${id}" label="${escapeHtml(meta)}" description="${created}">
+                <div slot="content-top" class="text-xs text-color-3">${escapeHtml(meta)}</div>
+                <div slot="content-bottom" class="text-sm text-color-2">${snippet || '—'}</div>
+            </calcite-list-item>
+        `;
+    }).join('');
+
+    return `
+        <calcite-panel>
+            <div slot="header">Notes</div>
+            <calcite-list id="ttNotesBrowserList" selection-mode="single" filter-enabled>
+                ${listItems || '<calcite-list-item label="No notes" description="Create your first note with New."></calcite-list-item>'}
+            </calcite-list>
+        </calcite-panel>
+    `;
+}
+
+function renderMainNotesPlaceholderHTML(notes) {
+    const count = Array.isArray(notes) ? notes.length : 0;
+    return `
+        <calcite-card>
+            <div slot="title">Notes</div>
+            <div class="text-color-2">Select a note from the left panel to view it here.</div>
+            <div class="text-xs text-color-3 mt-2">${count} note(s) match the current filters.</div>
+        </calcite-card>
+    `;
+}
+
+function renderNoteDetailHTML(note) {
+    const n = note || {};
+    const idNum = parseInt(String(n.id || ''), 10);
+    const id = escapeHtml(String(idNum || ''));
+    const created = escapeHtml(formatDate(n.created_at));
+    const todoId = n.todo_id ? parseInt(String(n.todo_id), 10) : null;
+    const todoLink = todoId
+        ? `<calcite-button appearance="outline" scale="s" icon-start="link" onclick="router.navigate('/todo/${todoId}')">Open Todo #${todoId}</calcite-button>`
+        : '';
+
+    return `
+        <calcite-card>
+            <div slot="title">Note #${id}</div>
+            <div slot="subtitle" class="text-xs text-color-3">Created: ${created}</div>
+            <div class="space-y-3">
+                ${todoLink ? `<div class="flex gap-2">${todoLink}</div>` : ''}
+                <div class="markdown-render">${escapeHtml(n.content || '')}</div>
+                <div class="flex gap-2">
+                    <calcite-button appearance="solid" kind="danger" scale="s" icon-start="trash" onclick="deleteNote(${idNum || 0})">Delete</calcite-button>
+                </div>
+            </div>
+        </calcite-card>
+    `;
+}
+
+async function renderNoteDetailView(params) {
+    showLoading();
+    const noteId = params && params.id ? parseInt(params.id, 10) : NaN;
+    if (!noteId) {
+        router.navigate('/notes');
+        return;
+    }
+    try {
+        setHeaderMode('notes');
+
+        let notes = Array.isArray(window.ttAllNotesCache) ? window.ttAllNotesCache : null;
+        if (!notes) {
+            const listRes = await fetch('/api/notes');
+            if (listRes.ok) notes = await listRes.json();
+        }
+        notes = Array.isArray(notes) ? notes : [];
+        window.ttAllNotesCache = notes;
+
+        const opts = getNotesRouteOptions();
+        const filtered = filterNotesClientSide(notes, opts.searchQuery, opts.filterText);
+
+        const res = await fetch(`/api/notes/${noteId}`);
+        if (!res.ok) throw new Error('Failed to fetch note');
+        const note = await res.json();
+
+        const { startPanel, startShell, mainView } = getShellTargets();
+        if (startShell) startShell.removeAttribute('collapsed');
+        if (startPanel) startPanel.innerHTML = renderNotesBrowserPanelHTML(filtered);
+        collapseDetailPanel();
+
+        if (mainView) mainView.innerHTML = renderNoteDetailHTML(note);
+
+        syncNotesSelection(noteId);
+        hideLoading();
+        initializeNotesView();
+    } catch (e) {
+        console.error('Error loading note detail:', e);
+        showError('Failed to load note. Please try again.');
+        hideLoading();
+    }
 }
 
 /**

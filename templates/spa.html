@@ -14,7 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <!-- Custom TodoTracker styles -->
-    <link rel="stylesheet" href="/static/css/custom.css?v=20260117-4">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20260117-5">
     
     <script>
         // Set theme ASAP to avoid flash
@@ -117,9 +117,9 @@
     <script src="/static/js/vendor/jsviews.min.js"></script>
 
     <!-- Load application JavaScript -->
-    <script src="/static/js/router.js?v=20260117-4"></script>
-    <script src="/static/js/views.js?v=20260117-4"></script>
-    <script src="/static/js/app.js?v=20260117-4"></script>
+    <script src="/static/js/router.js?v=20260117-5"></script>
+    <script src="/static/js/views.js?v=20260117-5"></script>
+    <script src="/static/js/app.js?v=20260117-5"></script>
     <script>
         // SPA nav "tabs"
         (function () {
@@ -130,8 +130,14 @@
                 try {
                     var h = window.location.hash || "#/";
                     var v = h.indexOf("#/notes") === 0 ? "notes" : "todos";
-                    if (tabs) tabs.value = v;
-                    if (select) select.value = v;
+                    // Calcite components may not be upgraded yet on first paint; apply a few times.
+                    var apply = function () {
+                        try { if (tabs) tabs.value = v; } catch (e) {}
+                        try { if (select) select.value = v; } catch (e) {}
+                    };
+                    apply();
+                    try { requestAnimationFrame(apply); } catch (e) { setTimeout(apply, 0); }
+                    setTimeout(apply, 250);
                 } catch (e) {}
             }
             function navigate() {
@@ -142,6 +148,15 @@
             }
             syncFromHash();
             window.addEventListener("hashchange", syncFromHash);
+            window.addEventListener("load", syncFromHash);
+            try {
+                if (window.customElements && window.customElements.whenDefined) {
+                    Promise.all([
+                        customElements.whenDefined("calcite-segmented-control"),
+                        customElements.whenDefined("calcite-select")
+                    ]).then(syncFromHash);
+                }
+            } catch (e) {}
             if (tabs) {
                 tabs.addEventListener("change", navigate);
                 tabs.addEventListener("calciteSegmentedControlChange", navigate);
