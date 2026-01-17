@@ -9,6 +9,8 @@
     </calcite-button>
 </div>
 
+<div id="ttTodoDetailRoot" data-todo-id="{{ todo.id }}">
+
 <!-- Queue Switch and Priority/Task Size Controls at Top -->
 <calcite-panel class="mb-4">
     <div slot="header">Todo Controls</div>
@@ -32,9 +34,7 @@
             <!-- Priority Dropdown -->
             <calcite-label>
                 Priority
-                <calcite-select name="priority_class"
-                                scale="s"
-                                onchange="updateTodoFieldDetail({{ todo.id }}, 'priority_class', this.value)">
+                <calcite-select id="ttTopPrioritySelect" name="priority_class" scale="s">
                     <calcite-option value="" {% if not todo.priority_class %}selected{% endif %}></calcite-option>
                     {% for p in ['A','B','C','D','E'] %}
                         <calcite-option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>{{ p }}</calcite-option>
@@ -45,7 +45,7 @@
             <!-- Task Size Segmented Control -->
             <calcite-label>
                 Task Size (1-5)
-                <calcite-segmented-control onchange="updateTodoFieldDetail({{ todo.id }}, 'task_size', this.value)">
+                <calcite-segmented-control id="ttTopTaskSizeSeg">
                     {% for s in range(1, 6) %}
                         <calcite-segmented-control-item value="{{ s }}"
                                                        {% if todo.task_size == s %}checked{% endif %}>
@@ -58,81 +58,103 @@
     </div>
 </calcite-panel>
 
-<div class="tt-card mb-6">
-    <div class="tt-card-content">
+<calcite-card class="mb-6">
     <div class="flex justify-between items-start mb-4">
         <div class="flex-1">
             <!-- Title - Inline Editable -->
             <div class="mb-2">
                 <h2 id="titleDisplay" class="text-3xl font-bold">{{ todo.title }}</h2>
-                <input type="text" id="titleInput" name="title" value="{{ todo.title }}"
-                       class="hidden w-full text-3xl font-bold tt-input">
+                <calcite-input type="text"
+                               id="titleInput"
+                               name="title"
+                               value="{{ todo.title }}"
+                               scale="l"
+                               class="hidden"
+                               style="width: 100%;">
+                </calcite-input>
+            </div>
+
+            <!-- Description - Inline Editable (directly beneath title) -->
+            <div class="mb-4">
+                <h3 class="text-sm font-semibold text-muted-foreground mb-2">Description</h3>
+                <div id="descriptionDisplay" class="{% if not todo.description %}text-muted-foreground italic{% endif %} markdown-render">
+                    {{ todo.description or 'No description' }}
+                </div>
+                <calcite-text-area id="descriptionInput" name="description" rows="6" class="hidden">
+                    {{ todo.description or '' }}
+                </calcite-text-area>
             </div>
             
             <!-- Category and Tags - Inline Editable -->
             <div class="flex flex-wrap gap-2 mb-4">
-                <span class="status-badge status-{{ todo.status.value }}">
+                <calcite-chip appearance="solid" scale="s" class="status-{{ todo.status.value }}">
                     {{ todo.status.value.replace('_', ' ') }}
-                </span>
-                
+                </calcite-chip>
+
                 <!-- Category Display -->
-                <span id="categoryDisplay" class="category-badge category-{{ todo.category.value }}">
+                <calcite-chip id="categoryDisplay" appearance="outline" scale="s" class="category-{{ todo.category.value }}">
                     {{ todo.category.value }}
-                </span>
+                </calcite-chip>
                 <!-- Category Edit -->
-                <select id="categoryInput" name="category" 
-                        class="hidden tt-select text-xs px-3 py-1 font-semibold">
+                <calcite-select id="categoryInput" name="category" class="hidden" scale="s">
                     {% for cat in categories %}
-                        <option value="{{ cat }}" {% if cat == todo.category.value %}selected{% endif %}>{{ cat }}</option>
+                        <calcite-option value="{{ cat }}" {% if cat == todo.category.value %}selected{% endif %}>{{ cat }}</calcite-option>
                     {% endfor %}
-                </select>
+                </calcite-select>
                 
                 <!-- Topic Display -->
                 {% if todo.topic %}
-                <span id="topicDisplay" class="tt-badge tt-badge-muted">
-                    📁 {{ todo.topic }}
-                </span>
+                <calcite-chip id="topicDisplay" appearance="outline" scale="s" icon-start="folder">
+                    {{ todo.topic }}
+                </calcite-chip>
                 {% else %}
-                <span id="topicDisplay" class="hidden"></span>
+                <calcite-chip id="topicDisplay" appearance="outline" scale="s" icon-start="folder" class="hidden"></calcite-chip>
                 {% endif %}
                 <!-- Topic Edit -->
                 <div id="topicEdit" class="hidden">
-                    <input type="text" id="topicInput" name="topic" value="{{ todo.topic or '' }}" 
-                           placeholder="Topic" list="topicListDetail"
-                           class="tt-input text-sm px-3 py-1 rounded-full">
+                    <calcite-input type="text"
+                                   id="topicInput"
+                                   name="topic"
+                                   value="{{ todo.topic or '' }}"
+                                   placeholder="Topic"
+                                   scale="s">
+                    </calcite-input>
                     <datalist id="topicListDetail"></datalist>
                 </div>
                 
                 <!-- Tags Display -->
                 <div id="tagsDisplay" class="flex flex-wrap gap-2">
                     {% for tag in todo.tags %}
-                    <span class="tt-badge tt-badge-muted">
-                        🏷️ {{ tag.name }}
-                    </span>
+                    <calcite-chip appearance="outline" scale="s" icon-start="tag">
+                        {{ tag.name }}
+                    </calcite-chip>
                     {% endfor %}
                 </div>
                 <!-- Tags Edit -->
                 <div id="tagsEdit" class="hidden">
-                    <input type="text" id="tagsInput" name="tags" 
-                           value="{{ todo.tags | map(attribute='name') | join(', ') }}"
-                           placeholder="Tags (comma-separated)" 
-                           class="tt-input text-sm px-3 py-1 rounded-full">
+                    <calcite-input type="text"
+                                   id="tagsInput"
+                                   name="tags"
+                                   value="{{ todo.tags | map(attribute='name') | join(', ') }}"
+                                   placeholder="Tags (comma-separated)"
+                                   scale="s">
+                    </calcite-input>
                     <div id="tagSuggestionsDetail" class="mt-2 flex flex-wrap gap-2"></div>
                 </div>
             </div>
             
             <!-- Status Change Control -->
             <div class="mb-4">
-                <label class="block text-sm font-medium mb-2">Status</label>
-                <div class="inline-flex tt-surface rounded-lg p-1" role="group">
-                    {% for stat in statuses %}
-                    <button type="button" 
-                            onclick="changeStatus('{{ stat }}')"
-                            class="tt-btn tt-btn-sm {% if stat == todo.status.value %}tt-btn-primary{% else %}tt-btn-ghost{% endif %}">
-                        {{ stat.replace('_', ' ') }}
-                    </button>
-                    {% endfor %}
-                </div>
+                <calcite-label>
+                    Status
+                    <calcite-segmented-control id="ttDetailStatusSeg" scale="s">
+                        {% for stat in statuses %}
+                        <calcite-segmented-control-item value="{{ stat }}" {% if stat == todo.status.value %}checked{% endif %}>
+                            {{ stat.replace('_', ' ') }}
+                        </calcite-segmented-control-item>
+                        {% endfor %}
+                    </calcite-segmented-control>
+                </calcite-label>
             </div>
 
             <!-- Execution & Priority -->
@@ -145,41 +167,30 @@
                         <span id="queueDisplay" class="text-sm">
                             {% if todo.queue and todo.queue > 0 %}{{ todo.queue }}{% else %}0 (not queued){% endif %}
                         </span>
-                        <input type="number" min="0" id="queueInput" name="queue" value="{{ todo.queue or 0 }}"
-                               class="hidden w-28 tt-input">
+                        <calcite-input type="number"
+                                       min="0"
+                                       id="queueInput"
+                                       name="queue"
+                                       value="{{ todo.queue or 0 }}"
+                                       scale="s"
+                                       class="hidden"
+                                       style="width: 7rem;">
+                        </calcite-input>
                     </div>
 
                     <!-- Task Size -->
                     <div>
-                        <span class="text-sm text-muted-foreground font-semibold">Task size:</span>
-                        <div id="taskSizeDisplay" class="inline-block">
-                            {% if todo.task_size %}
-                                <div class="tt-segmented-control inline-flex">
-                                    {% for s in range(1, 6) %}
-                                        <button type="button"
-                                                class="{% if todo.task_size == s %}active{% endif %}"
-                                                onclick="updateTodoFieldDetail({{ todo.id }}, 'task_size', '{{ s }}')"
-                                                title="Task size: {{ s }}/5">
-                                            {{ s }}
-                                        </button>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <div class="tt-segmented-control inline-flex">
-                                    {% for s in range(1, 6) %}
-                                        <button type="button"
-                                                class=""
-                                                onclick="updateTodoFieldDetail({{ todo.id }}, 'task_size', '{{ s }}')"
-                                                title="Task size: {{ s }}/5">
-                                            {{ s }}
-                                        </button>
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                        </div>
-                        <input type="number" min="1" max="5" id="taskSizeInput" name="task_size" value="{{ todo.task_size or '' }}"
-                               class="hidden w-24 tt-input"
-                               placeholder="1-5">
+                        <calcite-label>
+                            Task size
+                            <calcite-segmented-control scale="s" id="ttDetailTaskSizeSeg">
+                                {% for s in range(1, 6) %}
+                                <calcite-segmented-control-item value="{{ s }}" {% if todo.task_size == s %}checked{% endif %}>
+                                    {{ s }}
+                                </calcite-segmented-control-item>
+                                {% endfor %}
+                            </calcite-segmented-control>
+                        </calcite-label>
+                        <input type="hidden" id="taskSizeInput" name="task_size" value="{{ todo.task_size or '' }}">
                     </div>
 
                     <!-- Priority Class -->
@@ -188,80 +199,65 @@
                         <span id="priorityClassDisplay" class="text-sm">
                             {% if todo.priority_class %}{{ todo.priority_class }}{% else %}—{% endif %}
                         </span>
-                        <select id="priorityClassInput" name="priority_class"
-                                class="hidden w-24 tt-select">
-                            <option value="" {% if not todo.priority_class %}selected{% endif %}>—</option>
+                        <calcite-select id="priorityClassInput" name="priority_class" class="hidden" scale="s" style="width: 7rem;">
+                            <calcite-option value="" {% if not todo.priority_class %}selected{% endif %}>—</calcite-option>
                             {% for p in ['A','B','C','D','E'] %}
-                                <option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>{{ p }}</option>
+                                <calcite-option value="{{ p }}" {% if todo.priority_class == p %}selected{% endif %}>{{ p }}</calcite-option>
                             {% endfor %}
-                        </select>
+                        </calcite-select>
                     </div>
                 </div>
             </div>
         </div>
         <!-- Update Toggle Button - Top Right -->
         <div class="ml-4 flex flex-col items-end">
-            <button id="toggleEditBtn" onclick="toggleEditMode()" 
-                    class="tt-btn tt-btn-primary mb-2">
+            <calcite-button id="toggleEditBtn" onclick="toggleEditMode()"
+                            appearance="solid" kind="brand" scale="s" class="mb-2">
                 Update Todo
-            </button>
+            </calcite-button>
             <!-- Save Button (hidden by default) -->
             <div id="saveCancelButtons" class="hidden">
-                <button onclick="saveChanges()" 
-                        class="tt-btn tt-btn-primary w-full">
+                <calcite-button onclick="saveChanges()" appearance="solid" kind="brand" scale="s" width="full">
                     Save Changes
-                </button>
+                </calcite-button>
             </div>
         </div>
-    </div>
-    
-    <!-- Description - Inline Editable -->
-    <div class="mb-4">
-        <h3 class="text-sm font-semibold text-muted-foreground mb-2">Description</h3>
-        <div id="descriptionDisplay" class="{% if not todo.description %}text-muted-foreground italic{% endif %} markdown-render">
-            {{ todo.description or 'No description' }}
-        </div>
-        <textarea id="descriptionInput" name="description" rows="3"
-                  class="hidden tt-textarea">{{ todo.description or '' }}</textarea>
     </div>
     
     <!-- Progress Tracking (AI and User) - Always shown, inline editable - Horizontal Layout -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <!-- Work Completed -->
-        <div class="tt-card">
-            <div class="tt-card-content">
+        <calcite-card>
             <h3 class="text-sm font-semibold mb-2">✅ Work Completed</h3>
             <div id="workCompletedDisplay" class="{% if not todo.work_completed %}text-muted-foreground italic{% endif %} markdown-render">
                 {{ todo.work_completed or 'No work completed yet' }}
             </div>
-            <textarea id="workCompletedInput" name="work_completed" rows="3"
-                      class="hidden tt-textarea">{{ todo.work_completed or '' }}</textarea>
-            </div>
-        </div>
+            <calcite-text-area id="workCompletedInput" name="work_completed" rows="5" class="hidden">
+                {{ todo.work_completed or '' }}
+            </calcite-text-area>
+        </calcite-card>
         
         <!-- Work Remaining -->
-        <div class="tt-card">
-            <div class="tt-card-content">
+        <calcite-card>
             <h3 class="text-sm font-semibold mb-2">📋 Work Remaining</h3>
             <div id="workRemainingDisplay" class="{% if not todo.work_remaining %}text-muted-foreground italic{% endif %} markdown-render">
                 {{ todo.work_remaining or 'No remaining work specified' }}
             </div>
-            <textarea id="workRemainingInput" name="work_remaining" rows="3"
-                      class="hidden tt-textarea">{{ todo.work_remaining or '' }}</textarea>
-            </div>
-        </div>
+            <calcite-text-area id="workRemainingInput" name="work_remaining" rows="5" class="hidden">
+                {{ todo.work_remaining or '' }}
+            </calcite-text-area>
+        </calcite-card>
         
         <!-- Implementation Issues -->
-        <div class="tt-card">
-            <div class="tt-card-content">
+        <calcite-card>
             <h3 class="text-sm font-semibold mb-2">⚠️ Implementation Issues</h3>
             <div id="implementationIssuesDisplay" class="{% if not todo.implementation_issues %}text-muted-foreground italic{% endif %} markdown-render">
                 {{ todo.implementation_issues or 'No implementation issues' }}
             </div>
-            <textarea id="implementationIssuesInput" name="implementation_issues" rows="3"
-                      class="hidden tt-textarea">{{ todo.implementation_issues or '' }}</textarea>
-            </div>
-        </div>
+            <calcite-text-area id="implementationIssuesInput" name="implementation_issues" rows="5" class="hidden">
+                {{ todo.implementation_issues or '' }}
+            </calcite-text-area>
+        </calcite-card>
     </div>
     
     <div class="text-sm text-muted-foreground mb-4">
@@ -270,14 +266,12 @@
             <div>Updated: {{ todo.updated_at.strftime('%Y-%m-%d %H:%M') }}</div>
             <div class="flex items-center gap-1">
                 <span>ID: #{{ todo.id }}</span>
-                <button onclick="copyTodoId({{ todo.id }})" 
-                        class="tt-btn tt-btn-ghost tt-btn-sm"
-                        title="Copy todo ID to clipboard"
-                        id="copyBtn{{ todo.id }}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                    </svg>
-                </button>
+                <calcite-button appearance="transparent"
+                                scale="s"
+                                icon-start="copy"
+                                title="Copy todo ID to clipboard"
+                                id="copyBtn">
+                </calcite-button>
             </div>
         </div>
         {% if todo.parent_id %}
@@ -299,13 +293,11 @@
         <input type="hidden" id="formTaskSize" name="task_size" value="{{ todo.task_size or '' }}">
         <input type="hidden" id="formPriorityClass" name="priority_class" value="{{ todo.priority_class or '' }}">
     </form>
-</div>
-</div>
+</calcite-card>
 
 <!-- Subtasks -->
 {% if todo.children %}
-<div class="tt-card mb-6">
-    <div class="tt-card-content">
+<calcite-card class="mb-6">
     <h3 class="text-xl font-bold mb-4">Subtasks ({{ todo.children|length }})</h3>
     <div class="space-y-3">
         {% for child in todo.children %}
@@ -315,42 +307,38 @@
                     <a href="/todo/{{ child.id }}" class="font-semibold underline underline-offset-2">
                         {{ child.title }}
                     </a>
-                    <span class="status-badge status-{{ child.status.value }}">
+                    <calcite-chip appearance="solid" scale="s" class="status-{{ child.status.value }}">
                         {{ child.status.value.replace('_', ' ') }}
-                    </span>
-                    <span class="category-badge category-{{ child.category.value }}">
+                    </calcite-chip>
+                    <calcite-chip appearance="outline" scale="s" class="category-{{ child.category.value }}">
                         {{ child.category.value }}
-                    </span>
+                    </calcite-chip>
                 </div>
-                <a href="/todo/{{ child.id }}" class="tt-btn tt-btn-secondary tt-btn-sm">
-                    View
-                </a>
+                <calcite-button href="/todo/{{ child.id }}" appearance="outline" scale="s">View</calcite-button>
             </div>
         </div>
         {% endfor %}
     </div>
-    </div>
-</div>
+</calcite-card>
 {% endif %}
 
 <!-- Notes -->
-<div class="tt-card">
-    <div class="tt-card-content">
+<calcite-card>
         <div class="flex justify-between items-center mb-4">
             <h3 class="text-xl font-bold">Notes ({{ todo.notes|length }})</h3>
-            <button onclick="document.getElementById('noteForm').classList.toggle('hidden')" 
-                    class="tt-btn tt-btn-primary tt-btn-sm">
-                + Add Note
-            </button>
+            <calcite-button onclick="document.getElementById('noteForm').classList.toggle('hidden')"
+                            appearance="solid"
+                            kind="brand"
+                            scale="s"
+                            icon-start="plus">
+                Add Note
+            </calcite-button>
         </div>
     
         <form id="noteForm" action="/api/notes/form" method="POST" class="hidden mb-4 space-y-2">
-            <textarea name="content" rows="3" placeholder="Write a note..." required
-                      class="tt-textarea"></textarea>
+            <calcite-text-area name="content" rows="3" placeholder="Write a note..." required></calcite-text-area>
             <input type="hidden" name="todo_id" value="{{ todo.id }}">
-            <button type="submit" class="tt-btn tt-btn-primary">
-                Add Note
-            </button>
+            <calcite-button type="submit" appearance="solid" kind="brand">Add Note</calcite-button>
         </form>
     
         {% if todo.notes %}
@@ -361,9 +349,7 @@
                         <div class="flex-1 markdown-render">{{ note.content }}</div>
                         <form action="/api/notes/{{ note.id }}/delete" method="POST"
                               onsubmit="return confirm('Delete this note?')">
-                            <button type="submit" class="tt-btn tt-btn-destructive tt-btn-sm">
-                                Delete
-                            </button>
+                            <calcite-button type="submit" appearance="solid" kind="danger" scale="s">Delete</calcite-button>
                         </form>
                     </div>
                     <div class="text-xs text-muted-foreground mt-2">
@@ -375,8 +361,7 @@
         {% else %}
             <p class="text-muted-foreground text-sm">No notes yet.</p>
         {% endif %}
-    </div>
-</div>
+</calcite-card>
 
 <script>
 let isEditMode = false;
@@ -489,9 +474,12 @@ function enterEditMode() {
     document.getElementById('priorityClassInput').classList.remove('hidden');
     
     // Update button text and show save/cancel
-    document.getElementById('toggleEditBtn').textContent = 'Cancel Edit';
-    document.getElementById('toggleEditBtn').classList.remove('tt-btn-primary');
-    document.getElementById('toggleEditBtn').classList.add('tt-btn-secondary');
+    const toggleBtn = document.getElementById('toggleEditBtn');
+    if (toggleBtn) {
+        toggleBtn.textContent = 'Cancel Edit';
+        toggleBtn.setAttribute('appearance', 'outline');
+        toggleBtn.setAttribute('kind', 'neutral');
+    }
     document.getElementById('saveCancelButtons').classList.remove('hidden');
 }
 
@@ -553,9 +541,12 @@ function exitEditMode() {
     document.getElementById('priorityClassInput').classList.add('hidden');
     
     // Update button text and hide save/cancel
-    document.getElementById('toggleEditBtn').textContent = 'Update Todo';
-    document.getElementById('toggleEditBtn').classList.remove('tt-btn-secondary');
-    document.getElementById('toggleEditBtn').classList.add('tt-btn-primary');
+    const toggleBtn = document.getElementById('toggleEditBtn');
+    if (toggleBtn) {
+        toggleBtn.textContent = 'Update Todo';
+        toggleBtn.setAttribute('appearance', 'solid');
+        toggleBtn.setAttribute('kind', 'brand');
+    }
     document.getElementById('saveCancelButtons').classList.add('hidden');
 }
 
@@ -571,16 +562,13 @@ function saveChanges() {
     document.getElementById('formWorkRemaining').value = document.getElementById('workRemainingInput').value;
     document.getElementById('formImplementationIssues').value = document.getElementById('implementationIssuesInput').value;
     document.getElementById('formQueue').value = document.getElementById('queueInput').value;
-    // Get task size from segmented control
-    const taskSizeDisplay = document.getElementById('taskSizeDisplay');
+    // Get task size from Calcite segmented control (or hidden input fallback)
+    const taskSizeSeg = document.getElementById('ttDetailTaskSizeSeg');
     let taskSizeValue = '';
-    if (taskSizeDisplay) {
-        const activeBtn = taskSizeDisplay.querySelector('.tt-segmented-control button.active');
-        taskSizeValue = activeBtn ? activeBtn.textContent.trim() : '';
+    if (taskSizeSeg) {
+        taskSizeValue = (taskSizeSeg.value || '').toString().trim();
     }
-    if (!taskSizeValue) {
-        taskSizeValue = document.getElementById('taskSizeInput').value;
-    }
+    if (!taskSizeValue) taskSizeValue = (document.getElementById('taskSizeInput').value || '').trim();
     document.getElementById('formTaskSize').value = taskSizeValue;
     document.getElementById('formPriorityClass').value = document.getElementById('priorityClassInput').value;
     
@@ -609,14 +597,13 @@ function updateDisplayValues() {
     const categoryValue = document.getElementById('categoryInput').value;
     const categoryDisplay = document.getElementById('categoryDisplay');
     categoryDisplay.textContent = categoryValue;
-    categoryDisplay.className = 'category-badge category-' + categoryValue;
+    categoryDisplay.className = 'category-' + categoryValue;
     
     // Update topic display
     const topicValue = document.getElementById('topicInput').value.trim();
     const topicDisplay = document.getElementById('topicDisplay');
     if (topicValue) {
-        topicDisplay.textContent = '📁 ' + topicValue;
-        topicDisplay.className = 'px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-full';
+        topicDisplay.textContent = topicValue;
         topicDisplay.classList.remove('hidden');
     } else {
         topicDisplay.classList.add('hidden');
@@ -627,8 +614,8 @@ function updateDisplayValues() {
     const tagsDisplay = document.getElementById('tagsDisplay');
     if (tagsValue.trim()) {
         const tags = tagsValue.split(',').map(t => t.trim()).filter(t => t);
-        tagsDisplay.innerHTML = tags.map(tag => 
-            `<span class="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">🏷️ ${tag}</span>`
+        tagsDisplay.innerHTML = tags.map(tag =>
+            `<calcite-chip appearance="outline" scale="s" icon-start="tag">${tag}</calcite-chip>`
         ).join('');
     } else {
         tagsDisplay.innerHTML = '';
@@ -680,19 +667,10 @@ function updateDisplayValues() {
         queueDisplay.textContent = '0 (not queued)';
     }
 
-    const taskSizeVal = (document.getElementById('taskSizeInput').value || '').trim();
-    const taskSizeDisplay = document.getElementById('taskSizeDisplay');
-    // Update task size segmented control active state
-    if (taskSizeDisplay) {
-        const buttons = taskSizeDisplay.querySelectorAll('.tt-segmented-control button');
-        buttons.forEach((btn, index) => {
-            const value = (index + 1).toString();
-            if (value === taskSizeVal) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
+    // Task size segmented control reflects server state; keep hidden input in sync for saveChanges fallback
+    const taskSizeSeg = document.getElementById('ttDetailTaskSizeSeg');
+    if (taskSizeSeg) {
+        document.getElementById('taskSizeInput').value = (taskSizeSeg.value || '').toString();
     }
 
     const priorityVal = (document.getElementById('priorityClassInput').value || '').trim();
@@ -774,11 +752,13 @@ function renderTagSuggestionsDetail() {
     
     // Show first 20 tags
     allTags.slice(0, 20).forEach(tagName => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 transition';
+        const chip = document.createElement('calcite-chip');
+        chip.setAttribute('scale', 's');
+        chip.setAttribute('appearance', 'outline');
+        chip.setAttribute('icon-start', 'tag');
+        chip.setAttribute('interactive', '');
         chip.textContent = tagName;
-        chip.onclick = () => {
+        chip.addEventListener('click', () => {
             const input = document.getElementById('tagsInput');
             const current = input.value.trim();
             if (current) {
@@ -786,11 +766,63 @@ function renderTagSuggestionsDetail() {
             } else {
                 input.value = tagName;
             }
-        };
+        });
         container.appendChild(chip);
     });
 }
+
+// Wire Calcite segmented controls (status + task size) to server updates
+document.addEventListener('DOMContentLoaded', function () {
+    const root = document.getElementById('ttTodoDetailRoot');
+    const todoId = Number(root && root.dataset ? root.dataset.todoId : NaN);
+
+    const topPriority = document.getElementById('ttTopPrioritySelect');
+    if (topPriority && Number.isFinite(todoId)) {
+        topPriority.addEventListener('change', function () {
+            updateTodoFieldDetail(todoId, 'priority_class', topPriority.value);
+        });
+    }
+
+    const topTaskSizeSeg = document.getElementById('ttTopTaskSizeSeg');
+    if (topTaskSizeSeg && Number.isFinite(todoId)) {
+        const handler = function () {
+            const val = (topTaskSizeSeg.value || '').toString();
+            if (val) updateTodoFieldDetail(todoId, 'task_size', val);
+        };
+        topTaskSizeSeg.addEventListener('change', handler);
+        topTaskSizeSeg.addEventListener('calciteSegmentedControlChange', handler);
+    }
+
+    const statusSeg = document.getElementById('ttDetailStatusSeg');
+    if (statusSeg) {
+        const handler = function (e) {
+            const val = (e?.target?.value || statusSeg.value || '').toString();
+            if (val) changeStatus(val);
+        };
+        statusSeg.addEventListener('change', handler);
+        statusSeg.addEventListener('calciteSegmentedControlChange', handler);
+    }
+
+    const taskSizeSeg = document.getElementById('ttDetailTaskSizeSeg');
+    if (taskSizeSeg) {
+        const handler = function (e) {
+            const val = (e?.target?.value || taskSizeSeg.value || '').toString();
+            if (val && Number.isFinite(todoId)) updateTodoFieldDetail(todoId, 'task_size', val);
+        };
+        taskSizeSeg.addEventListener('change', handler);
+        taskSizeSeg.addEventListener('calciteSegmentedControlChange', handler);
+    }
+
+    const copyBtn = document.getElementById('copyBtn');
+    if (copyBtn && Number.isFinite(todoId)) {
+        copyBtn.addEventListener('click', function () {
+            copyTodoId(todoId);
+        });
+    }
+});
 </script>
+
+</div>
 
 {% endblock %}
 

@@ -608,6 +608,35 @@ function setHeaderControlsState(options, stats) {
         });
     }
 
+    // Mobile header status select mirrors segmented control (same semantics)
+    const statusSelect = document.getElementById('ttHeaderStatusSelect');
+    if (statusSelect) {
+        const selValue = o.queued ? 'queue' : (o.status || 'pending');
+        try { statusSelect.value = selValue; } catch (e) {}
+
+        const counts = {
+            all: s.total || 0,
+            pending: s.pending || 0,
+            in_progress: s.in_progress || 0,
+            completed: s.completed || 0,
+            cancelled: s.cancelled || 0,
+            queue: s.queued || 0,
+        };
+        const labels = {
+            all: 'All',
+            pending: 'Pending',
+            in_progress: 'In Progress',
+            completed: 'Completed',
+            cancelled: 'Cancelled',
+            queue: 'Queue',
+        };
+        statusSelect.querySelectorAll('calcite-option').forEach((opt) => {
+            const v = opt.getAttribute('value');
+            if (!v || !labels[v]) return;
+            opt.textContent = `${labels[v]} (${counts[v]})`;
+        });
+    }
+
     // Secondary-navigation "status page" button should reflect the selected status (and always have an accessible label).
     const statusPageItem = document.getElementById('ttNavStatusPageItem');
     if (statusPageItem) {
@@ -1003,11 +1032,25 @@ function initializeTodosView() {
         });
     }
 
+    // Header status select (mobile). Mirrors segmented control behavior.
+    const headerStatusSelect = document.getElementById('ttHeaderStatusSelect');
+    if (headerStatusSelect && !headerStatusSelect._ttBound) {
+        headerStatusSelect._ttBound = true;
+        headerStatusSelect.addEventListener('change', () => {
+            const v = headerStatusSelect.value || 'pending';
+            if (v === 'queue') {
+                navigateTodosWithParamPatch({ status: 'all', queued: 'true', page: 1 });
+            } else {
+                navigateTodosWithParamPatch({ status: v, queued: 'false', page: 1 });
+            }
+        });
+    }
+
     // Left panel minimize toggle
     const leftToggle = document.getElementById('ttLeftPanelToggleBtn');
     if (leftToggle && !leftToggle._ttBound) {
         leftToggle._ttBound = true;
-        leftToggle.addEventListener('click', () => {
+        leftToggle.addEventListener('click', async () => {
             const { startShell } = getShellTargets();
             if (!startShell) return;
             const isMin = startShell.getAttribute('data-tt-minimized') === 'true';
@@ -1020,10 +1063,44 @@ function initializeTodosView() {
                     startShell.style.removeProperty('--calcite-shell-panel-max-width');
                 } catch (e) {}
 
-                // Restore resizable state (min width constraints are removed by CSS when not minimized)
-                const prev = startShell.getAttribute('data-tt-resizable-prev');
-                if (prev === 'true') startShell.setAttribute('resizable', '');
+                // Restore size + resizable state (and force a rebind so it can resize out of min-width snaps)
+                const prevResizable = startShell.getAttribute('data-tt-resizable-prev');
+                const prevInline = parseInt(startShell.getAttribute('data-tt-prev-inline') || '', 10);
+
+                // Turn resizable off to clear any internal constraints
+                startShell.removeAttribute('resizable');
+
+                // First, clear any inline size constraints to reset Calcite's internal state
+                try {
+                    await startShell.updateSize({ inline: null });
+                } catch (e) {}
+
+                // Wait a tick for the size reset to propagate
+                await new Promise(resolve => setTimeout(resolve, 0));
+
+                // Restore previous width (or use default if too small)
+                // If the saved width is too small (at/near minimum), reset to default instead
+                // to avoid getting stuck at the minimum width constraint
+                const MIN_REASONABLE_WIDTH = 200; // Reasonable minimum to avoid getting stuck at snapped min
+                const DEFAULT_PANEL_WIDTH = 360; // Default width from CSS
+                try {
+                    if (Number.isFinite(prevInline) && prevInline > MIN_REASONABLE_WIDTH) {
+                        await startShell.updateSize({ inline: prevInline });
+                    } else {
+                        // Reset to default width explicitly to clear any minimum constraints
+                        await startShell.updateSize({ inline: DEFAULT_PANEL_WIDTH });
+                    }
+                } catch (e) {}
+
+                // Wait another tick before re-enabling resizable to ensure size is fully set
+                await new Promise(resolve => setTimeout(resolve, 0));
+
+                if (prevResizable === 'true') {
+                    try { startShell.setAttribute('resizable', ''); } catch (e) {}
+                }
+
                 startShell.removeAttribute('data-tt-resizable-prev');
+                startShell.removeAttribute('data-tt-prev-inline');
                 // Expanded state
                 leftToggle.setAttribute('icon-start', 'chevrons-left');
                 leftToggle.innerHTML = 'Minimize';
@@ -1033,12 +1110,21 @@ function initializeTodosView() {
                 startShell.setAttribute('data-tt-resizable-prev', startShell.hasAttribute('resizable') ? 'true' : 'false');
                 startShell.removeAttribute('resizable');
 
+                // Remember current width so restoring doesn't get "stuck" at snapped minimums.
+                try {
+                    const w = Math.round(startShell.getBoundingClientRect().width);
+                    if (w > 0) startShell.setAttribute('data-tt-prev-inline', String(w));
+                } catch (e) {}
+
                 // Enforce rail sizing via inline vars to defeat any default Calcite min-width clamps.
                 try {
                     startShell.style.setProperty('--calcite-shell-panel-width', '15pt');
                     startShell.style.setProperty('--calcite-shell-panel-min-width', '15pt');
                     startShell.style.setProperty('--calcite-shell-panel-max-width', '15pt');
                 } catch (e) {}
+
+                // Force internal size override to match rail width (15pt ≈ 20px).
+                try { await startShell.updateSize({ inline: 20 }); } catch (e) {}
 
                 // Minimized rail state
                 leftToggle.setAttribute('icon-start', 'dock-left');
@@ -1516,7 +1602,7 @@ function renderTodosGridCardsHTML(flatTodos) {
 
         return `
             <calcite-card class="cursor-pointer" onclick="router.navigate('/todo/${t.id}')">
-                <div slot="title" class="truncate">${title}</div>
+                <div slot="title" class="tt-main-todo-title truncate">${title}</div>
                 <div slot="subtitle" class="text-xs text-color-3">${escapeHtml(meta)}</div>
                 <div class="space-y-2">
                     <div class="flex items-center flex-wrap gap-1.5">
@@ -1571,6 +1657,10 @@ function renderMainTodosHTML(todosTree, options) {
             return `
                 <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
                     <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>
+                    <div slot="content" class="tt-main-list-content min-w-0">
+                        <div class="tt-main-todo-title truncate">${label}</div>
+                        <div class="text-xs text-color-3 truncate">${desc || ''}</div>
+                    </div>
                 </calcite-list-item>
             `;
         }).join('');
@@ -1759,6 +1849,11 @@ function renderTodoDetailPanelHTML(todoDetail) {
                     </div>
 
                     <calcite-input class="tt-title-input" scale="l" data-tt-field="title" data-tt-todo-id="${t.id}" value="${escapeHtml(t.title || '')}"></calcite-input>
+
+                    <calcite-label>
+                        Description (markdown)
+                        <calcite-text-area rows="16" data-tt-field="description" data-tt-todo-id="${t.id}"></calcite-text-area>
+                    </calcite-label>
                 </div>
                 <div class="space-y-3">
                     <calcite-label>
@@ -1788,23 +1883,18 @@ function renderTodoDetailPanelHTML(todoDetail) {
                         </calcite-label>
                     </div>
 
-                    <calcite-label>
-                        Description (markdown)
-                        <calcite-text-area rows="8" data-tt-field="description" data-tt-todo-id="${t.id}"></calcite-text-area>
-                    </calcite-label>
-
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <calcite-label>
                             ✅ Work Completed
-                            <calcite-text-area rows="4" data-tt-field="work_completed" data-tt-todo-id="${t.id}"></calcite-text-area>
+                            <calcite-text-area rows="6" data-tt-field="work_completed" data-tt-todo-id="${t.id}"></calcite-text-area>
                         </calcite-label>
                         <calcite-label>
                             📋 Work Remaining
-                            <calcite-text-area rows="4" data-tt-field="work_remaining" data-tt-todo-id="${t.id}"></calcite-text-area>
+                            <calcite-text-area rows="6" data-tt-field="work_remaining" data-tt-todo-id="${t.id}"></calcite-text-area>
                         </calcite-label>
                         <calcite-label>
                             ⚠️ Implementation Issues
-                            <calcite-text-area rows="4" data-tt-field="implementation_issues" data-tt-todo-id="${t.id}"></calcite-text-area>
+                            <calcite-text-area rows="6" data-tt-field="implementation_issues" data-tt-todo-id="${t.id}"></calcite-text-area>
                         </calcite-label>
                     </div>
 

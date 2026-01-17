@@ -42,9 +42,9 @@
         <!-- Header -->
         <header slot="header">
             <calcite-navigation>
-                <calcite-navigation-logo slot="logo" heading="TodoTracker" description="AI-powered todo management">
-                    📋
-                </calcite-navigation-logo>
+                <calcite-button slot="logo" href="/" appearance="solid" kind="brand" scale="m" icon-start="check-square">
+                    TodoTracker
+                </calcite-button>
 
                 {% if project_name %}
                 <calcite-chip appearance="outline" scale="s" slot="navigation-action">
@@ -52,14 +52,16 @@
                 </calcite-chip>
                 {% endif %}
 
-                <calcite-menu slot="navigation-secondary">
-                    <calcite-menu-item href="/" {% if request.url.path == '/' %}active{% endif %}>
-                        Todos
-                    </calcite-menu-item>
-                    <calcite-menu-item href="/notes" {% if request.url.path == '/notes' %}active{% endif %}>
-                        Notes
-                    </calcite-menu-item>
-                </calcite-menu>
+                <div slot="navigation-secondary" class="tt-nav-tabs">
+                    <calcite-segmented-control id="ttNavTabs" scale="s">
+                        <calcite-segmented-control-item value="/" {% if request.url.path == '/' %}checked{% endif %}>
+                            Todos
+                        </calcite-segmented-control-item>
+                        <calcite-segmented-control-item value="/notes" {% if request.url.path == '/notes' %}checked{% endif %}>
+                            Notes
+                        </calcite-segmented-control-item>
+                    </calcite-segmented-control>
+                </div>
 
                 <calcite-navigation-user slot="user">
                     <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
@@ -137,6 +139,20 @@
                 }
                 syncLabel();
             });
+        })();
+
+        // Navigation "tabs"
+        (function () {
+            var tabs = document.getElementById("ttNavTabs");
+            if (!tabs) return;
+            function navigate() {
+                try {
+                    var val = tabs.value;
+                    if (val) window.location.href = val;
+                } catch (e) {}
+            }
+            tabs.addEventListener("change", navigate);
+            tabs.addEventListener("calciteSegmentedControlChange", navigate);
         })();
     </script>
 

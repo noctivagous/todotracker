@@ -43,7 +43,12 @@ A complete clone of the Calcite Design System repository is available locally at
 
 Documents are located at designsys/ in the root.
 
--> Make additions, designs, etc. conforming to this design sys. 
+-> Make additions, designs, etc. conforming to this design sys.
+-> However, feel free to make new WebComponents that
+address our needs that fit in with other Calcite
+WebComponents.  We want to use as few <div>s
+and other standard HTML elements as possible when
+WebComponents can be used because this is a web app.
 
 
 ----
@@ -54,10 +59,25 @@ to web ui with browsermcp.
 
 If you are grok code, don't try to process images.
 
-prefer search.brave.com to research problems.
+---
+
+use the brave-search mcp tool whenever you
+think a problem would benefit from
+searching the web or official reference,
+but always use it when making changes
+to the ui as it relates to esri's calcite.
 
 ----
 
 When working on the web server and web server ui,
 running servers are on port >=8070. and launched
 with launch_todotracker.
+
+----
+
+If in agent mode:
+After completing a task and providing
+the report, make a line that could 
+serve as a git commit line:  
+
+git add .; git commit -m '[summary]'

@@ -1,5 +1,67 @@
 /* Custom styles for TodoTracker using Calcite Design Tokens */
 
+/* -------------------------------------------------------------------------- */
+/* Make Calcite controls feel like "application UI" (clear affordances)        */
+/* - crisp 1px (non-blurred) shadows                                          */
+/* - stronger separation between text and controls                             */
+/* -------------------------------------------------------------------------- */
+
+:root {
+    --tt-crisp-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.18);
+}
+
+body.calcite-mode-dark {
+    --tt-crisp-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.55);
+}
+
+/* Buttons: default raised feel (except fully transparent icon buttons) */
+calcite-button {
+    --calcite-button-shadow: var(--tt-crisp-shadow);
+}
+
+calcite-button[appearance="transparent"] {
+    --calcite-button-shadow: var(--calcite-shadow-none);
+}
+
+/* Segmented control: crisp separation so it reads like tabs/buttons */
+calcite-segmented-control-item {
+    --calcite-segmented-control-shadow: var(--tt-crisp-shadow);
+}
+
+/* Inputs/selects/textareas: add crisp shadow and make them feel "field-like" */
+calcite-input,
+calcite-select,
+calcite-text-area {
+    --calcite-input-shadow: var(--tt-crisp-shadow);
+    --calcite-input-corner-radius: var(--calcite-corner-radius-md);
+}
+
+/* Todo title should be bold everywhere (display + input fields) */
+#titleInput,
+calcite-input.tt-title-input,
+calcite-input[data-role="titleInput"] {
+    /* Calcite input internals use --calcite-font-weight-regular */
+    --calcite-font-weight-regular: 700 !important;
+    --calcite-input-text-color: var(--calcite-color-text-1);
+}
+
+.tt-title-display,
+.tt-todo-title-display {
+    font-weight: var(--calcite-font-weight-bold);
+}
+
+/* Main grid + list listings: bold title for clear hierarchy/affordance */
+.tt-main-todo-title {
+    font-weight: var(--calcite-font-weight-bold);
+    color: var(--calcite-color-text-1);
+}
+
+.tt-main-list-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--calcite-spacing-xxs);
+}
+
 /* Ensure Calcite Shell provides proper spacing and doesn't touch viewport */
 calcite-shell {
     --calcite-shell-border-color: var(--calcite-color-border-1);
@@ -111,6 +173,7 @@ calcite-shell main {
     align-items: center;
     gap: var(--calcite-spacing-md);
     flex-wrap: wrap;
+    padding-inline-start: var(--calcite-spacing-md);
 }
 
 .tt-nav-secondary {
@@ -118,6 +181,20 @@ calcite-shell main {
     align-items: center;
     gap: var(--calcite-spacing-md);
     flex-wrap: wrap;
+    padding-inline-start: var(--calcite-spacing-md);
+}
+
+.tt-nav-tabs,
+#ttNavTabs,
+#ttSpaNavTabs {
+    display: flex;
+    align-items: center;
+    gap: var(--calcite-spacing-sm);
+}
+
+.tt-nav-tabs calcite-segmented-control,
+#ttSpaNavTabs {
+    --calcite-segmented-control-shadow: var(--tt-crisp-shadow);
 }
 
 .tt-nav-secondary calcite-input {
@@ -127,6 +204,38 @@ calcite-shell main {
 @media (max-width: 768px) {
     .tt-nav-secondary calcite-input {
         width: 160px;
+    }
+}
+
+.tt-desktop-only { display: inline-flex; }
+.tt-mobile-only { display: none; }
+
+@media (max-width: 640px) {
+    .tt-desktop-only { display: none !important; }
+    .tt-mobile-only { display: inline-flex !important; }
+
+    /* Let header controls stack cleanly on small screens */
+    .tt-nav-actions {
+        width: 100%;
+        gap: var(--calcite-spacing-sm);
+        padding-inline-start: var(--calcite-spacing-sm);
+    }
+
+    .tt-nav-secondary {
+        width: 100%;
+        gap: var(--calcite-spacing-sm);
+        padding-inline-start: var(--calcite-spacing-sm);
+    }
+
+    .tt-nav-secondary calcite-input {
+        width: 100%;
+        min-width: 0;
+    }
+
+    #ttHeaderStatusSelect,
+    #ttSpaNavSelect {
+        width: 100%;
+        min-width: 0;
     }
 }
 

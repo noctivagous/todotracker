@@ -40,9 +40,9 @@
         <!-- Header -->
         <header slot="header">
             <calcite-navigation>
-                <calcite-navigation-logo slot="logo" heading="TodoTracker" description="AI-powered todo management" href="#/">
-                    📋
-                </calcite-navigation-logo>
+                <calcite-button slot="logo" href="#/" appearance="solid" kind="brand" scale="m" icon-start="check-square">
+                    TodoTracker
+                </calcite-button>
 
                 <div slot="content-start" class="tt-nav-actions">
                     <span id="projectNameChip" style="display: none;">
@@ -50,7 +50,7 @@
                     </span>
 
                     <!-- Global status filter (applies to left list + main view) -->
-                    <calcite-segmented-control id="ttHeaderStatusSeg" scale="s" value="pending">
+                    <calcite-segmented-control id="ttHeaderStatusSeg" class="tt-desktop-only" scale="s" value="pending">
                         <calcite-segmented-control-item value="all">All</calcite-segmented-control-item>
                         <calcite-segmented-control-item value="pending" checked>Pending</calcite-segmented-control-item>
                         <calcite-segmented-control-item value="in_progress">In Progress</calcite-segmented-control-item>
@@ -58,6 +58,15 @@
                         <calcite-segmented-control-item value="cancelled">Cancelled</calcite-segmented-control-item>
                         <calcite-segmented-control-item class="tt-seg-queue" value="queue" icon-start="list-check">Queue</calcite-segmented-control-item>
                     </calcite-segmented-control>
+
+                    <calcite-select id="ttHeaderStatusSelect" class="tt-mobile-only" scale="s">
+                        <calcite-option value="all">All</calcite-option>
+                        <calcite-option value="pending" selected>Pending</calcite-option>
+                        <calcite-option value="in_progress">In Progress</calcite-option>
+                        <calcite-option value="completed">Completed</calcite-option>
+                        <calcite-option value="cancelled">Cancelled</calcite-option>
+                        <calcite-option value="queue">Queue</calcite-option>
+                    </calcite-select>
 
                     <calcite-button id="ttHeaderNewTodoBtn" appearance="solid" scale="s" icon-start="plus">
                         New
@@ -67,10 +76,15 @@
                 <!-- Restore navigation-secondary and place global search/filter controls here -->
                 <calcite-navigation slot="navigation-secondary">
                     <div slot="content-start" class="tt-nav-secondary">
-                        <calcite-menu>
-                            <calcite-menu-item id="ttNavStatusPageItem" href="#/" text="Todos" label="Todos" text-enabled></calcite-menu-item>
-                            <calcite-menu-item id="ttNavNotesPageItem" href="#/notes" text="Notes" label="Notes" text-enabled></calcite-menu-item>
-                        </calcite-menu>
+                        <calcite-segmented-control id="ttSpaNavTabs" class="tt-desktop-only" scale="s" value="todos">
+                            <calcite-segmented-control-item value="todos" checked>Todos</calcite-segmented-control-item>
+                            <calcite-segmented-control-item value="notes">Notes</calcite-segmented-control-item>
+                        </calcite-segmented-control>
+
+                        <calcite-select id="ttSpaNavSelect" class="tt-mobile-only" scale="s">
+                            <calcite-option value="todos" selected>Todos</calcite-option>
+                            <calcite-option value="notes">Notes</calcite-option>
+                        </calcite-select>
 
                         <calcite-input id="ttNavSearchInput" type="text" placeholder="Search todos (Enter)..." scale="s"></calcite-input>
                         <calcite-input id="ttNavFilterInput" type="text" placeholder="Filter (live)..." scale="s"></calcite-input>
@@ -106,6 +120,37 @@
     <script src="/static/js/router.js?v=20260117-4"></script>
     <script src="/static/js/views.js?v=20260117-4"></script>
     <script src="/static/js/app.js?v=20260117-4"></script>
+    <script>
+        // SPA nav "tabs"
+        (function () {
+            var tabs = document.getElementById("ttSpaNavTabs");
+            var select = document.getElementById("ttSpaNavSelect");
+            if (!tabs && !select) return;
+            function syncFromHash() {
+                try {
+                    var h = window.location.hash || "#/";
+                    var v = h.indexOf("#/notes") === 0 ? "notes" : "todos";
+                    if (tabs) tabs.value = v;
+                    if (select) select.value = v;
+                } catch (e) {}
+            }
+            function navigate() {
+                try {
+                    var val = (tabs && tabs.value) || (select && select.value);
+                    window.location.hash = val === "notes" ? "#/notes" : "#/";
+                } catch (e) {}
+            }
+            syncFromHash();
+            window.addEventListener("hashchange", syncFromHash);
+            if (tabs) {
+                tabs.addEventListener("change", navigate);
+                tabs.addEventListener("calciteSegmentedControlChange", navigate);
+            }
+            if (select) {
+                select.addEventListener("change", navigate);
+            }
+        })();
+    </script>
 </body>
 </html>
 
