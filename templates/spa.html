@@ -14,7 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <!-- Custom TodoTracker styles -->
-    <link rel="stylesheet" href="/static/css/custom.css?v=20260117-1">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20260117-2">
     
     <script>
         // Set theme ASAP to avoid flash
@@ -40,22 +40,13 @@
         <!-- Header -->
         <header slot="header">
             <calcite-navigation>
-                <calcite-navigation-logo slot="logo" heading="TodoTracker" description="AI-powered todo management">
+                <calcite-navigation-logo slot="logo" heading="TodoTracker" description="AI-powered todo management" href="#/">
                     📋
                 </calcite-navigation-logo>
 
                 <span id="projectNameChip" slot="navigation-action" style="display: none;">
                     <calcite-chip appearance="outline" scale="s"></calcite-chip>
                 </span>
-
-                <calcite-menu slot="navigation-secondary">
-                    <calcite-menu-item id="navTodos" href="#/" active>
-                        Todos
-                    </calcite-menu-item>
-                    <calcite-menu-item id="navNotes" href="#/notes">
-                        Notes
-                    </calcite-menu-item>
-                </calcite-menu>
 
                 <calcite-navigation-user slot="user">
                     <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
@@ -73,13 +64,6 @@
                 <div id="app-view" style="display: none;"></div>
             </div>
         </main>
-
-        <!-- Footer -->
-        <footer slot="footer">
-            <p class="text-center text-sm text-color-2 py-4">
-                TodoTracker - AI-powered todo management with Model Context Protocol
-            </p>
-        </footer>
     </calcite-shell>
 
     <!-- jQuery (required for JsRender) -->
@@ -90,9 +74,9 @@
     <script src="/static/js/vendor/jsviews.min.js"></script>
 
     <!-- Load application JavaScript -->
-    <script src="/static/js/router.js?v=20260117-1"></script>
-    <script src="/static/js/views.js?v=20260117-1"></script>
-    <script src="/static/js/app.js?v=20260117-1"></script>
+    <script src="/static/js/router.js?v=20260117-2"></script>
+    <script src="/static/js/views.js?v=20260117-2"></script>
+    <script src="/static/js/app.js?v=20260117-2"></script>
 </body>
 </html>
 

@@ -562,7 +562,7 @@ async function renderTodosView() {
             });
         }
         if (mainView) {
-            mainView.innerHTML = renderTodoMainPlaceholderHTML(stats);
+            mainView.innerHTML = renderTodosGridHTML(todos, stats);
         }
 
         // Cache full tree for dependency dropdowns, etc.
@@ -827,7 +827,11 @@ function initializeTodosView() {
     if (statusSeg) {
         statusSeg.addEventListener('calciteSegmentedControlChange', () => {
             const v = statusSeg.value || 'pending';
-            router.navigate(`/?status=${encodeURIComponent(v)}`);
+            if (v === 'queue') {
+                router.navigate(`/?status=all&queued=true`);
+            } else {
+                router.navigate(`/?status=${encodeURIComponent(v)}&queued=false`);
+            }
         });
     }
 
@@ -859,10 +863,22 @@ function addCreateTodoModal() {
     
     const modal = document.createElement('calcite-dialog');
     modal.id = 'createModal';
+    // Calcite dialog best practice:
+    // - Use `heading` for visible title
+    // - IMPORTANT (Calcite 3.3.x): do NOT put your form in `slot="content"` unless you intend to
+    //   replace the entire internal `calcite-panel` (which removes the standard dialog chrome).
+    // - Use `footer-start/footer-end` slots for actions.
     modal.label = 'Create New Todo';
+    modal.setAttribute('heading', 'New Todo');
+    modal.setAttribute('description', 'Create a new todo item');
+    modal.setAttribute('modal', '');
+    modal.setAttribute('placement', 'center');
+    modal.setAttribute('scale', 'm');
+    modal.setAttribute('width-scale', 's');
+    modal.setAttribute('slot', 'dialogs');
     
     modal.innerHTML = `
-        <form id="createModalForm" slot="content" class="space-y-4">
+        <form id="createModalForm" class="space-y-4">
             <calcite-label>
                 Title*
                 <calcite-input type="text" name="title" required></calcite-input>
@@ -894,19 +910,32 @@ function addCreateTodoModal() {
                 <calcite-input type="text" name="tags" placeholder="e.g., ui, frontend, urgent"></calcite-input>
             </calcite-label>
         </form>
-        
-        <calcite-button slot="primary" type="submit" form="createModalForm" appearance="solid">
-            Create
-        </calcite-button>
-        <calcite-button slot="secondary" onclick="document.getElementById('createModal').open = false" appearance="outline">
+
+        <calcite-button id="createModalCancel" slot="footer-end" width="auto" appearance="outline" kind="neutral">
             Cancel
+        </calcite-button>
+        <calcite-button slot="footer-end" width="auto" type="submit" form="createModalForm" appearance="solid">
+            Create
         </calcite-button>
     `;
     
-    document.body.appendChild(modal);
+    // Place inside calcite-shell so it is constrained (Calcite pattern).
+    const shell = document.querySelector('calcite-shell');
+    (shell || document.body).appendChild(modal);
     
     // Handle form submission
     const form = document.getElementById('createModalForm');
+    const cancelBtn = document.getElementById('createModalCancel');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            modal.open = false;
+        });
+    }
+    // Reset form whenever dialog closes.
+    modal.addEventListener('calciteDialogClose', () => {
+        try { form && form.reset(); } catch (e) {}
+    });
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
@@ -1187,31 +1216,90 @@ function syncBrowserSelection(selectedTodoId) {
     });
 }
 
-function renderTodoMainPlaceholderHTML(stats) {
-    return `
-        <calcite-card>
-            <div slot="title">TodoTracker</div>
-            <div class="space-y-3">
-                <p class="text-color-2">Select a todo from the list to view and edit all properties in the right panel.</p>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <calcite-chip appearance="outline">Total: ${stats.total}</calcite-chip>
-                    <calcite-chip appearance="outline">Pending: ${stats.pending}</calcite-chip>
-                    <calcite-chip appearance="outline">In Progress: ${stats.in_progress}</calcite-chip>
-                    <calcite-chip appearance="outline">Completed: ${stats.completed}</calcite-chip>
-                </div>
-            </div>
-        </calcite-card>
-    `;
-}
-
 function _truncate(s, n) {
     if (!s) return '';
     const t = String(s);
     return t.length > n ? t.slice(0, n - 1) + '…' : t;
 }
 
+function flattenTodos(todos) {
+    const out = [];
+    const walk = (arr) => {
+        for (const x of arr || []) {
+            out.push(x);
+            if (x.children && x.children.length) walk(x.children);
+        }
+    };
+    walk(todos || []);
+    return out;
+}
+
+function renderTodosGridHTML(todos, stats) {
+    const flat = flattenTodos(todos || []);
+
+    const chips = `
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <calcite-chip appearance="outline">Total: ${(stats && stats.total) || 0}</calcite-chip>
+            <calcite-chip appearance="outline">Pending: ${(stats && stats.pending) || 0}</calcite-chip>
+            <calcite-chip appearance="outline">In Progress: ${(stats && stats.in_progress) || 0}</calcite-chip>
+            <calcite-chip appearance="outline">Completed: ${(stats && stats.completed) || 0}</calcite-chip>
+        </div>
+    `;
+
+    if (!flat.length) {
+        return `
+            <calcite-card>
+                <div slot="title">Todos</div>
+                <div class="space-y-3">
+                    <p class="text-color-2">No todos match the current filters.</p>
+                    ${chips}
+                </div>
+            </calcite-card>
+        `;
+    }
+
+    const cards = flat.map((t) => {
+        const title = escapeHtml(t.title || '');
+        const desc = escapeHtml(_truncate(t.description || '', 140));
+        const status = escapeHtml(t.status || '');
+        const category = escapeHtml(t.category || '');
+        const meta = `#${t.id} · ${replaceUnderscores(t.status)}`;
+        const topic = t.topic ? `<calcite-chip appearance="outline" scale="s">📁 ${escapeHtml(t.topic)}</calcite-chip>` : '';
+        const tags = Array.isArray(t.tags)
+            ? t.tags.slice(0, 3).map((x) => `<calcite-chip appearance="outline" scale="s">🏷️ ${escapeHtml(x.name || '')}</calcite-chip>`).join('')
+            : '';
+
+        return `
+            <calcite-card class="cursor-pointer" onclick="router.navigate('/todo/${t.id}')">
+                <div slot="title" class="truncate">${title}</div>
+                <div slot="subtitle" class="text-xs text-color-3">${escapeHtml(meta)}</div>
+                <div class="space-y-2">
+                    <div class="flex items-center flex-wrap gap-1.5">
+                        <calcite-chip appearance="solid" scale="s" class="status-${status}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>
+                        <calcite-chip appearance="outline" scale="s" class="category-${category}">${category}</calcite-chip>
+                        ${topic}
+                    </div>
+                    <div class="text-sm text-color-2">${desc || 'No description'}</div>
+                    ${tags ? `<div class="flex items-center flex-wrap gap-1.5">${tags}</div>` : ''}
+                </div>
+            </calcite-card>
+        `;
+    }).join('');
+
+    return `
+        <div class="space-y-3">
+            ${chips}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                ${cards}
+            </div>
+        </div>
+    `;
+}
+
 function renderTodoBrowserPanelHTML(todos, stats, options) {
     const status = options.status || 'pending';
+    const queued = !!options.queued;
+    const segValue = queued ? 'queue' : status;
     const searchQuery = options.searchQuery || '';
     return `
         <div class="space-y-3">
@@ -1225,12 +1313,17 @@ function renderTodoBrowserPanelHTML(todos, stats, options) {
 
             <calcite-input id="ttBrowserSearchInput" type="text" placeholder="Search (Enter)..." value="${escapeHtml(searchQuery)}" scale="m"></calcite-input>
 
-            <calcite-segmented-control id="ttBrowserStatusSeg" scale="s" value="${escapeHtml(status)}">
-                <calcite-segmented-control-item value="all" ${status === 'all' ? 'checked' : ''}>All</calcite-segmented-control-item>
-                <calcite-segmented-control-item value="pending" ${status === 'pending' ? 'checked' : ''}>Pending</calcite-segmented-control-item>
-                <calcite-segmented-control-item value="in_progress" ${status === 'in_progress' ? 'checked' : ''}>In Progress</calcite-segmented-control-item>
-                <calcite-segmented-control-item value="completed" ${status === 'completed' ? 'checked' : ''}>Completed</calcite-segmented-control-item>
-                <calcite-segmented-control-item value="cancelled" ${status === 'cancelled' ? 'checked' : ''}>Cancelled</calcite-segmented-control-item>
+            <calcite-segmented-control id="ttBrowserStatusSeg" scale="s" value="${escapeHtml(segValue)}">
+                <calcite-segmented-control-item value="all" ${!queued && status === 'all' ? 'checked' : ''}>All</calcite-segmented-control-item>
+                <calcite-segmented-control-item value="pending" ${!queued && status === 'pending' ? 'checked' : ''}>Pending</calcite-segmented-control-item>
+                <calcite-segmented-control-item value="in_progress" ${!queued && status === 'in_progress' ? 'checked' : ''}>In Progress</calcite-segmented-control-item>
+                <calcite-segmented-control-item value="completed" ${!queued && status === 'completed' ? 'checked' : ''}>Completed</calcite-segmented-control-item>
+                <calcite-segmented-control-item value="cancelled" ${!queued && status === 'cancelled' ? 'checked' : ''}>Cancelled</calcite-segmented-control-item>
+                <calcite-segmented-control-item
+                    class="tt-seg-queue"
+                    value="queue"
+                    icon-start="list-check"
+                    ${queued ? 'checked' : ''}>Queue</calcite-segmented-control-item>
             </calcite-segmented-control>
 
             <calcite-list id="ttTodoBrowserList" display-mode="nested" filter-enabled filter-placeholder="Filter list..." selection-mode="single" selection-appearance="highlight">
@@ -1321,12 +1414,15 @@ function renderTodoDetailPanelHTML(todoDetail) {
             <calcite-card>
                 <div slot="title" class="space-y-2">
                     <div class="flex items-center justify-between gap-2">
-                        <div class="text-xs text-color-3">Todo #${t.id}</div>
+                        <div class="text-xs text-color-3 truncate">
+                            Todo #${t.id}
+                            <span class="text-color-3"> · </span>
+                            Created: ${escapeHtml(formatDate(t.created_at))}
+                            ${t.updated_at && t.updated_at !== t.created_at ? ' · Updated: ' + escapeHtml(formatDate(t.updated_at)) : ''}
+                        </div>
                         <calcite-chip id="ttAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
                     </div>
-                    <calcite-input data-tt-field="title" data-tt-todo-id="${t.id}" value="${escapeHtml(t.title || '')}"></calcite-input>
-                </div>
-                <div class="space-y-3">
+
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <calcite-label>
                             Status
@@ -1353,9 +1449,12 @@ function renderTodoDetailPanelHTML(todoDetail) {
                         </calcite-label>
                     </div>
 
+                    <calcite-input class="tt-title-input" scale="l" data-tt-field="title" data-tt-todo-id="${t.id}" value="${escapeHtml(t.title || '')}"></calcite-input>
+                </div>
+                <div class="space-y-3">
                     <calcite-label>
                         Tags (comma-separated)
-                        <calcite-input data-tt-field="tag_names" data-tt-todo-id="${t.id}" value="${escapeHtml(tagsCsv)}"></calcite-input>
+                        <calcite-input class="tt-tags-input" scale="s" data-tt-field="tag_names" data-tt-todo-id="${t.id}" value="${escapeHtml(tagsCsv)}"></calcite-input>
                     </calcite-label>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1433,11 +1532,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
                         </calcite-panel>
                     ` : ''}
 
-                    <calcite-notice open scale="s">
-                        <div slot="message">
-                            Created: ${escapeHtml(formatDate(t.created_at))}${t.updated_at && t.updated_at !== t.created_at ? ' · Updated: ' + escapeHtml(formatDate(t.updated_at)) : ''}
-                        </div>
-                    </calcite-notice>
+                    <!-- Created/Updated shown in header next to Todo # -->
                 </div>
             </calcite-card>
         </div>

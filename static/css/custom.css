@@ -111,6 +111,19 @@ calcite-shell main {
     overflow: auto;
 }
 
+/* Slightly differentiate the non-status "Queue" option inside the status segmented control */
+calcite-segmented-control-item.tt-seg-queue {
+    --calcite-segmented-control-border-color: var(--calcite-color-border-2);
+    --calcite-segmented-control-icon-color: var(--calcite-color-brand);
+}
+
+calcite-segmented-control-item.tt-seg-queue[checked] {
+    --calcite-segmented-control-background-color: var(--calcite-color-foreground-1);
+    --calcite-segmented-control-border-color: var(--calcite-color-brand);
+    --calcite-segmented-control-color: var(--calcite-color-brand);
+    --calcite-segmented-control-shadow: inset 0 0 0 1px var(--calcite-color-brand);
+}
+
 /* Make the master-detail layout feel intentional on desktop (avoid huge empty center) */
 #tt-panel-start-shell {
     --calcite-shell-panel-width: 360px;
@@ -143,6 +156,17 @@ calcite-shell main {
 .category-feature { --calcite-chip-background-color: var(--calcite-color-status-info); }
 .category-issue { --calcite-chip-background-color: var(--calcite-color-status-warning); }
 .category-bug { --calcite-chip-background-color: var(--calcite-color-status-danger); }
+
+/* Detail view controls */
+.tt-title-input {
+    /* Calcite scale="l" does most of the work; this nudges toward ~1.5x feel. */
+    font-size: 1.5em;
+}
+
+.tt-tags-input {
+    /* Keep tags visually quieter/denser */
+    --calcite-input-font-size: 0.875rem;
+}
 
 /* Smooth transitions - scoped to avoid interfering with Calcite components */
 .todo-item,
