@@ -105,6 +105,35 @@ calcite-shell main {
 /* SPA-specific polish                                                        */
 /* -------------------------------------------------------------------------- */
 
+#tt-panel-start-shell[data-tt-minimized="true"] {
+    --calcite-shell-panel-width: 88px;
+}
+
+/* Navigation layout helpers (Calcite slots do most of the work; these are small tweaks). */
+.tt-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--calcite-spacing-md);
+    flex-wrap: wrap;
+}
+
+.tt-nav-secondary {
+    display: flex;
+    align-items: center;
+    gap: var(--calcite-spacing-md);
+    flex-wrap: wrap;
+}
+
+.tt-nav-secondary calcite-input {
+    width: 220px;
+}
+
+@media (max-width: 768px) {
+    .tt-nav-secondary calcite-input {
+        width: 160px;
+    }
+}
+
 #tt-panel-start,
 #tt-panel-end {
     height: 100%;
@@ -140,6 +169,23 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
     #tt-panel-end-shell {
         --calcite-shell-panel-width: 100vw;
     }
+}
+
+/* Left browser panel minimized mode: list-only, ultra-compact */
+#tt-panel-start-shell[data-tt-minimized="true"] #tt-panel-start {
+    overflow: hidden;
+}
+
+#tt-panel-start-shell[data-tt-minimized="true"] .tt-browser-title,
+#tt-panel-start-shell[data-tt-minimized="true"] .tt-browser-subtitle,
+#tt-panel-start-shell[data-tt-minimized="true"] .tt-browser-controls-text {
+    display: none !important;
+}
+
+/* Hide list item description/metadata in minimized mode to keep it readable */
+#tt-panel-start-shell[data-tt-minimized="true"] calcite-list-item::part(description),
+#tt-panel-start-shell[data-tt-minimized="true"] calcite-list-item::part(metadata) {
+    display: none;
 }
 
 .tt-surface {

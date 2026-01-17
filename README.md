@@ -450,6 +450,25 @@ AI: Project: /home/user/projects/my-app
 
 Access at **http://localhost:8070** (after running `python /path/to/todotracker/todotracker_webserver.py`)
 
+### GUI Layout (SPA)
+
+TodoTracker’s main UI is a Calcite-based single-page app with a **master/detail layout**:
+
+- **Header**
+  - **Status segmented control (with counts)**: `All / Pending / In Progress / Completed / Cancelled / Queue`  
+    Selecting one updates **both** the left list panel and the main panel.
+  - **Secondary navigation (`navigation-secondary`)**
+    - **Search** (`Enter`): runs a full-text search and updates both panels.
+    - **Filter (live)**: a lightweight, client-side filter that narrows results in both panels without leaving the page.
+
+- **Left panel (browser/list panel)**
+  - **List-only** view for quickly selecting a todo to open in the detail drawer.
+  - **Minimize/expand toggle**: collapses the panel down to a narrow width so you can use the main panel as a “single page” browsing experience, then expand the list when needed.
+
+- **Main panel**
+  - **View mode control**: `Grid | List | Table` (replaces the old top-of-page status buttons).
+  - **Pagination**: the main panel is paginated; use the pagination control at the bottom to navigate pages.
+
 ### Main Pages
 
 - **Home (/)** - Hierarchical todo tree with live statistics

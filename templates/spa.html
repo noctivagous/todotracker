@@ -14,7 +14,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <!-- Custom TodoTracker styles -->
-    <link rel="stylesheet" href="/static/css/custom.css?v=20260117-2">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20260117-3">
     
     <script>
         // Set theme ASAP to avoid flash
@@ -29,11 +29,11 @@
 <body class="calcite-mode-auto">
     <calcite-shell>
         <!-- Master-detail panels (SPA) -->
-        <calcite-shell-panel slot="panel-start" position="start" display-mode="dock" resizable id="tt-panel-start-shell" style="--calcite-shell-panel-width: 360px;">
+        <calcite-shell-panel slot="panel-start" position="start" display-mode="dock" resizable id="tt-panel-start-shell">
             <div class="p-3" id="tt-panel-start"></div>
         </calcite-shell-panel>
 
-        <calcite-shell-panel slot="panel-end" position="end" display-mode="dock" resizable collapsed id="tt-panel-end-shell" style="--calcite-shell-panel-width: 440px;">
+        <calcite-shell-panel slot="panel-end" position="end" display-mode="dock" resizable collapsed id="tt-panel-end-shell">
             <div class="p-3" id="tt-panel-end"></div>
         </calcite-shell-panel>
 
@@ -44,9 +44,34 @@
                     📋
                 </calcite-navigation-logo>
 
-                <span id="projectNameChip" slot="navigation-action" style="display: none;">
-                    <calcite-chip appearance="outline" scale="s"></calcite-chip>
-                </span>
+                <div slot="content-start" class="tt-nav-actions">
+                    <span id="projectNameChip" style="display: none;">
+                        <calcite-chip appearance="outline" scale="s"></calcite-chip>
+                    </span>
+
+                    <!-- Global status filter (applies to left list + main view) -->
+                    <calcite-segmented-control id="ttHeaderStatusSeg" scale="s" value="pending">
+                        <calcite-segmented-control-item value="all">All</calcite-segmented-control-item>
+                        <calcite-segmented-control-item value="pending" checked>Pending</calcite-segmented-control-item>
+                        <calcite-segmented-control-item value="in_progress">In Progress</calcite-segmented-control-item>
+                        <calcite-segmented-control-item value="completed">Completed</calcite-segmented-control-item>
+                        <calcite-segmented-control-item value="cancelled">Cancelled</calcite-segmented-control-item>
+                        <calcite-segmented-control-item class="tt-seg-queue" value="queue" icon-start="list-check">Queue</calcite-segmented-control-item>
+                    </calcite-segmented-control>
+                </div>
+
+                <!-- Restore navigation-secondary and place global search/filter controls here -->
+                <calcite-navigation slot="navigation-secondary">
+                    <calcite-menu slot="content-start">
+                        <calcite-menu-item href="#/">Todos</calcite-menu-item>
+                        <calcite-menu-item href="#/notes">Notes</calcite-menu-item>
+                    </calcite-menu>
+
+                    <div slot="content-end" class="tt-nav-secondary">
+                        <calcite-input id="ttNavSearchInput" type="text" placeholder="Search todos (Enter)..." scale="s"></calcite-input>
+                        <calcite-input id="ttNavFilterInput" type="text" placeholder="Filter (live)..." scale="s"></calcite-input>
+                    </div>
+                </calcite-navigation>
 
                 <calcite-navigation-user slot="user">
                     <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
@@ -74,9 +99,9 @@
     <script src="/static/js/vendor/jsviews.min.js"></script>
 
     <!-- Load application JavaScript -->
-    <script src="/static/js/router.js?v=20260117-2"></script>
-    <script src="/static/js/views.js?v=20260117-2"></script>
-    <script src="/static/js/app.js?v=20260117-2"></script>
+    <script src="/static/js/router.js?v=20260117-3"></script>
+    <script src="/static/js/views.js?v=20260117-3"></script>
+    <script src="/static/js/app.js?v=20260117-3"></script>
 </body>
 </html>
 

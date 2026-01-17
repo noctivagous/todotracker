@@ -501,17 +501,125 @@ function buildQueryString(params) {
     return parts.length > 0 ? '?' + parts.join('&') : '';
 }
 
+function clampInt(value, fallback, min, max) {
+    const n = parseInt(String(value || ''), 10);
+    if (!Number.isFinite(n)) return fallback;
+    if (typeof min === 'number' && n < min) return min;
+    if (typeof max === 'number' && n > max) return max;
+    return n;
+}
+
+function getTodosRouteOptions() {
+    const params = getQueryParams();
+    return {
+        status: params.status || 'pending',
+        queued: params.queued === 'true',
+        sortBy: params.sort_by || 'updated_at',
+        sortDir: params.sort_dir || 'desc',
+        searchQuery: params.q || '',
+        filterText: params.filter || '',
+        view: (params.view || 'grid'),
+        page: clampInt(params.page, 1, 1, 999999),
+        pageSize: clampInt(params.page_size, 24, 5, 200),
+    };
+}
+
+function navigateTodosWithParamPatch(patch) {
+    const current = getQueryParams();
+    const next = { ...current, ...(patch || {}) };
+    const qs = buildQueryString(next);
+    router.navigate('/' + qs);
+}
+
+function applyClientTextFilter(todos, filterText) {
+    const q = (filterText || '').trim().toLowerCase();
+    if (!q) return todos || [];
+
+    const matchesTodo = (t) => {
+        const hay = [
+            String(t.id || ''),
+            t.title || '',
+            t.description || '',
+            t.topic || '',
+            t.status || '',
+            t.category || '',
+            Array.isArray(t.tags) ? t.tags.map((x) => x && x.name).join(',') : '',
+        ].join(' ').toLowerCase();
+        return hay.includes(q);
+    };
+
+    const walk = (arr) => {
+        const out = [];
+        for (const t of arr || []) {
+            const kids = Array.isArray(t.children) ? walk(t.children) : [];
+            if (matchesTodo(t) || kids.length) {
+                out.push({ ...t, children: kids });
+            }
+        }
+        return out;
+    };
+
+    return walk(todos || []);
+}
+
+function setHeaderControlsState(options, stats) {
+    const o = options || {};
+    const s = stats || {};
+
+    const searchInput = document.getElementById('ttNavSearchInput');
+    if (searchInput && !searchInput._ttSyncing) {
+        searchInput._ttSyncing = true;
+        try { searchInput.value = o.searchQuery || ''; } catch (e) {}
+        searchInput._ttSyncing = false;
+    }
+
+    const filterInput = document.getElementById('ttNavFilterInput');
+    if (filterInput && !filterInput._ttSyncing) {
+        filterInput._ttSyncing = true;
+        try { filterInput.value = o.filterText || ''; } catch (e) {}
+        filterInput._ttSyncing = false;
+    }
+
+    const statusSeg = document.getElementById('ttHeaderStatusSeg');
+    if (statusSeg) {
+        const segValue = o.queued ? 'queue' : (o.status || 'pending');
+        try { statusSeg.value = segValue; } catch (e) {}
+
+        const counts = {
+            all: s.total || 0,
+            pending: s.pending || 0,
+            in_progress: s.in_progress || 0,
+            completed: s.completed || 0,
+            cancelled: s.cancelled || 0,
+            queue: s.queued || 0,
+        };
+        const labels = {
+            all: 'All',
+            pending: 'Pending',
+            in_progress: 'In Progress',
+            completed: 'Completed',
+            cancelled: 'Cancelled',
+            queue: 'Queue',
+        };
+        statusSeg.querySelectorAll('calcite-segmented-control-item').forEach((item) => {
+            const v = item.getAttribute('value');
+            if (!v || !labels[v]) return;
+            item.textContent = `${labels[v]} (${counts[v]})`;
+        });
+    }
+}
+
 /**
  * Todos List View
  */
 async function renderTodosView() {
     showLoading();
-    const params = getQueryParams();
-    const status = params.status || 'pending';
-    const queued = params.queued === 'true';
-    const sortBy = params.sort_by || 'updated_at';
-    const sortDir = params.sort_dir || 'desc';
-    const searchQuery = params.q;
+    const opts = getTodosRouteOptions();
+    const status = opts.status || 'pending';
+    const queued = !!opts.queued;
+    const sortBy = opts.sortBy || 'updated_at';
+    const sortDir = opts.sortDir || 'desc';
+    const searchQuery = (opts.searchQuery || '').trim();
 
     try {
         // Fetch todos
@@ -550,19 +658,16 @@ async function renderTodosView() {
         const allTodos = await statsResponse.json();
         const stats = calculateStats(allTodos);
 
+        // Apply client-side filter (applies to both left panel + main)
+        const filteredTree = applyClientTextFilter(todos, opts.filterText);
+
         // Render browser panel + main placeholder (master-detail)
         const { startPanel, mainView } = getShellTargets();
         if (startPanel) {
-            startPanel.innerHTML = renderTodoBrowserPanelHTML(todos, stats, {
-                status,
-                queued,
-                sortBy,
-                sortDir,
-                searchQuery
-            });
+            startPanel.innerHTML = renderTodoBrowserPanelHTML(filteredTree, stats);
         }
         if (mainView) {
-            mainView.innerHTML = renderTodosGridHTML(todos, stats);
+            mainView.innerHTML = renderMainTodosHTML(filteredTree, opts);
         }
 
         // Cache full tree for dependency dropdowns, etc.
@@ -570,6 +675,9 @@ async function renderTodosView() {
 
         // Default: no selection, detail panel closed
         collapseDetailPanel();
+
+        // Keep header controls in sync with route + stats
+        setHeaderControlsState(opts, stats);
 
         hideLoading();
 
@@ -717,6 +825,7 @@ function calculateStats(todos) {
         pending: all.filter(t => t.status === 'pending').length,
         in_progress: all.filter(t => t.status === 'in_progress').length,
         completed: all.filter(t => t.status === 'completed').length,
+        cancelled: all.filter(t => t.status === 'cancelled').length,
         queued: all.filter(t => (t.queue || 0) > 0).length
     };
 }
@@ -807,31 +916,60 @@ function renderTodoItem(todo, level = 0) {
  * Initialize todos view functionality
  */
 function initializeTodosView() {
-    // Search input handler (browser panel or legacy view)
-    const searchInput = document.getElementById('ttBrowserSearchInput') || document.getElementById('searchInput');
-    if (searchInput) {
-        searchInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                const query = searchInput.value.trim();
-                if (query) {
-                    router.navigate(`/?q=${encodeURIComponent(query)}`);
-                } else {
-                    router.navigate('/');
-                }
+    // Global navigation-secondary search (Enter)
+    const navSearch = document.getElementById('ttNavSearchInput');
+    if (navSearch && !navSearch._ttBound) {
+        navSearch._ttBound = true;
+        navSearch.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            if (navSearch._ttSyncing) return;
+            const query = (navSearch.value || '').trim();
+            navigateTodosWithParamPatch({ q: query, page: 1 });
+        });
+    }
+
+    // Global navigation-secondary filter (live)
+    const navFilter = document.getElementById('ttNavFilterInput');
+    if (navFilter && !navFilter._ttBound) {
+        navFilter._ttBound = true;
+        let timer = null;
+        navFilter.addEventListener('input', () => {
+            if (navFilter._ttSyncing) return;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+                const q = (navFilter.value || '').trim();
+                navigateTodosWithParamPatch({ filter: q, page: 1 });
+            }, 150);
+        });
+    }
+
+    // Header status segmented control (applies to both panels)
+    const headerStatusSeg = document.getElementById('ttHeaderStatusSeg');
+    if (headerStatusSeg && !headerStatusSeg._ttBound) {
+        headerStatusSeg._ttBound = true;
+        headerStatusSeg.addEventListener('calciteSegmentedControlChange', () => {
+            const v = headerStatusSeg.value || 'pending';
+            if (v === 'queue') {
+                navigateTodosWithParamPatch({ status: 'all', queued: 'true', page: 1 });
+            } else {
+                navigateTodosWithParamPatch({ status: v, queued: 'false', page: 1 });
             }
         });
     }
 
-    // Status segmented control (browser panel)
-    const statusSeg = document.getElementById('ttBrowserStatusSeg');
-    if (statusSeg) {
-        statusSeg.addEventListener('calciteSegmentedControlChange', () => {
-            const v = statusSeg.value || 'pending';
-            if (v === 'queue') {
-                router.navigate(`/?status=all&queued=true`);
-            } else {
-                router.navigate(`/?status=${encodeURIComponent(v)}&queued=false`);
-            }
+    // Left panel minimize toggle
+    const leftToggle = document.getElementById('ttLeftPanelToggleBtn');
+    if (leftToggle && !leftToggle._ttBound) {
+        leftToggle._ttBound = true;
+        leftToggle.addEventListener('click', () => {
+            const { startShell } = getShellTargets();
+            if (!startShell) return;
+            const isMin = startShell.getAttribute('data-tt-minimized') === 'true';
+            startShell.setAttribute('data-tt-minimized', isMin ? 'false' : 'true');
+            leftToggle.setAttribute('icon-start', isMin ? 'chevrons-left' : 'chevrons-right');
+            leftToggle.querySelectorAll('.tt-browser-controls-text').forEach((el) => {
+                el.textContent = isMin ? 'Minimize' : 'Expand';
+            });
         });
     }
 
@@ -845,6 +983,58 @@ function initializeTodosView() {
             const id = parseInt(item.value, 10);
             if (!id) return;
             router.navigate(`/todo/${id}`);
+        });
+    }
+
+    // Apply navigation-secondary filter text to the left list (Calcite list external filtering)
+    if (list) {
+        const filterText = (document.getElementById('ttNavFilterInput') && document.getElementById('ttNavFilterInput').value) || '';
+        try { list.filterText = filterText; } catch (e) {}
+    }
+
+    // Main panel list selection
+    const mainList = document.getElementById('ttMainTodosList');
+    if (mainList && !mainList._ttBound) {
+        mainList._ttBound = true;
+        mainList.addEventListener('calciteListItemSelect', (e) => {
+            const item = e.target;
+            if (!item) return;
+            const id = parseInt(item.value, 10);
+            if (!id) return;
+            router.navigate(`/todo/${id}`);
+        });
+    }
+
+    // Main panel table row click
+    document.querySelectorAll('.tt-main-table-row').forEach((row) => {
+        if (row._ttBound) return;
+        row._ttBound = true;
+        row.addEventListener('click', () => {
+            const id = parseInt(row.getAttribute('data-tt-todo-id'), 10);
+            if (!id) return;
+            router.navigate(`/todo/${id}`);
+        });
+    });
+
+    // Main panel view mode segmented control
+    const viewSeg = document.getElementById('ttMainViewModeSeg');
+    if (viewSeg && !viewSeg._ttBound) {
+        viewSeg._ttBound = true;
+        viewSeg.addEventListener('calciteSegmentedControlChange', () => {
+            const v = viewSeg.value || 'grid';
+            navigateTodosWithParamPatch({ view: v, page: 1 });
+        });
+    }
+
+    // Main panel pagination
+    const pagination = document.getElementById('ttMainPagination');
+    if (pagination && !pagination._ttBound) {
+        pagination._ttBound = true;
+        pagination.addEventListener('calcitePaginationChange', () => {
+            const pageSize = parseInt(String(pagination.pageSize || 24), 10) || 24;
+            const startItem = parseInt(String(pagination.startItem || 1), 10) || 1;
+            const page = Math.max(1, Math.ceil(startItem / pageSize));
+            navigateTodosWithParamPatch({ page, page_size: pageSize });
         });
     }
 
@@ -1234,31 +1424,11 @@ function flattenTodos(todos) {
     return out;
 }
 
-function renderTodosGridHTML(todos, stats) {
-    const flat = flattenTodos(todos || []);
+function renderTodosGridCardsHTML(flatTodos) {
+    const flat = Array.isArray(flatTodos) ? flatTodos : [];
+    if (!flat.length) return '';
 
-    const chips = `
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <calcite-chip appearance="outline">Total: ${(stats && stats.total) || 0}</calcite-chip>
-            <calcite-chip appearance="outline">Pending: ${(stats && stats.pending) || 0}</calcite-chip>
-            <calcite-chip appearance="outline">In Progress: ${(stats && stats.in_progress) || 0}</calcite-chip>
-            <calcite-chip appearance="outline">Completed: ${(stats && stats.completed) || 0}</calcite-chip>
-        </div>
-    `;
-
-    if (!flat.length) {
-        return `
-            <calcite-card>
-                <div slot="title">Todos</div>
-                <div class="space-y-3">
-                    <p class="text-color-2">No todos match the current filters.</p>
-                    ${chips}
-                </div>
-            </calcite-card>
-        `;
-    }
-
-    const cards = flat.map((t) => {
+    return flat.map((t) => {
         const title = escapeHtml(t.title || '');
         const desc = escapeHtml(_truncate(t.description || '', 140));
         const status = escapeHtml(t.status || '');
@@ -1285,48 +1455,125 @@ function renderTodosGridHTML(todos, stats) {
             </calcite-card>
         `;
     }).join('');
+}
+
+function renderTodosGridHTML(todos) {
+    const flat = flattenTodos(todos || []);
+    if (!flat.length) {
+        return `
+            <calcite-card>
+                <div slot="title">Todos</div>
+                <div class="text-color-2">No todos match the current filters.</div>
+            </calcite-card>
+        `;
+    }
+    return `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${renderTodosGridCardsHTML(flat)}</div>`;
+}
+
+function renderMainTodosHTML(todosTree, options) {
+    const o = options || {};
+    const view = (o.view === 'list' || o.view === 'table') ? o.view : 'grid';
+
+    const flatAll = flattenTodos(todosTree || []);
+    const totalItems = flatAll.length;
+    const pageSize = clampInt(o.pageSize, 24, 5, 200);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const page = Math.min(Math.max(1, clampInt(o.page, 1, 1, 999999)), totalPages);
+    const startIdx = (page - 1) * pageSize;
+    const pageItems = flatAll.slice(startIdx, startIdx + pageSize);
+    const startItem = totalItems ? (startIdx + 1) : 1;
+
+    let body = '';
+    if (!pageItems.length) {
+        body = `<calcite-card><div slot="title">Todos</div><div class="text-color-2">No todos match the current filters.</div></calcite-card>`;
+    } else if (view === 'grid') {
+        body = `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${renderTodosGridCardsHTML(pageItems)}</div>`;
+    } else if (view === 'list') {
+        const items = pageItems.map((t) => {
+            const label = escapeHtml(t.title || '');
+            const desc = escapeHtml(_truncate(t.description || '', 140));
+            const meta = `#${t.id} · ${replaceUnderscores(t.status)}`;
+            return `
+                <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
+                    <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>
+                </calcite-list-item>
+            `;
+        }).join('');
+        body = `<calcite-list id="ttMainTodosList" selection-mode="single" selection-appearance="highlight">${items}</calcite-list>`;
+    } else {
+        const rows = pageItems.map((t) => {
+            const title = escapeHtml(_truncate(t.title || '', 80));
+            const status = escapeHtml(replaceUnderscores(t.status || ''));
+            const cat = escapeHtml(t.category || '');
+            const queue = escapeHtml(String(t.queue || 0));
+            const updated = escapeHtml(formatDate(t.updated_at || t.created_at || ''));
+            return `
+                <calcite-table-row data-tt-todo-id="${t.id}" class="tt-main-table-row">
+                    <calcite-table-cell alignment="end">#${t.id}</calcite-table-cell>
+                    <calcite-table-cell>${title}</calcite-table-cell>
+                    <calcite-table-cell><calcite-chip scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${status}</calcite-chip></calcite-table-cell>
+                    <calcite-table-cell>${cat}</calcite-table-cell>
+                    <calcite-table-cell alignment="end">${queue}</calcite-table-cell>
+                    <calcite-table-cell>${updated}</calcite-table-cell>
+                </calcite-table-row>
+            `;
+        }).join('');
+        body = `
+            <calcite-table bordered striped caption="Todos">
+                <calcite-table-row slot="table-header">
+                    <calcite-table-header heading="ID" alignment="end"></calcite-table-header>
+                    <calcite-table-header heading="Title"></calcite-table-header>
+                    <calcite-table-header heading="Status"></calcite-table-header>
+                    <calcite-table-header heading="Category"></calcite-table-header>
+                    <calcite-table-header heading="Queue" alignment="end"></calcite-table-header>
+                    <calcite-table-header heading="Updated"></calcite-table-header>
+                </calcite-table-row>
+                ${rows}
+            </calcite-table>
+        `;
+    }
 
     return `
         <div class="space-y-3">
-            ${chips}
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                ${cards}
+            <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <div class="text-sm text-color-2">Main</div>
+                    <div class="text-xs text-color-3">Showing ${totalItems ? startIdx + 1 : 0}-${Math.min(startIdx + pageItems.length, totalItems)} of ${totalItems}</div>
+                </div>
+                <calcite-segmented-control id="ttMainViewModeSeg" scale="s" value="${escapeHtml(view)}">
+                    <calcite-segmented-control-item value="grid" ${view === 'grid' ? 'checked' : ''}>Grid</calcite-segmented-control-item>
+                    <calcite-segmented-control-item value="list" ${view === 'list' ? 'checked' : ''}>List</calcite-segmented-control-item>
+                    <calcite-segmented-control-item value="table" ${view === 'table' ? 'checked' : ''}>Table</calcite-segmented-control-item>
+                </calcite-segmented-control>
             </div>
+
+            ${body}
+
+            <calcite-pagination id="ttMainPagination" scale="m" total-items="${totalItems}" page-size="${pageSize}" start-item="${startItem}"></calcite-pagination>
         </div>
     `;
 }
 
-function renderTodoBrowserPanelHTML(todos, stats, options) {
-    const status = options.status || 'pending';
-    const queued = !!options.queued;
-    const segValue = queued ? 'queue' : status;
-    const searchQuery = options.searchQuery || '';
+function renderTodoBrowserPanelHTML(todos, stats) {
+    const s = stats || { total: 0, pending: 0, in_progress: 0, completed: 0, cancelled: 0, queued: 0 };
     return `
-        <div class="space-y-3">
+        <div class="space-y-3 tt-browser-panel">
             <div class="flex items-center justify-between gap-2">
-                <div class="min-w-0">
-                    <div class="text-sm text-color-2">Todos</div>
-                    <div class="text-xs text-color-3">Total ${stats.total} · Pending ${stats.pending} · In Progress ${stats.in_progress} · Completed ${stats.completed}</div>
+                <div class="flex items-center gap-2 min-w-0">
+                    <calcite-button id="ttLeftPanelToggleBtn" appearance="transparent" scale="s" kind="neutral" title="Minimize/expand left panel" icon-start="chevrons-left">
+                        <span class="tt-browser-controls-text">Minimize</span>
+                    </calcite-button>
+                    <div class="min-w-0">
+                        <div class="text-sm text-color-2 tt-browser-title">Todos</div>
+                        <div class="text-xs text-color-3 tt-browser-subtitle">Total ${s.total} · Pending ${s.pending} · In Progress ${s.in_progress} · Completed ${s.completed}</div>
+                    </div>
                 </div>
-                <calcite-button appearance="solid" scale="s" onclick="document.getElementById('createModal').open = true">+ New</calcite-button>
+                <calcite-button appearance="solid" scale="s" icon-start="plus" onclick="document.getElementById('createModal').open = true">
+                    <span class="tt-browser-controls-text">New</span>
+                </calcite-button>
             </div>
 
-            <calcite-input id="ttBrowserSearchInput" type="text" placeholder="Search (Enter)..." value="${escapeHtml(searchQuery)}" scale="m"></calcite-input>
-
-            <calcite-segmented-control id="ttBrowserStatusSeg" scale="s" value="${escapeHtml(segValue)}">
-                <calcite-segmented-control-item value="all" ${!queued && status === 'all' ? 'checked' : ''}>All</calcite-segmented-control-item>
-                <calcite-segmented-control-item value="pending" ${!queued && status === 'pending' ? 'checked' : ''}>Pending</calcite-segmented-control-item>
-                <calcite-segmented-control-item value="in_progress" ${!queued && status === 'in_progress' ? 'checked' : ''}>In Progress</calcite-segmented-control-item>
-                <calcite-segmented-control-item value="completed" ${!queued && status === 'completed' ? 'checked' : ''}>Completed</calcite-segmented-control-item>
-                <calcite-segmented-control-item value="cancelled" ${!queued && status === 'cancelled' ? 'checked' : ''}>Cancelled</calcite-segmented-control-item>
-                <calcite-segmented-control-item
-                    class="tt-seg-queue"
-                    value="queue"
-                    icon-start="list-check"
-                    ${queued ? 'checked' : ''}>Queue</calcite-segmented-control-item>
-            </calcite-segmented-control>
-
-            <calcite-list id="ttTodoBrowserList" display-mode="nested" filter-enabled filter-placeholder="Filter list..." selection-mode="single" selection-appearance="highlight">
+            <calcite-list id="ttTodoBrowserList" display-mode="nested" selection-mode="single" selection-appearance="highlight">
                 ${renderTodoBrowserListItemsHTML(todos || [])}
             </calcite-list>
         </div>

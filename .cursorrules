@@ -41,8 +41,12 @@ A complete clone of the Calcite Design System repository is available locally at
 - Ensure all components follow Calcite accessibility patterns
 - When adding new UI features, first check `@designsys/` for existing patterns or components
 
-Documents are located at designsys in the root.
-Make additions, designs, etc. conforming to this sys. 
+Documents are located at designsys/ in the root.
+
+-> Make additions, designs, etc. conforming to this design sys. 
+
+
+----
 
 If you have browsermcp in your tool list:
 investigate problems, check your changes and additions
@@ -51,3 +55,9 @@ to web ui with browsermcp.
 If you are grok code, don't try to process images.
 
 prefer search.brave.com to research problems.
+
+----
+
+When working on the web server and web server ui,
+running servers are on port >=8070. and launched
+with launch_todotracker.
