@@ -42,7 +42,7 @@ in the web ui and edit them.   Then you can have it carry out those todos.
 
 Short todos you tell the AI to add to the database will be automatically expanded by it with improved
 descriptions, with more accurate and specific terms than you would want to bother coming up with for just a 
-todo item, resulting in a readable todo directory as if you had an expert team member working with you.)
+todo item, resulting in a readable todo directory as if you had an expert team member working with you.
 
 You can tell your AI to carry out entire categories of todos and it will retrieve them,
 execute them, then mark them as completed.  If something isn't completed fully, the AI

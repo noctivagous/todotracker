@@ -147,3 +147,4 @@ class Router {
 // Export router instance
 window.router = new Router();
 
+

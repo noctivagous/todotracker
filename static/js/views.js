@@ -393,9 +393,21 @@ function showError(message) {
  * Escape HTML to prevent XSS
  */
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    // NOTE: This function is used in BOTH text-node and attribute contexts in templates.
+    // It must escape quotes to avoid breaking HTML attributes (e.g., titles containing `"`).
+    const s = String(text ?? '');
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function _setAutosaveChip(text) {
+    const chip = document.getElementById('ttAutosaveChip');
+    if (!chip) return;
+    chip.textContent = text;
 }
 
 /**
@@ -1002,43 +1014,122 @@ async function renderTodoDetailHTML(todo, notes) {
  * Initialize todo detail view
  */
 function initializeTodoDetailView(todo) {
-    // Auto-save for all editable fields in the inspector
-    document.querySelectorAll('[data-tt-field]').forEach((el) => {
+    // Fill initial values via JS properties to preserve quotes/newlines safely.
+    // (Avoid relying on HTML attributes like value="..." for multi-line content.)
+    const fields = Array.from(document.querySelectorAll('[data-tt-field]'));
+    for (const el of fields) {
+        const field = el.getAttribute('data-tt-field');
+        const todoId = parseInt(el.getAttribute('data-tt-todo-id') || todo.id, 10);
+        if (!field || !todoId) continue;
+
+        try {
+            if (field === 'tag_names') {
+                el.value = (todo.tags || []).map((x) => x.name).join(', ');
+            } else if (field === 'queue') {
+                el.value = String(todo.queue || 0);
+            } else if (field === 'task_size') {
+                el.value = todo.task_size == null ? '' : String(todo.task_size);
+            } else if (field === 'priority_class') {
+                el.value = todo.priority_class || '';
+            } else if (field === 'topic') {
+                el.value = todo.topic || '';
+            } else if (field === 'title') {
+                el.value = todo.title || '';
+            } else if (field === 'status' || field === 'category') {
+                el.value = todo[field] || '';
+            } else if (field === 'description' || field === 'work_completed' || field === 'work_remaining' || field === 'implementation_issues') {
+                el.value = todo[field] || '';
+            }
+        } catch (e) {
+            // Non-fatal: some Calcite elements may not be ready immediately.
+        }
+    }
+
+    _setAutosaveChip('Saved');
+
+    // Auto-save for all editable fields in the inspector (with status indicator).
+    window.ttAutosaveState = window.ttAutosaveState || {};
+    const getState = (todoId) => {
+        if (!window.ttAutosaveState[todoId]) {
+            window.ttAutosaveState[todoId] = { timer: null, patch: {} };
+        }
+        return window.ttAutosaveState[todoId];
+    };
+
+    const updateBrowserListItemTitle = (todoId, title) => {
+        const list = document.getElementById('ttTodoBrowserList');
+        if (!list) return;
+        const item = list.querySelector(`calcite-list-item[value="${todoId}"]`);
+        if (!item) return;
+        try {
+            item.label = title;
+        } catch (e) {
+            item.setAttribute('label', escapeHtml(title));
+        }
+    };
+
+    const flushAutosave = async (todoId) => {
+        const state = getState(todoId);
+        const patch = state.patch || {};
+        state.patch = {};
+        state.timer = null;
+        if (!patch || Object.keys(patch).length === 0) return;
+
+        try {
+            _setAutosaveChip('Saving…');
+            await apiUpdateTodo(todoId, patch);
+            if (typeof patch.title === 'string') {
+                updateBrowserListItemTitle(todoId, patch.title);
+            }
+            _setAutosaveChip(`Saved ${new Date().toLocaleTimeString()}`);
+        } catch (e) {
+            console.error('Update failed:', e);
+            _setAutosaveChip('Save failed');
+            alert('Failed to save changes: ' + (e.message || e));
+        }
+    };
+
+    const scheduleAutosave = (todoId, patch, debounceMs) => {
+        const state = getState(todoId);
+        state.patch = { ...(state.patch || {}), ...(patch || {}) };
+        if (state.timer) clearTimeout(state.timer);
+        // Give immediate feedback that changes are pending.
+        _setAutosaveChip('Saving…');
+        state.timer = setTimeout(() => flushAutosave(todoId), Math.max(0, debounceMs || 0));
+    };
+
+    fields.forEach((el) => {
         const field = el.getAttribute('data-tt-field');
         const todoId = parseInt(el.getAttribute('data-tt-todo-id') || todo.id, 10);
 
         const handler = async () => {
-            try {
-                let value = el.value;
-                const patch = {};
+            let value = el.value;
+            const patch = {};
 
-                if (field === 'tag_names') {
-                    patch.tag_names = (value || '')
-                        .split(',')
-                        .map((t) => t.trim())
-                        .filter(Boolean);
-                } else if (field === 'queue') {
-                    patch.queue = value === '' ? 0 : parseInt(value, 10);
-                } else if (field === 'task_size') {
-                    patch.task_size = value === '' ? null : parseInt(value, 10);
-                } else if (field === 'priority_class') {
-                    patch.priority_class = (value || '').trim().toUpperCase() || null;
-                } else if (field === 'topic') {
-                    patch.topic = (value || '').trim() || null;
-                } else if (field === 'title') {
-                    patch.title = value;
-                } else if (field === 'status' || field === 'category') {
-                    patch[field] = value;
-                } else if (field === 'description' || field === 'work_completed' || field === 'work_remaining' || field === 'implementation_issues') {
-                    patch[field] = value;
-                }
-
-                await apiUpdateTodo(todoId, patch);
-                await refreshTodoDetail(todoId);
-            } catch (e) {
-                console.error('Update failed:', e);
-                alert('Failed to save changes: ' + (e.message || e));
+            if (field === 'tag_names') {
+                patch.tag_names = (value || '')
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean);
+            } else if (field === 'queue') {
+                patch.queue = value === '' ? 0 : parseInt(value, 10);
+            } else if (field === 'task_size') {
+                patch.task_size = value === '' ? null : parseInt(value, 10);
+            } else if (field === 'priority_class') {
+                patch.priority_class = (value || '').trim().toUpperCase() || null;
+            } else if (field === 'topic') {
+                patch.topic = (value || '').trim() || null;
+            } else if (field === 'title') {
+                patch.title = value;
+            } else if (field === 'status' || field === 'category') {
+                patch[field] = value;
+            } else if (field === 'description' || field === 'work_completed' || field === 'work_remaining' || field === 'implementation_issues') {
+                patch[field] = value;
             }
+
+            if (Object.keys(patch).length === 0) return;
+            const debounceMs = (field === 'status' || field === 'category') ? 0 : 450;
+            scheduleAutosave(todoId, patch, debounceMs);
         };
 
         el.addEventListener('calciteInputChange', handler);
@@ -1229,35 +1320,38 @@ function renderTodoDetailPanelHTML(todoDetail) {
 
             <calcite-card>
                 <div slot="title" class="space-y-2">
-                    <div class="text-xs text-color-3">Todo #${t.id}</div>
-                    <calcite-inline-editable controls editing-enabled>
-                        <calcite-input data-tt-field="title" data-tt-todo-id="${t.id}" value="${escapeHtml(t.title || '')}"></calcite-input>
-                    </calcite-inline-editable>
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="text-xs text-color-3">Todo #${t.id}</div>
+                        <calcite-chip id="ttAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
+                    </div>
+                    <calcite-input data-tt-field="title" data-tt-todo-id="${t.id}" value="${escapeHtml(t.title || '')}"></calcite-input>
                 </div>
                 <div class="space-y-3">
-                    <calcite-label>
-                        Status
-                        <calcite-select data-tt-field="status" data-tt-todo-id="${t.id}">
-                            <calcite-option value="pending" ${t.status === 'pending' ? 'selected' : ''}>pending</calcite-option>
-                            <calcite-option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>in_progress</calcite-option>
-                            <calcite-option value="completed" ${t.status === 'completed' ? 'selected' : ''}>completed</calcite-option>
-                            <calcite-option value="cancelled" ${t.status === 'cancelled' ? 'selected' : ''}>cancelled</calcite-option>
-                        </calcite-select>
-                    </calcite-label>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <calcite-label>
+                            Status
+                            <calcite-select data-tt-field="status" data-tt-todo-id="${t.id}">
+                                <calcite-option value="pending" ${t.status === 'pending' ? 'selected' : ''}>pending</calcite-option>
+                                <calcite-option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>in_progress</calcite-option>
+                                <calcite-option value="completed" ${t.status === 'completed' ? 'selected' : ''}>completed</calcite-option>
+                                <calcite-option value="cancelled" ${t.status === 'cancelled' ? 'selected' : ''}>cancelled</calcite-option>
+                            </calcite-select>
+                        </calcite-label>
 
-                    <calcite-label>
-                        Category
-                        <calcite-select data-tt-field="category" data-tt-todo-id="${t.id}">
-                            <calcite-option value="feature" ${t.category === 'feature' ? 'selected' : ''}>feature</calcite-option>
-                            <calcite-option value="issue" ${t.category === 'issue' ? 'selected' : ''}>issue</calcite-option>
-                            <calcite-option value="bug" ${t.category === 'bug' ? 'selected' : ''}>bug</calcite-option>
-                        </calcite-select>
-                    </calcite-label>
+                        <calcite-label>
+                            Category
+                            <calcite-select data-tt-field="category" data-tt-todo-id="${t.id}">
+                                <calcite-option value="feature" ${t.category === 'feature' ? 'selected' : ''}>feature</calcite-option>
+                                <calcite-option value="issue" ${t.category === 'issue' ? 'selected' : ''}>issue</calcite-option>
+                                <calcite-option value="bug" ${t.category === 'bug' ? 'selected' : ''}>bug</calcite-option>
+                            </calcite-select>
+                        </calcite-label>
 
-                    <calcite-label>
-                        Topic
-                        <calcite-input data-tt-field="topic" data-tt-todo-id="${t.id}" value="${escapeHtml(t.topic || '')}"></calcite-input>
-                    </calcite-label>
+                        <calcite-label>
+                            Topic
+                            <calcite-input data-tt-field="topic" data-tt-todo-id="${t.id}" value="${escapeHtml(t.topic || '')}"></calcite-input>
+                        </calcite-label>
+                    </div>
 
                     <calcite-label>
                         Tags (comma-separated)
@@ -1266,7 +1360,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <calcite-label>
-                            Queue
+                            Queue Position
                             <calcite-input type="number" min="0" data-tt-field="queue" data-tt-todo-id="${t.id}" value="${escapeHtml(String(t.queue || 0))}"></calcite-input>
                         </calcite-label>
                         <calcite-label>
@@ -1288,21 +1382,21 @@ function renderTodoDetailPanelHTML(todoDetail) {
 
                     <calcite-label>
                         Description (markdown)
-                        <calcite-text-area rows="4" data-tt-field="description" data-tt-todo-id="${t.id}" value="${escapeHtml(t.description || '')}"></calcite-text-area>
+                        <calcite-text-area rows="8" data-tt-field="description" data-tt-todo-id="${t.id}"></calcite-text-area>
                     </calcite-label>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <calcite-label>
                             ✅ Work Completed
-                            <calcite-text-area rows="4" data-tt-field="work_completed" data-tt-todo-id="${t.id}" value="${escapeHtml(t.work_completed || '')}"></calcite-text-area>
+                            <calcite-text-area rows="4" data-tt-field="work_completed" data-tt-todo-id="${t.id}"></calcite-text-area>
                         </calcite-label>
                         <calcite-label>
                             📋 Work Remaining
-                            <calcite-text-area rows="4" data-tt-field="work_remaining" data-tt-todo-id="${t.id}" value="${escapeHtml(t.work_remaining || '')}"></calcite-text-area>
+                            <calcite-text-area rows="4" data-tt-field="work_remaining" data-tt-todo-id="${t.id}"></calcite-text-area>
                         </calcite-label>
                         <calcite-label>
                             ⚠️ Implementation Issues
-                            <calcite-text-area rows="4" data-tt-field="implementation_issues" data-tt-todo-id="${t.id}" value="${escapeHtml(t.implementation_issues || '')}"></calcite-text-area>
+                            <calcite-text-area rows="4" data-tt-field="implementation_issues" data-tt-todo-id="${t.id}"></calcite-text-area>
                         </calcite-label>
                     </div>
 
