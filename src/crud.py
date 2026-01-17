@@ -6,7 +6,7 @@ These functions are used by both the MCP server and web server.
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_, func
-from .db import Todo, Note, TodoDependency, TodoStatus, TodoCategory, Tag, TodoTag
+from .db import Todo, Note, TodoDependency, TodoStatus, TodoCategory, Tag, TodoTag, NoteType
 from .schemas import TodoCreate, TodoUpdate, NoteCreate, NoteUpdate, TodoSearch
 
 
@@ -483,21 +483,43 @@ def get_note(db: Session, note_id: int) -> Optional[Note]:
     return db.query(Note).filter(Note.id == note_id).first()
 
 
-def get_notes(db: Session, todo_id: Optional[int] = None, skip: int = 0, limit: int = 100) -> List[Note]:
-    """Get notes, optionally filtered by todo_id."""
+def get_notes(
+    db: Session,
+    todo_id: Optional[int] = None,
+    note_type: Optional[str] = None,
+    category: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100
+) -> List[Note]:
+    """Get notes, optionally filtered by todo_id, note_type, and/or category."""
     query = db.query(Note)
     
     if todo_id is not None:
         query = query.filter(Note.todo_id == todo_id)
+
+    if note_type:
+        try:
+            nt = NoteType(note_type)
+        except Exception:
+            raise ValueError("note_type must be one of: attached, project")
+        query = query.filter(Note.note_type == nt)
+
+    if category:
+        query = query.filter(Note.category == category)
     
     return query.offset(skip).limit(limit).all()
 
 
 def create_note(db: Session, note: NoteCreate) -> Note:
     """Create a new note."""
+    todo_id = note.todo_id
+    nt = NoteType.ATTACHED if todo_id is not None else NoteType.PROJECT
+    cat = (note.category or "").strip() or "general"
     db_note = Note(
         content=note.content,
-        todo_id=note.todo_id,
+        todo_id=todo_id,
+        note_type=nt,
+        category=cat,
     )
     db.add(db_note)
     db.commit()
@@ -514,6 +536,12 @@ def update_note(db: Session, note_id: int, note_update: NoteUpdate) -> Optional[
     update_data = note_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_note, field, value)
+
+    # Keep note_type consistent with todo_id.
+    db_note.note_type = NoteType.ATTACHED if db_note.todo_id is not None else NoteType.PROJECT
+    # Normalize default category if cleared
+    if not (db_note.category or "").strip():
+        db_note.category = "general"
     
     db.commit()
     db.refresh(db_note)

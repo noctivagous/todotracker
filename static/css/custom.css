@@ -194,6 +194,22 @@ calcite-shell main {
     padding-inline-start: var(--calcite-spacing-md);
 }
 
+.tt-notes-nav-filters {
+    display: flex;
+    align-items: center;
+    gap: var(--calcite-spacing-md);
+    margin-inline-start: auto; /* push Notes filters to the right of search/filter */
+    flex-wrap: wrap;
+}
+
+.tt-notes-nav-filters calcite-combobox {
+    width: 220px;
+}
+
+.tt-notes-nav-filters calcite-segmented-control {
+    --calcite-segmented-control-shadow: var(--tt-crisp-shadow);
+}
+
 .tt-nav-tabs,
 #ttNavTabs,
 #ttSpaNavTabs {
@@ -213,6 +229,10 @@ calcite-shell main {
 
 @media (max-width: 768px) {
     .tt-nav-secondary calcite-input {
+        width: 160px;
+    }
+
+    .tt-notes-nav-filters calcite-combobox {
         width: 160px;
     }
 }
@@ -238,6 +258,16 @@ calcite-shell main {
     }
 
     .tt-nav-secondary calcite-input {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .tt-notes-nav-filters {
+        width: 100%;
+        margin-inline-start: 0;
+    }
+
+    .tt-notes-nav-filters calcite-combobox {
         width: 100%;
         min-width: 0;
     }

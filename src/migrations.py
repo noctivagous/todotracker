@@ -256,11 +256,97 @@ def migrate_3_to_4(db):
     db.commit()
 
 
+def migrate_4_to_5(db):
+    """
+    Migration from schema v4 to v5.
+    Adds note typing and categories:
+      - notes.note_type: 'project' | 'attached' (derived from todo_id for existing data)
+      - notes.category: freeform category string (defaults to 'general')
+    """
+    print("  → Adding note_type/category columns to notes table...")
+
+    # note_type (nullable during migration, then backfilled)
+    try:
+        db.execute(text("ALTER TABLE notes ADD COLUMN note_type TEXT"))
+        print("    ✓ Added note_type column")
+    except OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            print("    (note_type column already exists, skipping)")
+        else:
+            raise
+
+    # category (nullable during migration, then backfilled)
+    try:
+        db.execute(text("ALTER TABLE notes ADD COLUMN category TEXT"))
+        print("    ✓ Added category column")
+    except OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            print("    (category column already exists, skipping)")
+        else:
+            raise
+
+    # Backfill existing rows
+    print("  → Backfilling note_type based on todo_id...")
+    # NOTE: SQLAlchemy's Enum mapping stores Enum member *names* by default.
+    # Our Python enum values are lowercase ("attached"/"project"), but the DB
+    # should store "ATTACHED"/"PROJECT" to round-trip safely.
+    db.execute(text("""
+        UPDATE notes
+        SET note_type = CASE
+            WHEN todo_id IS NULL THEN 'PROJECT'
+            ELSE 'ATTACHED'
+        END
+        WHERE note_type IS NULL OR TRIM(note_type) = ''
+    """))
+
+    # Normalize any previously written lowercase values (idempotent).
+    db.execute(text("""
+        UPDATE notes
+        SET note_type = 'ATTACHED'
+        WHERE note_type = 'attached'
+    """))
+    db.execute(text("""
+        UPDATE notes
+        SET note_type = 'PROJECT'
+        WHERE note_type = 'project'
+    """))
+
+    print("  → Backfilling category defaults...")
+    db.execute(text("""
+        UPDATE notes
+        SET category = 'general'
+        WHERE category IS NULL OR TRIM(category) = ''
+    """))
+
+    # Helpful indexes for filtering
+    print("  → Creating indexes for notes filtering...")
+    try:
+        db.execute(text("CREATE INDEX ix_notes_note_type ON notes(note_type)"))
+        print("    ✓ Added ix_notes_note_type index")
+    except OperationalError as e:
+        if "already exists" in str(e).lower():
+            print("    (ix_notes_note_type already exists, skipping)")
+        else:
+            raise
+
+    try:
+        db.execute(text("CREATE INDEX ix_notes_category ON notes(category)"))
+        print("    ✓ Added ix_notes_category index")
+    except OperationalError as e:
+        if "already exists" in str(e).lower():
+            print("    (ix_notes_category already exists, skipping)")
+        else:
+            raise
+
+    db.commit()
+
+
 # Migration map: from_version -> migration_function
 MIGRATIONS = {
     2: migrate_1_to_2,
     3: migrate_2_to_3,
     4: migrate_3_to_4,
+    5: migrate_4_to_5,
 }
 
 

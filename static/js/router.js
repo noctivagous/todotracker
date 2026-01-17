@@ -39,7 +39,10 @@ class Router {
      */
     getCurrentRoute() {
         const hash = window.location.hash || '#/';
-        return hash.substring(1) || '/';
+        const full = hash.substring(1) || '/';
+        // Ignore query string for route matching (views parse query params separately from location.hash).
+        const pathOnly = full.split('?')[0] || '/';
+        return pathOnly;
     }
 
     /**

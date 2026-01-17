@@ -452,6 +452,49 @@ function isNotesMode() {
     }
 }
 
+function renderNotesNavFiltersHTML(allNotes, opts) {
+    const o = opts || getNotesRouteOptions();
+    const all = Array.isArray(allNotes) ? allNotes : [];
+
+    const categories = Array.from(new Set(
+        (all || []).map((n) => String(n.category || '').trim()).filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b));
+
+    const categoryItems = [
+        `<calcite-combobox-item value="__all__" text-label="All categories" ${!o.category ? 'selected' : ''}></calcite-combobox-item>`,
+        ...categories.map((c) => {
+            const v = escapeHtml(c);
+            const sel = (o.category === c) ? 'selected' : '';
+            return `<calcite-combobox-item value="${v}" text-label="${v}" ${sel}></calcite-combobox-item>`;
+        })
+    ].join('');
+
+    return `
+        <calcite-segmented-control id="ttNotesTypeSeg" scale="s" value="${escapeHtml(o.noteType || 'all')}">
+            <calcite-segmented-control-item value="all" ${(!o.noteType || o.noteType === 'all') ? 'checked' : ''}>All</calcite-segmented-control-item>
+            <calcite-segmented-control-item value="project" ${(o.noteType === 'project') ? 'checked' : ''}>Project</calcite-segmented-control-item>
+            <calcite-segmented-control-item value="attached" ${(o.noteType === 'attached') ? 'checked' : ''}>Attached</calcite-segmented-control-item>
+        </calcite-segmented-control>
+        <calcite-combobox id="ttNotesCategoryBox" selection-mode="single" allow-custom-values placeholder="All categories" scale="s">
+            ${categoryItems}
+        </calcite-combobox>
+    `;
+}
+
+function syncNotesNavFilters(allNotes, opts) {
+    const host = document.getElementById('ttNotesNavFilters');
+    if (!host) return;
+
+    if (!isNotesMode()) {
+        host.hidden = true;
+        host.innerHTML = '';
+        return;
+    }
+
+    host.hidden = false;
+    host.innerHTML = renderNotesNavFiltersHTML(allNotes, opts);
+}
+
 function setHeaderMode(mode) {
     const m = mode === 'notes' ? 'notes' : 'todos';
     const headerStatusSeg = document.getElementById('ttHeaderStatusSeg');
@@ -459,6 +502,7 @@ function setHeaderMode(mode) {
     const navSearch = document.getElementById('ttNavSearchInput');
     const navFilter = document.getElementById('ttNavFilterInput');
     const headerNewBtn = document.getElementById('ttHeaderNewTodoBtn');
+    const notesNavFilters = document.getElementById('ttNotesNavFilters');
 
     // Status controls are todo-specific for now.
     const disableStatus = m !== 'todos';
@@ -481,6 +525,12 @@ function setHeaderMode(mode) {
         headerNewBtn.innerHTML = 'New';
         headerNewBtn.setAttribute('icon-start', 'plus');
         headerNewBtn.title = m === 'notes' ? 'Create note' : 'Create todo';
+    }
+
+    // Notes-only filters live in navigation-secondary.
+    if (notesNavFilters && m !== 'notes') {
+        notesNavFilters.hidden = true;
+        notesNavFilters.innerHTML = '';
     }
 }
 
@@ -579,6 +629,8 @@ function getNotesRouteOptions() {
     return {
         searchQuery: (params.q || '').trim(),
         filterText: (params.filter || '').trim(),
+        noteType: (params.note_type || 'all').trim(),
+        category: (params.category || '').trim(),
     };
 }
 
@@ -598,10 +650,27 @@ function filterNotesClientSide(notes, searchQuery, filterText) {
         const hay = [
             String(n.id || ''),
             String(n.todo_id || ''),
+            String(n.note_type || ''),
+            String(n.category || ''),
             n.content || '',
             n.created_at || '',
         ].join(' ').toLowerCase();
         return hay.includes(q);
+    });
+}
+
+function filterNotesByTypeAndCategory(notes, noteType, category) {
+    const items = Array.isArray(notes) ? notes : [];
+    const nt = (noteType || 'all').trim().toLowerCase();
+    const cat = (category || '').trim();
+
+    return items.filter((n) => {
+        const nType = String(n.note_type || (n.todo_id ? 'attached' : 'project')).toLowerCase();
+        const nCat = String(n.category || '').trim();
+
+        if (nt && nt !== 'all' && nType !== nt) return false;
+        if (cat && nCat !== cat) return false;
+        return true;
     });
 }
 
@@ -745,6 +814,108 @@ function setHeaderControlsState(options, stats) {
             page_size: o.pageSize || 24,
         });
         statusPageItem.href = `#/${qs}`;
+    }
+}
+
+function setNavSearchFilterState(searchQuery, filterText) {
+    const searchInput = document.getElementById('ttNavSearchInput');
+    if (searchInput && !searchInput._ttSyncing) {
+        searchInput._ttSyncing = true;
+        try { searchInput.value = (searchQuery || '').trim(); } catch (e) {}
+        searchInput._ttSyncing = false;
+    }
+
+    const filterInput = document.getElementById('ttNavFilterInput');
+    if (filterInput && !filterInput._ttSyncing) {
+        filterInput._ttSyncing = true;
+        try { filterInput.value = (filterText || '').trim(); } catch (e) {}
+        filterInput._ttSyncing = false;
+    }
+}
+
+function initializeHeaderControls() {
+    // Header "+ New" button (global)
+    const headerNewBtn = document.getElementById('ttHeaderNewTodoBtn');
+    if (headerNewBtn && !headerNewBtn._ttBound) {
+        headerNewBtn._ttBound = true;
+        headerNewBtn.addEventListener('click', () => {
+            // Route-aware: in Notes mode, "New" creates a note.
+            if (isNotesMode()) {
+                const m = document.getElementById('createNoteModal');
+                if (m) m.open = true;
+                else addCreateNoteModal();
+                const mm = document.getElementById('createNoteModal');
+                if (mm) mm.open = true;
+                return;
+            }
+            const m = document.getElementById('createModal');
+            if (m) m.open = true;
+        });
+    }
+
+    // Global navigation-secondary search (Enter)
+    const navSearch = document.getElementById('ttNavSearchInput');
+    if (navSearch && !navSearch._ttBound) {
+        navSearch._ttBound = true;
+        navSearch.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            if (navSearch._ttSyncing) return;
+            const query = (navSearch.value || '').trim();
+            if (isNotesMode()) {
+                navigateNotesWithParamPatch({ q: query });
+            } else {
+                navigateTodosWithParamPatch({ q: query, page: 1 });
+            }
+        });
+    }
+
+    // Global navigation-secondary filter (live)
+    const navFilter = document.getElementById('ttNavFilterInput');
+    if (navFilter && !navFilter._ttBound) {
+        navFilter._ttBound = true;
+        let timer = null;
+        navFilter.addEventListener('input', () => {
+            if (navFilter._ttSyncing) return;
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(() => {
+                const q = (navFilter.value || '').trim();
+                if (isNotesMode()) {
+                    navigateNotesWithParamPatch({ filter: q });
+                } else {
+                    navigateTodosWithParamPatch({ filter: q, page: 1 });
+                }
+            }, 150);
+        });
+    }
+
+    // Header status segmented control (applies to both panels)
+    const headerStatusSeg = document.getElementById('ttHeaderStatusSeg');
+    if (headerStatusSeg && !headerStatusSeg._ttBound) {
+        headerStatusSeg._ttBound = true;
+        headerStatusSeg.addEventListener('calciteSegmentedControlChange', () => {
+            if (isNotesMode()) return;
+            const v = headerStatusSeg.value || 'pending';
+            if (v === 'queue') {
+                navigateTodosWithParamPatch({ status: 'all', queued: 'true', page: 1 });
+            } else {
+                navigateTodosWithParamPatch({ status: v, queued: 'false', page: 1 });
+            }
+        });
+    }
+
+    // Header status select (mobile). Mirrors segmented control behavior.
+    const headerStatusSelect = document.getElementById('ttHeaderStatusSelect');
+    if (headerStatusSelect && !headerStatusSelect._ttBound) {
+        headerStatusSelect._ttBound = true;
+        headerStatusSelect.addEventListener('change', () => {
+            if (isNotesMode()) return;
+            const v = headerStatusSelect.value || 'pending';
+            if (v === 'queue') {
+                navigateTodosWithParamPatch({ status: 'all', queued: 'true', page: 1 });
+            } else {
+                navigateTodosWithParamPatch({ status: v, queued: 'false', page: 1 });
+            }
+        });
     }
 }
 
@@ -1056,89 +1227,8 @@ function renderTodoItem(todo, level = 0) {
  * Initialize todos view functionality
  */
 function initializeTodosView() {
-    // Header "+ New" button (global)
-    const headerNewBtn = document.getElementById('ttHeaderNewTodoBtn');
-    if (headerNewBtn && !headerNewBtn._ttBound) {
-        headerNewBtn._ttBound = true;
-        headerNewBtn.addEventListener('click', () => {
-            // Route-aware: in Notes mode, "New" creates a note.
-            if (isNotesMode()) {
-                const m = document.getElementById('createNoteModal');
-                if (m) m.open = true;
-                else addCreateNoteModal();
-                const mm = document.getElementById('createNoteModal');
-                if (mm) mm.open = true;
-                return;
-            }
-            const m = document.getElementById('createModal');
-            if (m) m.open = true;
-        });
-    }
-
-    // Global navigation-secondary search (Enter)
-    const navSearch = document.getElementById('ttNavSearchInput');
-    if (navSearch && !navSearch._ttBound) {
-        navSearch._ttBound = true;
-        navSearch.addEventListener('keydown', (e) => {
-            if (e.key !== 'Enter') return;
-            if (navSearch._ttSyncing) return;
-            const query = (navSearch.value || '').trim();
-            if (isNotesMode()) {
-                navigateNotesWithParamPatch({ q: query });
-            } else {
-                navigateTodosWithParamPatch({ q: query, page: 1 });
-            }
-        });
-    }
-
-    // Global navigation-secondary filter (live)
-    const navFilter = document.getElementById('ttNavFilterInput');
-    if (navFilter && !navFilter._ttBound) {
-        navFilter._ttBound = true;
-        let timer = null;
-        navFilter.addEventListener('input', () => {
-            if (navFilter._ttSyncing) return;
-            if (timer) clearTimeout(timer);
-            timer = setTimeout(() => {
-                const q = (navFilter.value || '').trim();
-                if (isNotesMode()) {
-                    navigateNotesWithParamPatch({ filter: q });
-                } else {
-                    navigateTodosWithParamPatch({ filter: q, page: 1 });
-                }
-            }, 150);
-        });
-    }
-
-    // Header status segmented control (applies to both panels)
-    const headerStatusSeg = document.getElementById('ttHeaderStatusSeg');
-    if (headerStatusSeg && !headerStatusSeg._ttBound) {
-        headerStatusSeg._ttBound = true;
-        headerStatusSeg.addEventListener('calciteSegmentedControlChange', () => {
-            if (isNotesMode()) return;
-            const v = headerStatusSeg.value || 'pending';
-            if (v === 'queue') {
-                navigateTodosWithParamPatch({ status: 'all', queued: 'true', page: 1 });
-            } else {
-                navigateTodosWithParamPatch({ status: v, queued: 'false', page: 1 });
-            }
-        });
-    }
-
-    // Header status select (mobile). Mirrors segmented control behavior.
-    const headerStatusSelect = document.getElementById('ttHeaderStatusSelect');
-    if (headerStatusSelect && !headerStatusSelect._ttBound) {
-        headerStatusSelect._ttBound = true;
-        headerStatusSelect.addEventListener('change', () => {
-            if (isNotesMode()) return;
-            const v = headerStatusSelect.value || 'pending';
-            if (v === 'queue') {
-                navigateTodosWithParamPatch({ status: 'all', queued: 'true', page: 1 });
-            } else {
-                navigateTodosWithParamPatch({ status: v, queued: 'false', page: 1 });
-            }
-        });
-    }
+    // Header controls are global (Todos + Notes).
+    initializeHeaderControls();
 
     // Left panel minimize toggle
     const leftToggle = document.getElementById('ttLeftPanelToggleBtn');
@@ -2016,14 +2106,23 @@ function renderTodoDetailPanelHTML(todoDetail) {
                         </div>
                     </calcite-panel>
 
-                    ${(t.notes && t.notes.length) ? `
-                        <calcite-panel>
-                            <div slot="header">Notes (${t.notes.length})</div>
-                            <div class="space-y-2">
-                                ${t.notes.map((n) => `<div class="tt-surface p-3"><div class="markdown-render">${escapeHtml(n.content || '')}</div><div class="text-xs text-color-3 mt-1">${escapeHtml(formatDate(n.created_at))}</div></div>`).join('')}
-                            </div>
-                        </calcite-panel>
-                    ` : ''}
+                    <calcite-panel>
+                        <div slot="header">Notes (${(t.notes || []).length})</div>
+                        <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
+                            onclick="addCreateNoteModal(); (window.ttOpenCreateNoteModal ? window.ttOpenCreateNoteModal({ todoId: ${t.id} }) : (document.getElementById('createNoteModal') && (document.getElementById('createNoteModal').open = true)))">
+                            Add note
+                        </calcite-button>
+                        <div class="space-y-2">
+                            ${(t.notes && t.notes.length)
+                                ? t.notes.map((n) => {
+                                    const nt = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
+                                    const cat = escapeHtml(String(n.category || 'general'));
+                                    return `<div class="tt-surface p-3"><div class="text-xs text-color-3 mb-1">${nt} · ${cat} · ${escapeHtml(formatDate(n.created_at))}</div><div class="markdown-render">${escapeHtml(n.content || '')}</div></div>`;
+                                  }).join('')
+                                : '<div class="text-xs text-color-3">No notes yet.</div>'
+                            }
+                        </div>
+                    </calcite-panel>
 
                     <!-- Created/Updated shown in header next to Todo # -->
                 </div>
@@ -2110,13 +2209,15 @@ async function renderNotesView() {
         const notes = await response.json();
 
         const opts = getNotesRouteOptions();
-        const filtered = filterNotesClientSide(notes, opts.searchQuery, opts.filterText);
+        const filteredTypeCat = filterNotesByTypeAndCategory(notes, opts.noteType, opts.category);
+        const filtered = filterNotesClientSide(filteredTypeCat, opts.searchQuery, opts.filterText);
         window.ttAllNotesCache = notes || [];
 
         // Notes uses master-detail too: list in panel-start, detail in main.
         const { startPanel, startShell, mainView } = getShellTargets();
         if (startShell) startShell.removeAttribute('collapsed');
-        if (startPanel) startPanel.innerHTML = renderNotesBrowserPanelHTML(filtered);
+        if (startPanel) startPanel.innerHTML = renderNotesBrowserPanelHTML(filtered, opts, notes || []);
+        syncNotesNavFilters(notes || [], opts);
         collapseDetailPanel();
 
         const view = mainView || document.getElementById('app-view');
@@ -2166,6 +2267,9 @@ async function renderNotesHTML(notes) {
  */
 function initializeNotesView() {
     setHeaderMode('notes');
+    initializeHeaderControls();
+    const opts = getNotesRouteOptions();
+    setNavSearchFilterState(opts.searchQuery, opts.filterText);
 
     // Render markdown
     document.querySelectorAll('.markdown-render').forEach(el => {
@@ -2185,6 +2289,27 @@ function initializeNotesView() {
             const id = parseInt(item.value, 10);
             if (!id) return;
             router.navigate(`/notes/${id}`);
+        });
+    }
+
+    const typeSeg = document.getElementById('ttNotesTypeSeg');
+    if (typeSeg && !typeSeg._ttBound) {
+        typeSeg._ttBound = true;
+        typeSeg.addEventListener('calciteSegmentedControlChange', () => {
+            const v = String(typeSeg.value || 'all');
+            navigateNotesWithParamPatch({ note_type: v === 'all' ? '' : v });
+        });
+    }
+
+    const catBox = document.getElementById('ttNotesCategoryBox');
+    if (catBox && !catBox._ttBound) {
+        catBox._ttBound = true;
+        catBox.addEventListener('calciteComboboxChange', () => {
+            let v = catBox.value;
+            if (Array.isArray(v)) v = v[0];
+            v = String(v || '').trim();
+            if (v === '__all__') v = '';
+            navigateNotesWithParamPatch({ category: v });
         });
     }
 
@@ -2210,12 +2335,18 @@ function _noteSnippet(content, n) {
     return t.length > n ? (t.slice(0, n - 1) + '…') : t;
 }
 
-function renderNotesBrowserPanelHTML(notes) {
+function renderNotesBrowserPanelHTML(notes, opts, allNotes) {
     const items = (Array.isArray(notes) ? notes : []);
+    const o = opts || getNotesRouteOptions();
+
     const listItems = items.map((n) => {
         const id = escapeHtml(String(n.id || ''));
         const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
-        const meta = todoId ? `Note #${id} · Todo #${todoId}` : `Note #${id}`;
+        const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
+        const category = escapeHtml(String(n.category || 'general'));
+        const meta = todoId
+            ? `Note #${id} · ${noteType} · ${category} · Todo #${todoId}`
+            : `Note #${id} · ${noteType} · ${category}`;
         const created = escapeHtml(formatDate(n.created_at));
         const snippet = escapeHtml(_noteSnippet(n.content, 140));
         return `
@@ -2253,6 +2384,8 @@ function renderNoteDetailHTML(note) {
     const id = escapeHtml(String(idNum || ''));
     const created = escapeHtml(formatDate(n.created_at));
     const todoId = n.todo_id ? parseInt(String(n.todo_id), 10) : null;
+    const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
+    const category = escapeHtml(String(n.category || 'general'));
     const todoLink = todoId
         ? `<calcite-button appearance="outline" scale="s" icon-start="link" onclick="router.navigate('/todo/${todoId}')">Open Todo #${todoId}</calcite-button>`
         : '';
@@ -2260,7 +2393,7 @@ function renderNoteDetailHTML(note) {
     return `
         <calcite-card>
             <div slot="title">Note #${id}</div>
-            <div slot="subtitle" class="text-xs text-color-3">Created: ${created}</div>
+            <div slot="subtitle" class="text-xs text-color-3">Created: ${created} · ${noteType} · ${category}</div>
             <div class="space-y-3">
                 ${todoLink ? `<div class="flex gap-2">${todoLink}</div>` : ''}
                 <div class="markdown-render">${escapeHtml(n.content || '')}</div>
@@ -2291,7 +2424,8 @@ async function renderNoteDetailView(params) {
         window.ttAllNotesCache = notes;
 
         const opts = getNotesRouteOptions();
-        const filtered = filterNotesClientSide(notes, opts.searchQuery, opts.filterText);
+        const filteredTypeCat = filterNotesByTypeAndCategory(notes, opts.noteType, opts.category);
+        const filtered = filterNotesClientSide(filteredTypeCat, opts.searchQuery, opts.filterText);
 
         const res = await fetch(`/api/notes/${noteId}`);
         if (!res.ok) throw new Error('Failed to fetch note');
@@ -2299,8 +2433,9 @@ async function renderNoteDetailView(params) {
 
         const { startPanel, startShell, mainView } = getShellTargets();
         if (startShell) startShell.removeAttribute('collapsed');
-        if (startPanel) startPanel.innerHTML = renderNotesBrowserPanelHTML(filtered);
+        if (startPanel) startPanel.innerHTML = renderNotesBrowserPanelHTML(filtered, opts, notes);
         collapseDetailPanel();
+        syncNotesNavFilters(notes || [], opts);
 
         if (mainView) mainView.innerHTML = renderNoteDetailHTML(note);
 
@@ -2327,6 +2462,34 @@ function addCreateNoteModal() {
     
     modal.innerHTML = `
         <form id="createNoteModalForm" slot="content" class="space-y-4">
+            <input type="hidden" name="todo_id" id="ttCreateNoteTodoIdInput" value="">
+            <input type="hidden" name="category" id="ttCreateNoteCategoryInput" value="">
+
+            <calcite-label>
+                Type
+                <calcite-segmented-control id="ttCreateNoteTypeSeg" scale="s" value="project">
+                    <calcite-segmented-control-item value="project" checked>Project note</calcite-segmented-control-item>
+                    <calcite-segmented-control-item value="attached">Attached note</calcite-segmented-control-item>
+                </calcite-segmented-control>
+            </calcite-label>
+
+            <calcite-label>
+                Category
+                <calcite-combobox id="ttCreateNoteCategoryBox" selection-mode="single" allow-custom-values placeholder="general">
+                    <calcite-combobox-item value="general" text-label="general" selected></calcite-combobox-item>
+                    <calcite-combobox-item value="research" text-label="research"></calcite-combobox-item>
+                    <calcite-combobox-item value="decision" text-label="decision"></calcite-combobox-item>
+                    <calcite-combobox-item value="meeting" text-label="meeting"></calcite-combobox-item>
+                </calcite-combobox>
+            </calcite-label>
+
+            <calcite-label id="ttCreateNoteTodoLabel" hidden>
+                Attach to Todo
+                <calcite-combobox id="ttCreateNoteTodoBox" selection-mode="single" placeholder="Select a todo...">
+                    <calcite-combobox-item value="" text-label="Loading todos..."></calcite-combobox-item>
+                </calcite-combobox>
+            </calcite-label>
+
             <calcite-label>
                 Content*
                 <calcite-text-area name="content" rows="5" required></calcite-text-area>
@@ -2342,12 +2505,125 @@ function addCreateNoteModal() {
     `;
     
     document.body.appendChild(modal);
+
+    const typeSeg = document.getElementById('ttCreateNoteTypeSeg');
+    const todoLabel = document.getElementById('ttCreateNoteTodoLabel');
+    const todoBox = document.getElementById('ttCreateNoteTodoBox');
+    const todoIdInput = document.getElementById('ttCreateNoteTodoIdInput');
+    const categoryBox = document.getElementById('ttCreateNoteCategoryBox');
+    const categoryInput = document.getElementById('ttCreateNoteCategoryInput');
+
+    function _setComboboxSingleValue(box, value) {
+        if (!box) return;
+        const target = String(value || '');
+        box.querySelectorAll('calcite-combobox-item').forEach((it) => {
+            const v = String(it.getAttribute('value') || '');
+            if (v === target && target !== '') it.setAttribute('selected', '');
+            else it.removeAttribute('selected');
+        });
+        try {
+            box.value = target;
+        } catch (e) {}
+    }
+
+    function syncTypeUI() {
+        const t = String((typeSeg && typeSeg.value) || 'project');
+        const attached = t === 'attached';
+        if (todoLabel) {
+            if (attached) todoLabel.removeAttribute('hidden');
+            else todoLabel.setAttribute('hidden', '');
+        }
+        if (!attached && todoIdInput) {
+            todoIdInput.value = '';
+            _setComboboxSingleValue(todoBox, '');
+        }
+    }
+
+    // Keep hidden category input in sync (form submission compatibility)
+    if (categoryBox && !categoryBox._ttBound) {
+        categoryBox._ttBound = true;
+        categoryBox.addEventListener('calciteComboboxChange', () => {
+            let v = categoryBox.value;
+            if (Array.isArray(v)) v = v[0];
+            v = String(v || '').trim();
+            if (categoryInput) categoryInput.value = v;
+        });
+        // Initialize
+        if (categoryInput) categoryInput.value = 'general';
+    }
+
+    if (typeSeg && !typeSeg._ttBound) {
+        typeSeg._ttBound = true;
+        typeSeg.addEventListener('calciteSegmentedControlChange', () => syncTypeUI());
+    }
+
+    if (todoBox && !todoBox._ttBound) {
+        todoBox._ttBound = true;
+        todoBox.addEventListener('calciteComboboxChange', () => {
+            let v = todoBox.value;
+            if (Array.isArray(v)) v = v[0];
+            v = String(v || '').trim();
+            if (todoIdInput) todoIdInput.value = v;
+        });
+    }
+
+    async function populateTodos() {
+        if (!todoBox) return;
+        try {
+            const res = await fetch('/api/todos');
+            if (!res.ok) throw new Error('Failed to fetch todos');
+            const tree = await res.json();
+            const flat = [];
+            const walk = (arr, depth) => {
+                for (const t of (arr || [])) {
+                    flat.push({ id: t.id, title: t.title || `Todo #${t.id}`, depth: depth || 0 });
+                    if (t.children && t.children.length) walk(t.children, (depth || 0) + 1);
+                }
+            };
+            walk(tree, 0);
+            const items = flat.map((t) => {
+                const prefix = t.depth ? `${'—'.repeat(Math.min(6, t.depth))} ` : '';
+                const id = escapeHtml(String(t.id));
+                const label = escapeHtml(prefix + String(t.title || '').trim());
+                return `<calcite-combobox-item value="${id}" text-label="${label}"></calcite-combobox-item>`;
+            }).join('');
+            todoBox.innerHTML = `<calcite-combobox-item value="" text-label="Select a todo..."></calcite-combobox-item>${items}`;
+        } catch (e) {
+            todoBox.innerHTML = `<calcite-combobox-item value="" text-label="Failed to load todos"></calcite-combobox-item>`;
+        }
+    }
+
+    // Populate once
+    populateTodos();
+    syncTypeUI();
+
+    // Expose helper to open/prefill the modal
+    window.ttOpenCreateNoteModal = async function (prefill) {
+        const p = prefill || {};
+        const todoId = p.todoId ? String(p.todoId) : '';
+        // Default to project note unless a todoId was provided
+        if (typeSeg) {
+            try { typeSeg.value = todoId ? 'attached' : 'project'; } catch (e) {}
+        }
+        syncTypeUI();
+        if (todoId) {
+            if (todoIdInput) todoIdInput.value = todoId;
+            _setComboboxSingleValue(todoBox, todoId);
+        }
+        if (modal) modal.open = true;
+    };
     
     // Handle form submission
     const form = document.getElementById('createNoteModalForm');
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        syncTypeUI();
         const formData = new FormData(form);
+        // Avoid FastAPI int parsing errors when optional fields are blank
+        const tid = formData.get('todo_id');
+        if (tid === '' || tid === null) formData.delete('todo_id');
+        const cat = formData.get('category');
+        if (cat === '' || cat === null) formData.delete('category');
         
         try {
             const response = await fetch('/api/notes/form', {

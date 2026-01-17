@@ -16,8 +16,8 @@ Schema Version Convention:
 - Never skip versions or use non-sequential numbering
 """
 
-__version__ = "1.2.0"
-SCHEMA_VERSION = 4  # Current database schema version
+__version__ = "1.3.0"
+SCHEMA_VERSION = 5  # Current database schema version
 
 # Schema version history and changelog
 SCHEMA_CHANGELOG = {
@@ -62,6 +62,17 @@ SCHEMA_CHANGELOG = {
             "Added queue field (integer >= 0; 0 means not queued; lower numbers execute first)",
             "Added task_size field (optional integer 1-5)",
             "Added priority_class field (optional letter A-E)",
+        ]
+    },
+    5: {
+        "version": "1.3.0",
+        "date": "2026-01-17",
+        "description": "Notes: project vs attached + categories",
+        "changes": [
+            "Added note_type field to notes (project vs attached)",
+            "Added category field to notes (e.g., research)",
+            "Web API + MCP updated to support note categories and note types",
+            "SPA Notes view updated with filters for type and category",
         ]
     },
 }

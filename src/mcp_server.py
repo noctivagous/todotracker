@@ -640,6 +640,10 @@ Note: When starting work on any returned todo, call update_todo to update progre
                         "type": "integer",
                         "description": "Optional: Todo ID to attach the note to",
                     },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional note category (e.g., research)",
+                    },
                 },
                 "required": ["content"],
             }),
@@ -673,6 +677,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
                             "properties": {
                                 "content": {"type": "string", "description": "The note content"},
                                 "todo_id": {"type": "integer", "description": "Optional: Todo ID to attach the note to"},
+                                "category": {"type": "string", "description": "Optional note category (e.g., research)"},
                             },
                             "required": ["content"],
                         },
@@ -699,6 +704,10 @@ Note: When starting work on any returned todo, call update_todo to update progre
                     "todo_id": {
                         "type": "integer",
                         "description": "Optional: (re)attach the note to a todo (or set null via omit; standalone notes are allowed)",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "Optional note category (e.g., research)",
                     },
                 },
                 "required": ["note_id"],
@@ -1197,7 +1206,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         elif name == "create_note":
             note_create = NoteCreate(
                 content=arguments["content"],
-                todo_id=arguments.get("todo_id")
+                todo_id=arguments.get("todo_id"),
+                category=arguments.get("category"),
             )
             note = crud.create_note(db, note_create)
             return [TextContent(
@@ -1208,6 +1218,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         "id": note.id,
                         "content": note.content,
                         "todo_id": note.todo_id,
+                        "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
+                        "category": getattr(note, "category", None),
                         "created_at": note.created_at.isoformat()
                     }
                 }, indent=2)
@@ -1228,6 +1240,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         "id": note.id,
                         "content": note.content,
                         "todo_id": note.todo_id,
+                        "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
+                        "category": getattr(note, "category", None),
                         "created_at": note.created_at.isoformat() if note.created_at else None,
                     })
                 except Exception as e:
@@ -1253,12 +1267,15 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     note_create = NoteCreate(
                         content=item["content"],
                         todo_id=item.get("todo_id"),
+                        category=item.get("category"),
                     )
                     note = crud.create_note(db, note_create)
                     created.append({
                         "id": note.id,
                         "content": note.content,
                         "todo_id": note.todo_id,
+                        "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
+                        "category": getattr(note, "category", None),
                         "created_at": note.created_at.isoformat() if note.created_at else None,
                     })
                 except Exception as e:
@@ -1293,6 +1310,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         "id": note.id,
                         "content": note.content,
                         "todo_id": note.todo_id,
+                        "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
+                        "category": getattr(note, "category", None),
                         "created_at": note.created_at.isoformat() if note.created_at else None,
                     }
                 }, indent=2)

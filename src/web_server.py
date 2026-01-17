@@ -414,10 +414,15 @@ async def api_search_todos(search: TodoSearch, db: Session = Depends(get_db)):
 @app.get("/api/notes", response_model=list[NoteInDB])
 async def api_list_notes(
     todo_id: Optional[int] = None,
+    note_type: Optional[str] = None,
+    category: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """Get all notes, optionally filtered by todo_id."""
-    return crud.get_notes(db, todo_id=todo_id, limit=1000)
+    """Get all notes, optionally filtered by todo_id, note_type, and category."""
+    try:
+        return crud.get_notes(db, todo_id=todo_id, note_type=note_type, category=category, limit=1000)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/notes/{note_id}", response_model=NoteInDB)
@@ -439,10 +444,11 @@ async def api_create_note(note: NoteCreate, db: Session = Depends(get_db)):
 async def api_create_note_form(
     content: str = Form(...),
     todo_id: Optional[int] = Form(None),
+    category: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """Create a new note from form data."""
-    note_create = NoteCreate(content=content, todo_id=todo_id)
+    note_create = NoteCreate(content=content, todo_id=todo_id, category=category)
     crud.create_note(db, note_create)
     
     if todo_id:
@@ -552,6 +558,8 @@ async def export_json(db: Session = Depends(get_db)):
                 "id": note.id,
                 "content": note.content,
                 "todo_id": note.todo_id,
+                "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
+                "category": getattr(note, "category", None),
                 "created_at": note.created_at.isoformat(),
             }
             for note in notes

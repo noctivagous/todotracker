@@ -5,7 +5,7 @@ Pydantic schemas for request/response validation and serialization.
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from .db import TodoCategory, TodoStatus
+from .db import TodoCategory, TodoStatus, NoteType
 
 
 # Todo Schemas
@@ -131,28 +131,48 @@ class TodoWithChildren(TodoInDB):
 
 # Note Schemas
 
-class NoteBase(BaseModel):
-    """Base schema for Note."""
+def _normalize_note_category(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    if not isinstance(v, str):
+        raise ValueError("category must be a string")
+    s = v.strip()
+    return s if s else None
+
+
+class NoteCreate(BaseModel):
+    """Schema for creating a new note."""
     content: str = Field(..., min_length=1)
     todo_id: Optional[int] = None
+    category: Optional[str] = Field(None, description="Optional note category (e.g., research)")
 
-
-class NoteCreate(NoteBase):
-    """Schema for creating a new note."""
-    pass
+    @field_validator("category", mode="before")
+    @classmethod
+    def _normalize_category(cls, v):
+        return _normalize_note_category(v)
 
 
 class NoteUpdate(BaseModel):
     """Schema for updating a note."""
     content: Optional[str] = Field(None, min_length=1)
     todo_id: Optional[int] = None
+    category: Optional[str] = None
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _normalize_category(cls, v):
+        return _normalize_note_category(v)
 
 
-class NoteInDB(NoteBase):
+class NoteInDB(BaseModel):
     """Schema for Note in database."""
     id: int
+    content: str
+    todo_id: Optional[int] = None
+    note_type: NoteType
+    category: str
     created_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

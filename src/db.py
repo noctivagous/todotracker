@@ -28,6 +28,8 @@ import enum
 
 Base = declarative_base()
 
+_AUTO_MIGRATED_DB_PATHS: Set[str] = set()
+
 
 class TodoCategory(str, enum.Enum):
     """Todo categories as specified in the requirements."""
@@ -42,6 +44,12 @@ class TodoStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class NoteType(str, enum.Enum):
+    """Note type options."""
+    ATTACHED = "attached"
+    PROJECT = "project"
 
 
 class Todo(Base):
@@ -125,6 +133,11 @@ class Note(Base):
     id = Column(Integer, primary_key=True, index=True)
     content = Column(Text, nullable=False)
     todo_id = Column(Integer, ForeignKey("todos.id"), nullable=True)
+    # New in schema v5:
+    # - note_type: explicit type (project vs attached) for filtering/UX
+    # - category: lightweight categorization (e.g., "research")
+    note_type = Column(SQLEnum(NoteType), nullable=False, default=NoteType.PROJECT, index=True)
+    category = Column(String(80), nullable=False, default="general", index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships
@@ -382,6 +395,7 @@ def set_db_schema_version(db, version: int, app_version: str, description: str =
 def init_db():
     """Initialize the database, creating all tables with version tracking."""
     from .version import SCHEMA_VERSION, __version__, get_changelog
+    from .migrations import migrate_database
 
     # Ensure engine is initialized
     _init_engine()
@@ -402,8 +416,16 @@ def init_db():
         elif current_version < SCHEMA_VERSION:
             # Existing database needs migration
             print(f"⚠️  Database schema v{current_version}, current version is v{SCHEMA_VERSION}")
-            print("   Migration required. Run: python scripts/migrate_cli.py --migrate")
-            print("   Or the database will be auto-migrated on next operation.")
+            print("   Auto-migrating database (non-interactive)...")
+            db.close()
+            ok = migrate_database(get_db_path(), interactive=False)
+            if not ok:
+                raise RuntimeError("Database migration failed or was skipped")
+            # Re-open session to reflect new schema/version
+            db = SessionLocal()
+            current_version = get_db_schema_version(db)
+            if current_version < SCHEMA_VERSION:
+                raise RuntimeError(f"Database still at schema v{current_version} after migration (target v{SCHEMA_VERSION})")
         elif current_version > SCHEMA_VERSION:
             print(f"⚠️  WARNING: Database schema v{current_version} is NEWER than TodoTracker v{SCHEMA_VERSION}")
             print("   Please upgrade TodoTracker to use this database.")
@@ -429,6 +451,15 @@ def init_db():
             db.commit()
         except Exception:
             # Best-effort cleanup; if the DB is old/unusual, runtime CRUD enforcement still applies.
+            db.rollback()
+
+        # Notes: normalize enum storage for note_type (historical v5 migration wrote lowercase in some DBs).
+        # SQLAlchemy Enum mapping expects member names ("ATTACHED"/"PROJECT").
+        try:
+            db.execute(text("UPDATE notes SET note_type = 'ATTACHED' WHERE note_type = 'attached'"))
+            db.execute(text("UPDATE notes SET note_type = 'PROJECT' WHERE note_type = 'project'"))
+            db.commit()
+        except Exception:
             db.rollback()
         
         # Create stock tags if they don't exist
@@ -499,6 +530,30 @@ def get_db():
 
     db = SessionLocal()
     try:
+        # Best-effort auto-migration for old databases, once per DB path.
+        from .version import SCHEMA_VERSION
+        db_path = get_db_path()
+        if db_path and db_path not in _AUTO_MIGRATED_DB_PATHS:
+            try:
+                current_version = get_db_schema_version(db)
+                if current_version < SCHEMA_VERSION:
+                    from .migrations import migrate_database
+                    db.close()
+                    ok = migrate_database(db_path, interactive=False)
+                    if not ok:
+                        raise RuntimeError("Database migration failed or was skipped")
+                    db = SessionLocal()
+                # Normalize note_type enum storage (see init_db note).
+                try:
+                    db.execute(text("UPDATE notes SET note_type = 'ATTACHED' WHERE note_type = 'attached'"))
+                    db.execute(text("UPDATE notes SET note_type = 'PROJECT' WHERE note_type = 'project'"))
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                _AUTO_MIGRATED_DB_PATHS.add(db_path)
+            except Exception:
+                # If migration fails, let normal request handling surface the error.
+                pass
         yield db
     finally:
         db.close()
