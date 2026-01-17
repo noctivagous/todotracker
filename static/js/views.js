@@ -607,6 +607,42 @@ function setHeaderControlsState(options, stats) {
             item.textContent = `${labels[v]} (${counts[v]})`;
         });
     }
+
+    // Secondary-navigation "status page" button should reflect the selected status (and always have an accessible label).
+    const statusPageItem = document.getElementById('ttNavStatusPageItem');
+    if (statusPageItem) {
+        const segValue = o.queued ? 'queue' : (o.status || 'pending');
+        const counts = {
+            all: s.total || 0,
+            pending: s.pending || 0,
+            in_progress: s.in_progress || 0,
+            completed: s.completed || 0,
+            cancelled: s.cancelled || 0,
+            queue: s.queued || 0,
+        };
+        const labels = {
+            all: 'All',
+            pending: 'Pending',
+            in_progress: 'In Progress',
+            completed: 'Completed',
+            cancelled: 'Cancelled',
+            queue: 'Queue',
+        };
+        const displayText = `${labels[segValue] || 'Todos'} (${counts[segValue] || 0})`;
+        statusPageItem.text = displayText;
+        statusPageItem.label = displayText;
+
+        const qs = buildQueryString({
+            status: o.status || 'pending',
+            queued: o.queued ? 'true' : 'false',
+            q: o.searchQuery || '',
+            filter: o.filterText || '',
+            view: o.view || 'grid',
+            page: o.page || 1,
+            page_size: o.pageSize || 24,
+        });
+        statusPageItem.href = `#/${qs}`;
+    }
 }
 
 /**
@@ -916,6 +952,16 @@ function renderTodoItem(todo, level = 0) {
  * Initialize todos view functionality
  */
 function initializeTodosView() {
+    // Header "+ New" button (global)
+    const headerNewBtn = document.getElementById('ttHeaderNewTodoBtn');
+    if (headerNewBtn && !headerNewBtn._ttBound) {
+        headerNewBtn._ttBound = true;
+        headerNewBtn.addEventListener('click', () => {
+            const m = document.getElementById('createModal');
+            if (m) m.open = true;
+        });
+    }
+
     // Global navigation-secondary search (Enter)
     const navSearch = document.getElementById('ttNavSearchInput');
     if (navSearch && !navSearch._ttBound) {
@@ -966,10 +1012,17 @@ function initializeTodosView() {
             if (!startShell) return;
             const isMin = startShell.getAttribute('data-tt-minimized') === 'true';
             startShell.setAttribute('data-tt-minimized', isMin ? 'false' : 'true');
-            leftToggle.setAttribute('icon-start', isMin ? 'chevrons-left' : 'chevrons-right');
-            leftToggle.querySelectorAll('.tt-browser-controls-text').forEach((el) => {
-                el.textContent = isMin ? 'Minimize' : 'Expand';
-            });
+            if (isMin) {
+                // Expanded state
+                leftToggle.setAttribute('icon-start', 'chevrons-left');
+                leftToggle.innerHTML = 'Minimize';
+                leftToggle.setAttribute('title', 'Minimize left panel');
+            } else {
+                // Minimized rail state
+                leftToggle.setAttribute('icon-start', 'dock-left');
+                leftToggle.innerHTML = '';
+                leftToggle.setAttribute('title', 'Restore left panel');
+            }
         });
     }
 
@@ -1535,16 +1588,15 @@ function renderMainTodosHTML(todosTree, options) {
 
     return `
         <div class="space-y-3">
-            <div class="flex items-center justify-between gap-3">
-                <div class="min-w-0">
-                    <div class="text-sm text-color-2">Main</div>
-                    <div class="text-xs text-color-3">Showing ${totalItems ? startIdx + 1 : 0}-${Math.min(startIdx + pageItems.length, totalItems)} of ${totalItems}</div>
-                </div>
+            <div class="flex items-center gap-3">
                 <calcite-segmented-control id="ttMainViewModeSeg" scale="s" value="${escapeHtml(view)}">
                     <calcite-segmented-control-item value="grid" ${view === 'grid' ? 'checked' : ''}>Grid</calcite-segmented-control-item>
                     <calcite-segmented-control-item value="list" ${view === 'list' ? 'checked' : ''}>List</calcite-segmented-control-item>
                     <calcite-segmented-control-item value="table" ${view === 'table' ? 'checked' : ''}>Table</calcite-segmented-control-item>
                 </calcite-segmented-control>
+                <div class="min-w-0">
+                    <div class="text-xs text-color-3">Showing ${totalItems ? startIdx + 1 : 0}-${Math.min(startIdx + pageItems.length, totalItems)} of ${totalItems}</div>
+                </div>
             </div>
 
             ${body}
@@ -1555,22 +1607,10 @@ function renderMainTodosHTML(todosTree, options) {
 }
 
 function renderTodoBrowserPanelHTML(todos, stats) {
-    const s = stats || { total: 0, pending: 0, in_progress: 0, completed: 0, cancelled: 0, queued: 0 };
     return `
         <div class="space-y-3 tt-browser-panel">
-            <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 min-w-0">
-                    <calcite-button id="ttLeftPanelToggleBtn" appearance="transparent" scale="s" kind="neutral" title="Minimize/expand left panel" icon-start="chevrons-left">
-                        <span class="tt-browser-controls-text">Minimize</span>
-                    </calcite-button>
-                    <div class="min-w-0">
-                        <div class="text-sm text-color-2 tt-browser-title">Todos</div>
-                        <div class="text-xs text-color-3 tt-browser-subtitle">Total ${s.total} · Pending ${s.pending} · In Progress ${s.in_progress} · Completed ${s.completed}</div>
-                    </div>
-                </div>
-                <calcite-button appearance="solid" scale="s" icon-start="plus" onclick="document.getElementById('createModal').open = true">
-                    <span class="tt-browser-controls-text">New</span>
-                </calcite-button>
+            <div class="flex items-center gap-2">
+                <calcite-button id="ttLeftPanelToggleBtn" appearance="transparent" scale="s" kind="neutral" title="Minimize/expand left panel" icon-start="chevrons-left"></calcite-button>
             </div>
 
             <calcite-list id="ttTodoBrowserList" display-mode="nested" selection-mode="single" selection-appearance="highlight">

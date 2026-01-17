@@ -58,16 +58,20 @@
                         <calcite-segmented-control-item value="cancelled">Cancelled</calcite-segmented-control-item>
                         <calcite-segmented-control-item class="tt-seg-queue" value="queue" icon-start="list-check">Queue</calcite-segmented-control-item>
                     </calcite-segmented-control>
+
+                    <calcite-button id="ttHeaderNewTodoBtn" appearance="solid" scale="s" icon-start="plus">
+                        New
+                    </calcite-button>
                 </div>
 
                 <!-- Restore navigation-secondary and place global search/filter controls here -->
                 <calcite-navigation slot="navigation-secondary">
-                    <calcite-menu slot="content-start">
-                        <calcite-menu-item href="#/">Todos</calcite-menu-item>
-                        <calcite-menu-item href="#/notes">Notes</calcite-menu-item>
-                    </calcite-menu>
+                    <div slot="content-start" class="tt-nav-secondary">
+                        <calcite-menu>
+                            <calcite-menu-item id="ttNavStatusPageItem" href="#/" text="Todos" label="Todos" text-enabled></calcite-menu-item>
+                            <calcite-menu-item id="ttNavNotesPageItem" href="#/notes" text="Notes" label="Notes" text-enabled></calcite-menu-item>
+                        </calcite-menu>
 
-                    <div slot="content-end" class="tt-nav-secondary">
                         <calcite-input id="ttNavSearchInput" type="text" placeholder="Search todos (Enter)..." scale="s"></calcite-input>
                         <calcite-input id="ttNavFilterInput" type="text" placeholder="Filter (live)..." scale="s"></calcite-input>
                     </div>

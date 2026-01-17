@@ -105,10 +105,6 @@ calcite-shell main {
 /* SPA-specific polish                                                        */
 /* -------------------------------------------------------------------------- */
 
-#tt-panel-start-shell[data-tt-minimized="true"] {
-    --calcite-shell-panel-width: 88px;
-}
-
 /* Navigation layout helpers (Calcite slots do most of the work; these are small tweaks). */
 .tt-nav-actions {
     display: flex;
@@ -171,21 +167,24 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
     }
 }
 
-/* Left browser panel minimized mode: list-only, ultra-compact */
+/* Left panel minimize rail (do not mutate list item internals; just hide overflow). */
+#tt-panel-start-shell[data-tt-minimized="true"] {
+    --calcite-shell-panel-width: 15pt;
+}
+
 #tt-panel-start-shell[data-tt-minimized="true"] #tt-panel-start {
+    padding: 0;
     overflow: hidden;
 }
 
-#tt-panel-start-shell[data-tt-minimized="true"] .tt-browser-title,
-#tt-panel-start-shell[data-tt-minimized="true"] .tt-browser-subtitle,
-#tt-panel-start-shell[data-tt-minimized="true"] .tt-browser-controls-text {
-    display: none !important;
+#tt-panel-start-shell[data-tt-minimized="true"] #ttTodoBrowserList {
+    display: none;
 }
 
-/* Hide list item description/metadata in minimized mode to keep it readable */
-#tt-panel-start-shell[data-tt-minimized="true"] calcite-list-item::part(description),
-#tt-panel-start-shell[data-tt-minimized="true"] calcite-list-item::part(metadata) {
-    display: none;
+#tt-panel-start-shell[data-tt-minimized="true"] #ttLeftPanelToggleBtn {
+    width: 15pt;
+    min-width: 15pt;
+    padding: 0;
 }
 
 .tt-surface {
