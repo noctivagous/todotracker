@@ -50,6 +50,10 @@ WebComponents.  We want to use as few <div>s
 and other standard HTML elements as possible when
 WebComponents can be used because this is a web app.
 
+----
+
+when looking for calcite icons, look in the
+@designsys/packages/ui-icons directory
 
 ----
 

@@ -210,6 +210,16 @@ calcite-shell main {
     --calcite-segmented-control-shadow: var(--tt-crisp-shadow);
 }
 
+tt-md-editor {
+    display: block;
+}
+
+.tt-md-editor-host {
+    /* Let Toast UI editor fill the available width inside Calcite labels/panels */
+    width: 100%;
+    border-radius: var(--calcite-border-radius);
+}
+
 .tt-nav-tabs,
 #ttNavTabs,
 #ttSpaNavTabs {

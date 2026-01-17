@@ -330,6 +330,8 @@ if (typeof $ !== 'undefined' && $.templates) {
             }
         });
     }
+
+    // Markdown editing uses Toast UI via <tt-md-editor>.
 }
 
 /**
@@ -347,6 +349,7 @@ function renderMarkdown(element) {
         console.error('Markdown rendering error:', e);
     }
 }
+
 
 /**
  * Show loading state
@@ -1421,7 +1424,7 @@ function addCreateTodoModal() {
             
             <calcite-label>
                 Description
-                <calcite-text-area name="description" rows="3"></calcite-text-area>
+                <tt-md-editor name="description" height="180px" placeholder="Description (Markdown)"></tt-md-editor>
             </calcite-label>
             
             <calcite-label>
@@ -1457,6 +1460,8 @@ function addCreateTodoModal() {
     // Place inside calcite-shell so it is constrained (Calcite pattern).
     const shell = document.querySelector('calcite-shell');
     (shell || document.body).appendChild(modal);
+
+    // Toast UI editor mounts itself inside <tt-md-editor> instances.
     
     // Handle form submission
     const form = document.getElementById('createModalForm');
@@ -1608,6 +1613,9 @@ function initializeTodoDetailView(todo) {
             // Non-fatal: some Calcite elements may not be ready immediately.
         }
     }
+
+    // Markdown editor helpers for detail textareas (description/work_* fields)
+    // Markdown editing uses Toast UI via <tt-md-editor>.
 
     _setAutosaveChip('Saved');
 
@@ -2036,7 +2044,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
 
                     <calcite-label>
                         Description (markdown)
-                        <calcite-text-area rows="16" data-tt-field="description" data-tt-todo-id="${t.id}"></calcite-text-area>
+                        <tt-md-editor data-tt-field="description" data-tt-todo-id="${t.id}" height="320px" placeholder="Description (Markdown)"></tt-md-editor>
                     </calcite-label>
                 </div>
                 <div class="space-y-3">
@@ -2070,15 +2078,15 @@ function renderTodoDetailPanelHTML(todoDetail) {
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <calcite-label>
                             ✅ Work Completed
-                            <calcite-text-area rows="6" data-tt-field="work_completed" data-tt-todo-id="${t.id}"></calcite-text-area>
+                        <tt-md-editor data-tt-field="work_completed" data-tt-todo-id="${t.id}" height="220px" placeholder="Work completed (Markdown)"></tt-md-editor>
                         </calcite-label>
                         <calcite-label>
                             📋 Work Remaining
-                            <calcite-text-area rows="6" data-tt-field="work_remaining" data-tt-todo-id="${t.id}"></calcite-text-area>
+                        <tt-md-editor data-tt-field="work_remaining" data-tt-todo-id="${t.id}" height="220px" placeholder="Work remaining (Markdown)"></tt-md-editor>
                         </calcite-label>
                         <calcite-label>
                             ⚠️ Implementation Issues
-                            <calcite-text-area rows="6" data-tt-field="implementation_issues" data-tt-todo-id="${t.id}"></calcite-text-area>
+                        <tt-md-editor data-tt-field="implementation_issues" data-tt-todo-id="${t.id}" height="220px" placeholder="Implementation issues (Markdown)"></tt-md-editor>
                         </calcite-label>
                     </div>
 
@@ -2278,6 +2286,8 @@ function initializeNotesView() {
     
     // Add create note modal
     addCreateNoteModal();
+
+    // Markdown editing uses Toast UI via <tt-md-editor>.
 
     // Left panel list selection
     const list = document.getElementById('ttNotesBrowserList');
@@ -2492,7 +2502,7 @@ function addCreateNoteModal() {
 
             <calcite-label>
                 Content*
-                <calcite-text-area name="content" rows="5" required></calcite-text-area>
+                <tt-md-editor name="content" height="240px" placeholder="Content (Markdown)"></tt-md-editor>
             </calcite-label>
         </form>
         
@@ -2505,6 +2515,7 @@ function addCreateNoteModal() {
     `;
     
     document.body.appendChild(modal);
+    // Toast UI editor mounts itself inside <tt-md-editor> instances.
 
     const typeSeg = document.getElementById('ttCreateNoteTypeSeg');
     const todoLabel = document.getElementById('ttCreateNoteTodoLabel');
@@ -2618,6 +2629,15 @@ function addCreateNoteModal() {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         syncTypeUI();
+        // Validate markdown content (required, since <tt-md-editor> uses a hidden input for form submission)
+        try {
+            const mdEl = form.querySelector('tt-md-editor[name="content"]');
+            const content = mdEl ? String(mdEl.value || '').trim() : '';
+            if (!content) {
+                alert('Content is required');
+                return;
+            }
+        } catch (e) {}
         const formData = new FormData(form);
         // Avoid FastAPI int parsing errors when optional fields are blank
         const tid = formData.get('todo_id');
