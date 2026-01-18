@@ -183,6 +183,13 @@ calcite-shell main {
     margin-inline: auto;
 }
 
+/* In max-width mode, constrain the entire Calcite shell (header + panels + main) */
+.tt-layout-maxwidth calcite-shell {
+    width: 100%;
+    max-width: 1100px;
+    margin-inline: auto;
+}
+
 /* Settings page */
 .tt-settings-page calcite-panel {
     --calcite-panel-space: var(--calcite-spacing-md);

@@ -50,21 +50,23 @@ class Router {
      * Get current route from hash
      */
     getCurrentRoute() {
-        const hash = window.location.hash || '';
-        // Prefer hash-based routing when present (default SPA mode).
-        if (hash && hash !== '#' && hash !== '#/') {
-            const full = hash.substring(1) || '/';
+        const hash = window.location.hash || "";
+
+        // Prefer hash-based routing whenever a hash is present (including "#/" for home).
+        // Only fall back to pathname routing when there is no meaningful hash.
+        if (hash && hash !== "#") {
+            const full = hash.substring(1) || "/";
             // Ignore query string for route matching (views parse query params separately).
-            const pathOnly = full.split('?')[0] || '/';
+            const pathOnly = full.split("?")[0] || "/";
             return pathOnly;
         }
 
-        // Support direct path routing for a small set of SPA entrypoints (e.g. /settings).
+        // Support direct path routing for SPA entrypoints (e.g. /settings).
         try {
-            const p = window.location.pathname || '/';
-            return p || '/';
+            const p = window.location.pathname || "/";
+            return p || "/";
         } catch (e) {
-            return '/';
+            return "/";
         }
     }
 
