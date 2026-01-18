@@ -962,8 +962,11 @@ async def health_check(db: Session = Depends(get_db)):
         status = "error"
         compat = {"error": str(e)}
     
+    project_name = _get_project_name()
+    
     return {
         "status": status,
+        "project_name": project_name,
         "todotracker": {
             "version": __version__,
             "schema_version": SCHEMA_VERSION,

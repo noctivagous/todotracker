@@ -242,8 +242,10 @@ const TT_SETTINGS_DEFAULTS = {
         author_name: "admin",
     },
     layout: {
-        // 'full' (viewport width) | 'max' (1100px centered)
+        // 'full' (viewport width) | 'max' (centered + max width)
         width_mode: 'full',
+        // Used when width_mode === 'max'
+        max_width_px: 1100,
     },
     todos: {
         list: {
@@ -339,6 +341,15 @@ function ttApplySettingsToLayout(settings) {
     if (!root) return;
     if (mode === 'max') root.classList.add('tt-layout-maxwidth');
     else root.classList.remove('tt-layout-maxwidth');
+
+    // Layout max width (used by CSS var even when not in max mode so UI preview is consistent)
+    try {
+        let px = clampInt(ttGetByPath(s, 'layout.max_width_px'), 1100, 900, 2000);
+        // Snap to 100px increments
+        px = Math.round(px / 100) * 100;
+        px = clampInt(px, 1100, 900, 2000);
+        root.style.setProperty('--tt-layout-maxwidth', `${px}px`);
+    } catch (e) {}
 }
 
 function ttLoadSettings() {
@@ -388,18 +399,90 @@ function ttSettingsSyncControls(rootEl) {
     const s = ttGetSettings();
     root.querySelectorAll('[data-tt-setting]').forEach((el) => {
         const path = el.getAttribute('data-tt-setting');
+        // Special handling: theme is stored in localStorage "tt-theme" (default: light)
+        if (path === 'layout.theme_dark') {
+            try {
+                const theme = localStorage.getItem('tt-theme') || 'light';
+                if (el.tagName === 'CALCITE-SWITCH') el.checked = (theme === 'dark');
+            } catch (e) {}
+            return;
+        }
         const v = ttGetByPath(s, path);
         try {
             if (el.tagName === 'CALCITE-SWITCH') el.checked = (v !== false);
-            if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') el.value = String(v || 'full');
+            if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') {
+                const val = String(v || 'full');
+                el.value = val;
+                // Ensure visual selection matches (some cases require setting checked on items)
+                el.querySelectorAll('calcite-segmented-control-item').forEach((item) => {
+                    const itemVal = String(item.getAttribute('value') || '');
+                    item.checked = (itemVal === val);
+                });
+            }
             if (el.tagName === 'CALCITE-INPUT') el.value = (v == null) ? '' : String(v);
+            if (el.tagName === 'CALCITE-SLIDER') el.value = clampInt(v, 1100, 900, 2000);
         } catch (e) {}
     });
+}
+
+function ttSettingsSyncLayoutWidthControls(rootEl) {
+    const root = rootEl || document;
+    try {
+        const s = ttGetSettings();
+        const mode = String(ttGetByPath(s, 'layout.width_mode') || 'full');
+        let px = clampInt(ttGetByPath(s, 'layout.max_width_px'), 1100, 900, 2000);
+        px = Math.round(px / 100) * 100;
+        px = clampInt(px, 1100, 900, 2000);
+
+        // Slider enable/disable
+        const slider = root.querySelector('calcite-slider[data-tt-setting="layout.max_width_px"]');
+        if (slider) {
+            if (mode === 'max') slider.removeAttribute('disabled');
+            else slider.setAttribute('disabled', '');
+            slider.value = px;
+        }
+
+        // Update segmented-control item label
+        const seg = root.querySelector('calcite-segmented-control[data-tt-setting="layout.width_mode"]');
+        if (seg) {
+            const maxItem = seg.querySelector('calcite-segmented-control-item[value="max"]');
+            if (maxItem) maxItem.textContent = `Centered (${px}px)`;
+        }
+    } catch (e) {}
 }
 
 function ttSettingsApplyFromEl(el) {
     const path = el && el.getAttribute ? el.getAttribute('data-tt-setting') : '';
     if (!path) return;
+    
+    // Special handling: theme is stored in localStorage "tt-theme" (default: light)
+    if (path === 'layout.theme_dark') {
+        try {
+            const isDark = el.tagName === 'CALCITE-SWITCH' && !!el.checked;
+            const theme = isDark ? 'dark' : 'light';
+            localStorage.setItem('tt-theme', theme);
+            // Apply theme immediately
+            if (typeof applyTheme === 'function') {
+                applyTheme(theme);
+            } else {
+                // Fallback if applyTheme not available yet
+                const body = document.body;
+                if (body) {
+                    // Remove all mode classes first, then add the desired one
+                    body.classList.remove('calcite-mode-auto', 'calcite-mode-light', 'calcite-mode-dark');
+                    if (isDark) {
+                        body.classList.add('calcite-mode-dark');
+                    } else {
+                        body.classList.add('calcite-mode-light');
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to save theme:', e);
+        }
+        return;
+    }
+    
     const current = ttGetSettings();
     let nextValue = null;
 
@@ -407,6 +490,12 @@ function ttSettingsApplyFromEl(el) {
         if (el.tagName === 'CALCITE-SWITCH') nextValue = !!el.checked;
         else if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') nextValue = String(el.value || 'full');
         else if (el.tagName === 'CALCITE-INPUT') nextValue = String(el.value || '');
+        else if (el.tagName === 'CALCITE-SLIDER') {
+            let px = clampInt(el.value, 1100, 900, 2000);
+            px = Math.round(px / 100) * 100;
+            px = clampInt(px, 1100, 900, 2000);
+            nextValue = px;
+        }
         else return;
     } catch (e) {
         return;
@@ -415,6 +504,8 @@ function ttSettingsApplyFromEl(el) {
     const next = ttDeepMerge(current, {});
     ttSetByPath(next, path, nextValue);
     ttSaveSettings(next);
+    // Keep Settings controls (slider/labels) in sync without requiring a re-render.
+    try { ttSettingsSyncLayoutWidthControls(document); } catch (e) {}
 
     // Persist feature flags to server-side project config so MCP tools can respect them.
     if (path === 'features.subtasks_enabled') {
@@ -481,12 +572,35 @@ function ttBindSettingsControls(rootEl) {
         inp.addEventListener('input', () => ttSettingsApplyFromEl(inp));
     });
 
+    root.querySelectorAll('calcite-slider[data-tt-setting]').forEach((slider) => {
+        if (slider._ttBoundSettings) return;
+        slider._ttBoundSettings = true;
+
+        // Live preview while dragging (avoid spamming storage writes)
+        slider.addEventListener('calciteSliderInput', () => {
+            try {
+                let px = clampInt(slider.value, 1100, 900, 2000);
+                px = Math.round(px / 100) * 100;
+                px = clampInt(px, 1100, 900, 2000);
+                document.documentElement.style.setProperty('--tt-layout-maxwidth', `${px}px`);
+                const seg = document.querySelector('calcite-segmented-control[data-tt-setting="layout.width_mode"]');
+                const maxItem = seg ? seg.querySelector('calcite-segmented-control-item[value="max"]') : null;
+                if (maxItem) maxItem.textContent = `Centered (${px}px)`;
+            } catch (e) {}
+        });
+
+        // Persist on release
+        slider.addEventListener('calciteSliderChange', () => ttSettingsApplyFromEl(slider));
+        slider.addEventListener('change', () => ttSettingsApplyFromEl(slider));
+    });
+
     const resetBtn = root.querySelector('#ttSettingsResetBtn');
     if (resetBtn && !resetBtn._ttBoundSettings) {
         resetBtn._ttBoundSettings = true;
         resetBtn.addEventListener('click', () => {
             ttResetSettings();
             ttSettingsSyncControls(root);
+            ttSettingsSyncLayoutWidthControls(root);
             try {
                 const r = (window.router && typeof window.router.getCurrentRoute === 'function') ? window.router.getCurrentRoute() : '';
                 if (String(r || '') !== '/settings') {

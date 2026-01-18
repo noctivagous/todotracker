@@ -17,6 +17,7 @@
       this._pendingValue = null;
       this._waitTimer = null;
       this._syncTimer = null;
+      this._themeObserver = null;
     }
 
     connectedCallback() {
@@ -35,6 +36,7 @@
       if (attrVal != null && this._pendingValue == null) this._pendingValue = String(attrVal);
 
       this._ensureEditor();
+      this._watchTheme();
     }
 
     disconnectedCallback() {
@@ -45,6 +47,10 @@
       if (this._syncTimer) {
         clearTimeout(this._syncTimer);
         this._syncTimer = null;
+      }
+      if (this._themeObserver) {
+        this._themeObserver.disconnect();
+        this._themeObserver = null;
       }
       try {
         if (this._editor && typeof this._editor.destroy === "function") this._editor.destroy();
@@ -232,6 +238,41 @@
       try {
         this.dispatchEvent(new Event("change", { bubbles: true }));
       } catch (e) {}
+    }
+
+    _updateTheme() {
+      if (!this._hostEl) return;
+      const isDark = document.body.classList.contains("calcite-mode-dark") || 
+                     document.documentElement.classList.contains("calcite-mode-dark");
+      if (isDark) {
+        this._hostEl.classList.add("toastui-editor-dark");
+      } else {
+        this._hostEl.classList.remove("toastui-editor-dark");
+      }
+    }
+
+    _watchTheme() {
+      if (this._themeObserver) return;
+      if (!window.MutationObserver) return;
+
+      // Watch for changes to body class list for theme changes
+      this._themeObserver = new MutationObserver(() => {
+        this._updateTheme();
+      });
+
+      try {
+        this._themeObserver.observe(document.body, {
+          attributes: true,
+          attributeFilter: ["class"]
+        });
+        // Also watch documentElement in case theme is applied there
+        this._themeObserver.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ["class"]
+        });
+      } catch (e) {
+        this._themeObserver = null;
+      }
     }
   }
 

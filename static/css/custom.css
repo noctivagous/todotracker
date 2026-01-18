@@ -112,6 +112,15 @@ calcite-input[data-role="titleInput"] {
     gap: var(--calcite-spacing-xxs);
 }
 
+/* Ensure body background color adapts to theme */
+body {
+    background-color: var(--calcite-color-background);
+}
+
+body.calcite-mode-dark {
+    background-color: var(--calcite-color-background);
+}
+
 /* Ensure Calcite Shell provides proper spacing and doesn't touch viewport */
 calcite-shell {
     --calcite-shell-border-color: var(--calcite-color-border-1);
@@ -219,15 +228,28 @@ calcite-shell main {
 
 /* Layout width mode (Settings) */
 .tt-layout-maxwidth .tt-content-container {
-    max-width: 1100px;
+    max-width: var(--tt-layout-maxwidth, 1100px);
     margin-inline: auto;
 }
 
 /* In max-width mode, constrain the entire Calcite shell (header + panels + main) */
 .tt-layout-maxwidth calcite-shell {
     width: 100%;
-    max-width: 1100px;
+    max-width: var(--tt-layout-maxwidth, 1100px);
     margin-inline: auto;
+}
+
+/* Note: calcite-shell inherits dark mode from body via Calcite's theme system automatically */
+
+/* Settings: content width controls */
+.tt-settings-width-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--calcite-spacing-sm);
+}
+
+.tt-settings-width-slider {
+    width: 200px;
 }
 
 /* Settings page */
@@ -667,10 +689,15 @@ calcite-table-row.tt-main-note-row:hover {
 /* Description snippets: light gray background (#f5f5f5) */
 /* Neutralize block element margins so container padding provides uniform spacing */
 .markdown-render {
-    background-color: #f5f5f5;
+    background-color: var(--calcite-color-foreground-2);
     padding: var(--calcite-spacing-xs);
     border-radius: var(--calcite-corner-radius-sm);
     overflow:hidden;
+}
+
+/* Dark mode: use darker background for markdown-render */
+body.calcite-mode-dark .markdown-render {
+    background-color: var(--calcite-color-foreground-3);
 }
 
 .markdown-render p,
@@ -686,6 +713,21 @@ calcite-table-row.tt-main-note-row:hover {
 .markdown-render pre {
     margin: 0;
     padding: 0;
+}
+
+/* Ensure markdown-render text color adapts to theme */
+.markdown-render,
+.markdown-render * {
+    color: inherit;
+}
+
+/* Markdown content (rendered HTML inside markdown-render) - use Calcite colors */
+.markdown-content {
+    color: var(--calcite-color-text-1);
+}
+
+body.calcite-mode-dark .markdown-content {
+    color: var(--calcite-color-text-1);
 }
 
 .markdown-render > :first-child {

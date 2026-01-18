@@ -68,17 +68,41 @@ function renderSettingsViewHTML() {
     // Ensure settings are loaded so layout is applied on first paint.
     const s = ttGetSettings();
     const widthMode = escapeHtml(String((s && s.layout && s.layout.width_mode) || 'full'));
+    const maxWidthPx = clampInt((s && s.layout && s.layout.max_width_px) ? s.layout.max_width_px : 1100, 1100, 900, 2000);
+    const snappedMaxWidthPx = clampInt(Math.round(maxWidthPx / 100) * 100, 1100, 900, 2000);
+    const isMax = String(widthMode || 'full') === 'max';
 
     const layoutTab = `
         <calcite-block-group>
             <calcite-block heading="Layout" description="Tune the SPA shell defaults" open>
-                <calcite-label>
-                    Content width
-                    <calcite-segmented-control scale="s" data-tt-setting="layout.width_mode" value="${widthMode}">
-                        <calcite-segmented-control-item value="full">Full width</calcite-segmented-control-item>
-                        <calcite-segmented-control-item value="max">Centered (1100px)</calcite-segmented-control-item>
-                    </calcite-segmented-control>
-                </calcite-label>
+                <calcite-list>
+                    ${ttSettingsSwitchRow('Dark theme', 'Use dark theme instead of light (default: light)', 'layout.theme_dark')}
+                    <calcite-list-item
+                        label="Content width"
+                        description="Full width, or centered with adjustable max width"
+                    >
+                        <span slot="actions-end" class="tt-settings-width-controls">
+                            <calcite-segmented-control
+                                scale="s"
+                                data-tt-setting="layout.width_mode"
+                                value="${widthMode}"
+                            >
+                                <calcite-segmented-control-item value="full" ${!isMax ? 'checked' : ''}>Full width</calcite-segmented-control-item>
+                                <calcite-segmented-control-item value="max" ${isMax ? 'checked' : ''}>Centered (${snappedMaxWidthPx}px)</calcite-segmented-control-item>
+                            </calcite-segmented-control>
+                            <calcite-slider
+                                class="tt-settings-width-slider"
+                                scale="s"
+                                min="900"
+                                max="2000"
+                                step="100"
+                                value="${snappedMaxWidthPx}"
+                                data-tt-setting="layout.max_width_px"
+                                ${isMax ? '' : 'disabled'}
+                            ></calcite-slider>
+                        </span>
+                    </calcite-list-item>
+                </calcite-list>
                 <calcite-notice open kind="info">
                     <div slot="message">Master–detail layout is currently fixed: left browser panel + right/main detail.</div>
                 </calcite-notice>
@@ -221,6 +245,7 @@ function initializeSettingsView() {
     initializeHeaderControls();
     // Load + sync settings, then bind controls.
     ttSettingsSyncControls(document);
+    ttSettingsSyncLayoutWidthControls(document);
     ttBindSettingsControls(document);
 }
 

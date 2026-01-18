@@ -71,54 +71,72 @@ document.addEventListener('DOMContentLoaded', async function() {
 });
 
 /**
- * Initialize theme toggle
+ * Apply theme to body (default: light)
  */
-function initializeThemeToggle() {
-    const btn = document.getElementById('ttThemeToggle');
-    const label = document.getElementById('ttThemeLabel');
+function applyTheme(theme) {
+    const body = document.body;
+    if (!body) return;
     
-    if (!btn || !label) return;
-    
-    function syncLabel() {
-        const body = document.body;
-        const isDark = body.classList.contains('calcite-mode-dark');
-        label.textContent = isDark ? '☀️ Light' : '🌙 Dark';
+    const t = (theme || localStorage.getItem('tt-theme') || 'light').toLowerCase();
+    // Remove all mode classes first, then add the desired one
+    body.classList.remove('calcite-mode-auto', 'calcite-mode-light', 'calcite-mode-dark');
+    if (t === 'dark') {
+        body.classList.add('calcite-mode-dark');
+    } else {
+        body.classList.add('calcite-mode-light');
     }
-    
-    syncLabel();
-    
-    btn.addEventListener('click', function() {
-        const body = document.body;
-        const isDark = body.classList.contains('calcite-mode-dark');
-        
-        if (isDark) {
-            body.classList.remove('calcite-mode-dark');
-            body.classList.add('calcite-mode-light');
-            try { localStorage.setItem('tt-theme', 'light'); } catch (e) {}
-        } else {
-            body.classList.remove('calcite-mode-light');
-            body.classList.add('calcite-mode-dark');
-            try { localStorage.setItem('tt-theme', 'dark'); } catch (e) {}
-        }
-        
-        syncLabel();
-    });
 }
 
 /**
- * Load project name from API
+ * Get current theme (default: light)
+ */
+function getCurrentTheme() {
+    try {
+        return localStorage.getItem('tt-theme') || 'light';
+    } catch (e) {
+        return 'light';
+    }
+}
+
+/**
+ * Set theme (default: light)
+ */
+function setTheme(theme) {
+    const t = (theme || 'light').toLowerCase();
+    try {
+        localStorage.setItem('tt-theme', t);
+    } catch (e) {}
+    applyTheme(t);
+}
+
+/**
+ * Initialize theme toggle - now handled by Settings switch
+ * This function is kept for compatibility but no longer creates a header button
+ */
+function initializeThemeToggle() {
+    // Theme is now controlled via Settings switch
+    // Initialize theme on page load (default: light)
+    applyTheme(getCurrentTheme());
+}
+
+/**
+ * Load project name from API and display in chip
  */
 async function loadProjectName() {
+    const chip = document.getElementById('ttProjectNameChip');
+    if (!chip) return;
+    
     try {
-        // Try to get project name from health endpoint or config
         const response = await fetch('/api/health');
         if (response.ok) {
             const health = await response.json();
-            // Project name might be in the response or we can derive it
-            // For now, we'll leave it empty or set from a config endpoint if available
+            const projectName = health.project_name || 'Unknown Project';
+            chip.textContent = projectName;
+        } else {
+            chip.textContent = 'Unknown Project';
         }
     } catch (e) {
-        // Ignore errors
+        chip.textContent = 'Unknown Project';
     }
 }
 

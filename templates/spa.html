@@ -24,11 +24,52 @@
     <link rel="stylesheet" href="/static/css/custom.css?v=20260118-12">
     
     <script>
-        // Set theme ASAP to avoid flash
+        // Set theme and layout width ASAP to avoid flash (default: light, full width)
         (function () {
             try {
-                var t = localStorage.getItem("tt-theme");
-                if (t === "dark") document.documentElement.classList.add("calcite-mode-dark");
+                // Apply theme immediately (before body renders)
+                var t = localStorage.getItem("tt-theme") || "light";
+                // Apply to documentElement first since body may not exist yet
+                var docEl = document.documentElement;
+                docEl.classList.remove("calcite-mode-auto", "calcite-mode-light", "calcite-mode-dark");
+                if (t === "dark") {
+                    docEl.classList.add("calcite-mode-dark");
+                } else {
+                    docEl.classList.add("calcite-mode-light");
+                }
+                
+                // Also apply to body if it exists
+                var body = document.body;
+                if (body) {
+                    body.classList.remove("calcite-mode-auto", "calcite-mode-light", "calcite-mode-dark");
+                    if (t === "dark") {
+                        body.classList.add("calcite-mode-dark");
+                    } else {
+                        body.classList.add("calcite-mode-light");
+                    }
+                }
+                
+                // Apply layout width mode immediately to avoid flash
+                var settingsKey = 'tt-settings-v1';
+                var savedSettings = localStorage.getItem(settingsKey);
+                if (savedSettings) {
+                    try {
+                        var settings = JSON.parse(savedSettings);
+                        var widthMode = (settings && settings.layout && settings.layout.width_mode) ? String(settings.layout.width_mode) : 'full';
+                        var maxWidthPx = (settings && settings.layout && settings.layout.max_width_px) ? parseInt(String(settings.layout.max_width_px), 10) : 1100;
+                        if (!Number.isFinite(maxWidthPx)) maxWidthPx = 1100;
+                        // snap to 100px increments + clamp
+                        maxWidthPx = Math.round(maxWidthPx / 100) * 100;
+                        if (maxWidthPx < 900) maxWidthPx = 900;
+                        if (maxWidthPx > 2000) maxWidthPx = 2000;
+                        docEl.style.setProperty('--tt-layout-maxwidth', String(maxWidthPx) + 'px');
+                        if (widthMode === 'max') {
+                            docEl.classList.add('tt-layout-maxwidth');
+                        } else {
+                            docEl.classList.remove('tt-layout-maxwidth');
+                        }
+                    } catch (e) {}
+                }
             } catch (e) {}
         })();
     </script>
@@ -106,10 +147,7 @@
                 <calcite-button id="ttHeaderSettingsBtn" slot="content-end" appearance="transparent" scale="s" icon-start="gear" title="Settings">
                     Settings
                 </calcite-button>
-                <calcite-button id="ttThemeToggle" slot="content-end" appearance="transparent" scale="s" title="Toggle theme">
-                    <span id="ttThemeLabel">🌙 Dark</span>
-                </calcite-button>
-                <calcite-chip slot="content-end" scale="s" appearance="outline">MCP Server Ready</calcite-chip>
+                <calcite-chip id="ttProjectNameChip" slot="content-end" scale="s" appearance="outline">Loading...</calcite-chip>
             </calcite-navigation>
         </header>
 
@@ -196,6 +234,7 @@
             }
             if (select) {
                 select.addEventListener("change", navigate);
+                select.addEventListener("calciteSelectChange", navigate);
             }
         })();
     </script>
