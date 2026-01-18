@@ -341,12 +341,103 @@ def migrate_4_to_5(db):
     db.commit()
 
 
+def migrate_5_to_6(db):
+    """
+    Migration from schema v5 to v6.
+    Adds vNext todo metadata and relations/attachments, plus optional note titles:
+      - todos.completion_percentage: INTEGER nullable (0-100; validated in app)
+      - todos.ai_instructions: TEXT NOT NULL DEFAULT '{}' (JSON text)
+      - notes.title: TEXT nullable
+      - todo_relations: (todo_id, relates_to_id) informational links
+      - todo_attachments: basic file attachment metadata
+    """
+    print("  → Adding vNext todo metadata columns...")
+
+    # completion_percentage (nullable)
+    try:
+        db.execute(text("ALTER TABLE todos ADD COLUMN completion_percentage INTEGER"))
+        print("    ✓ Added completion_percentage column")
+    except OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            print("    (completion_percentage column already exists, skipping)")
+        else:
+            raise
+
+    # ai_instructions (TEXT NOT NULL DEFAULT '{}')
+    # NOTE: Store as JSON text for extensibility. App layer parses/validates.
+    try:
+        db.execute(text("ALTER TABLE todos ADD COLUMN ai_instructions TEXT NOT NULL DEFAULT '{}'"))
+        print("    ✓ Added ai_instructions column")
+    except OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            print("    (ai_instructions column already exists, skipping)")
+        else:
+            raise
+
+    print("  → Adding notes.title (optional) ...")
+    try:
+        db.execute(text("ALTER TABLE notes ADD COLUMN title TEXT"))
+        print("    ✓ Added notes.title column")
+    except OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            print("    (notes.title column already exists, skipping)")
+        else:
+            raise
+
+    print("  → Creating todo_relations table...")
+    try:
+        db.execute(text("""
+            CREATE TABLE todo_relations (
+                id INTEGER PRIMARY KEY,
+                todo_id INTEGER NOT NULL,
+                relates_to_id INTEGER NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (todo_id) REFERENCES todos(id),
+                FOREIGN KEY (relates_to_id) REFERENCES todos(id)
+            )
+        """))
+        # Avoid duplicates for same pair.
+        db.execute(text("CREATE UNIQUE INDEX ux_todo_relations_pair ON todo_relations(todo_id, relates_to_id)"))
+        db.execute(text("CREATE INDEX ix_todo_relations_todo_id ON todo_relations(todo_id)"))
+        db.execute(text("CREATE INDEX ix_todo_relations_relates_to_id ON todo_relations(relates_to_id)"))
+        print("    ✓ Created todo_relations table + indexes")
+    except OperationalError as e:
+        if "already exists" in str(e).lower():
+            print("    (todo_relations already exists, skipping)")
+        else:
+            raise
+
+    print("  → Creating todo_attachments table...")
+    try:
+        db.execute(text("""
+            CREATE TABLE todo_attachments (
+                id INTEGER PRIMARY KEY,
+                todo_id INTEGER NOT NULL,
+                file_path TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                file_size INTEGER,
+                uploaded_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (todo_id) REFERENCES todos(id)
+            )
+        """))
+        db.execute(text("CREATE INDEX ix_todo_attachments_todo_id ON todo_attachments(todo_id)"))
+        print("    ✓ Created todo_attachments table + index")
+    except OperationalError as e:
+        if "already exists" in str(e).lower():
+            print("    (todo_attachments already exists, skipping)")
+        else:
+            raise
+
+    db.commit()
+
+
 # Migration map: from_version -> migration_function
 MIGRATIONS = {
     2: migrate_1_to_2,
     3: migrate_2_to_3,
     4: migrate_3_to_4,
     5: migrate_4_to_5,
+    6: migrate_5_to_6,
 }
 
 

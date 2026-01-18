@@ -551,6 +551,309 @@ function getShellTargets() {
     };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Settings (tt-settings-v1)                                                  */
+/* -------------------------------------------------------------------------- */
+
+const TT_SETTINGS_STORAGE_KEY = 'tt-settings-v1';
+
+const TT_SETTINGS_DEFAULTS = {
+    layout: {
+        // 'full' (viewport width) | 'max' (1100px centered)
+        width_mode: 'full',
+    },
+    todos: {
+        list: {
+            status: true,
+            category: true,
+            queue: true,
+            priority_class: true,
+            task_size: true,
+            topic: true,
+            tags: true,
+            description: true,
+            timestamps: true,
+        },
+        detail: {
+            status: true,
+            category: true,
+            queue: true,
+            priority_class: true,
+            task_size: true,
+            topic: true,
+            tags: true,
+            description: true,
+            progress: true,
+            timestamps: true,
+            notes: true,
+            dependencies: true,
+            relates_to: true,
+            attachments: true,
+            completion_percentage: true,
+            ai_instructions: true,
+        },
+    },
+    notes: {
+        list: {
+            note_type: true,
+            category: true,
+            attachment: true,
+            created: true,
+            snippet: true,
+        },
+        detail: {
+            metadata: true,
+            attachment: true,
+            title: true,
+            category: true,
+            content: true,
+        },
+    },
+};
+
+function ttIsPlainObject(v) {
+    return !!v && typeof v === 'object' && !Array.isArray(v);
+}
+
+function ttDeepMerge(base, override) {
+    if (!ttIsPlainObject(base)) return ttIsPlainObject(override) ? { ...override } : base;
+    const out = { ...base };
+    if (!ttIsPlainObject(override)) return out;
+    for (const [k, v] of Object.entries(override)) {
+        if (ttIsPlainObject(v) && ttIsPlainObject(out[k])) out[k] = ttDeepMerge(out[k], v);
+        else out[k] = v;
+    }
+    return out;
+}
+
+function ttGetByPath(obj, path) {
+    const parts = String(path || '').split('.').filter(Boolean);
+    let cur = obj;
+    for (const p of parts) {
+        if (!cur || typeof cur !== 'object') return undefined;
+        cur = cur[p];
+    }
+    return cur;
+}
+
+function ttSetByPath(obj, path, value) {
+    const parts = String(path || '').split('.').filter(Boolean);
+    if (!parts.length) return obj;
+    let cur = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const p = parts[i];
+        if (!ttIsPlainObject(cur[p])) cur[p] = {};
+        cur = cur[p];
+    }
+    cur[parts[parts.length - 1]] = value;
+    return obj;
+}
+
+function ttApplySettingsToLayout(settings) {
+    const s = settings || ttGetSettings();
+    const mode = (s && s.layout && s.layout.width_mode) ? String(s.layout.width_mode) : 'full';
+    const root = document.documentElement;
+    if (!root) return;
+    if (mode === 'max') root.classList.add('tt-layout-maxwidth');
+    else root.classList.remove('tt-layout-maxwidth');
+}
+
+function ttLoadSettings() {
+    if (window.ttSettingsCache && typeof window.ttSettingsCache === 'object') return window.ttSettingsCache;
+    let saved = null;
+    try {
+        const raw = localStorage.getItem(TT_SETTINGS_STORAGE_KEY);
+        if (raw) saved = JSON.parse(raw);
+    } catch (e) {}
+    const merged = ttDeepMerge(TT_SETTINGS_DEFAULTS, saved || {});
+    window.ttSettingsCache = merged;
+    // Apply layout as soon as settings are loaded.
+    try { ttApplySettingsToLayout(merged); } catch (e) {}
+    return merged;
+}
+
+function ttGetSettings() {
+    return ttLoadSettings();
+}
+
+function ttSaveSettings(next) {
+    const merged = ttDeepMerge(TT_SETTINGS_DEFAULTS, next || {});
+    window.ttSettingsCache = merged;
+    try { localStorage.setItem(TT_SETTINGS_STORAGE_KEY, JSON.stringify(merged)); } catch (e) {}
+    try { ttApplySettingsToLayout(merged); } catch (e) {}
+    return merged;
+}
+
+function ttResetSettings() {
+    try { localStorage.removeItem(TT_SETTINGS_STORAGE_KEY); } catch (e) {}
+    window.ttSettingsCache = ttDeepMerge(TT_SETTINGS_DEFAULTS, {});
+    try { ttApplySettingsToLayout(window.ttSettingsCache); } catch (e) {}
+    return window.ttSettingsCache;
+}
+
+function ttRerenderCurrentView() {
+    try {
+        if (window.router && typeof window.router.handleRoute === 'function') {
+            window.router.handleRoute();
+            return;
+        }
+    } catch (e) {}
+}
+
+function addSettingsDialog() {
+    if (document.getElementById('ttSettingsDialog')) return;
+
+    const dlg = document.createElement('calcite-dialog');
+    dlg.id = 'ttSettingsDialog';
+    // Match other dialogs: set `label` for accessibility.
+    try { dlg.label = 'Settings'; } catch (e) {}
+    dlg.setAttribute('heading', 'Settings');
+    dlg.setAttribute('description', 'Customize layout and visible properties');
+    dlg.setAttribute('modal', '');
+    // Calcite dialog does not currently support a "right drawer" placement; use cover + CSS vars to anchor right.
+    dlg.setAttribute('placement', 'cover');
+    dlg.setAttribute('scale', 'm');
+    dlg.setAttribute('width-scale', 's');
+    dlg.setAttribute('slot', 'dialogs');
+    dlg.classList.add('tt-settings-dialog');
+
+    dlg.innerHTML = `
+        <calcite-accordion selection-mode="multiple">
+            <calcite-accordion-item item-title="Layout" open>
+                <calcite-label>
+                    Content width
+                    <calcite-segmented-control id="ttSettingsWidthModeSeg" scale="s" data-tt-setting="layout.width_mode">
+                        <calcite-segmented-control-item value="full">Full width</calcite-segmented-control-item>
+                        <calcite-segmented-control-item value="max">Centered (1100px)</calcite-segmented-control-item>
+                    </calcite-segmented-control>
+                </calcite-label>
+                <div class="text-xs text-color-3 mt-2">Master–detail layout is currently fixed (left browser + right/main detail).</div>
+            </calcite-accordion-item>
+
+            <calcite-accordion-item item-title="Todos · List view">
+                <calcite-label class="tt-settings-item">Status <calcite-switch data-tt-setting="todos.list.status"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Category <calcite-switch data-tt-setting="todos.list.category"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Queue position <calcite-switch data-tt-setting="todos.list.queue"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Priority class <calcite-switch data-tt-setting="todos.list.priority_class"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Task size <calcite-switch data-tt-setting="todos.list.task_size"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Topic <calcite-switch data-tt-setting="todos.list.topic"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Tags <calcite-switch data-tt-setting="todos.list.tags"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Description <calcite-switch data-tt-setting="todos.list.description"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Timestamps <calcite-switch data-tt-setting="todos.list.timestamps"></calcite-switch></calcite-label>
+            </calcite-accordion-item>
+
+            <calcite-accordion-item item-title="Todos · Detail view">
+                <calcite-label class="tt-settings-item">Status <calcite-switch data-tt-setting="todos.detail.status"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Category <calcite-switch data-tt-setting="todos.detail.category"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Queue position <calcite-switch data-tt-setting="todos.detail.queue"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Priority class <calcite-switch data-tt-setting="todos.detail.priority_class"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Task size <calcite-switch data-tt-setting="todos.detail.task_size"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Topic <calcite-switch data-tt-setting="todos.detail.topic"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Tags <calcite-switch data-tt-setting="todos.detail.tags"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Description <calcite-switch data-tt-setting="todos.detail.description"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Progress fields (work_*) <calcite-switch data-tt-setting="todos.detail.progress"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Timestamps <calcite-switch data-tt-setting="todos.detail.timestamps"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Notes section <calcite-switch data-tt-setting="todos.detail.notes"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Dependencies section <calcite-switch data-tt-setting="todos.detail.dependencies"></calcite-switch></calcite-label>
+            </calcite-accordion-item>
+
+            <calcite-accordion-item item-title="Notes · List view">
+                <calcite-label class="tt-settings-item">Type <calcite-switch data-tt-setting="notes.list.note_type"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Category <calcite-switch data-tt-setting="notes.list.category"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Attachment (todo link) <calcite-switch data-tt-setting="notes.list.attachment"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Created timestamp <calcite-switch data-tt-setting="notes.list.created"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Content snippet <calcite-switch data-tt-setting="notes.list.snippet"></calcite-switch></calcite-label>
+            </calcite-accordion-item>
+
+            <calcite-accordion-item item-title="Notes · Detail view">
+                <calcite-label class="tt-settings-item">Metadata (created/type/category) <calcite-switch data-tt-setting="notes.detail.metadata"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Attachment (todo link) <calcite-switch data-tt-setting="notes.detail.attachment"></calcite-switch></calcite-label>
+            </calcite-accordion-item>
+
+            <calcite-accordion-item item-title="Advanced">
+                <calcite-label class="tt-settings-item">Completion percentage <calcite-switch data-tt-setting="todos.detail.completion_percentage"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">AI instructions <calcite-switch data-tt-setting="todos.detail.ai_instructions"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Relates-to section <calcite-switch data-tt-setting="todos.detail.relates_to"></calcite-switch></calcite-label>
+                <calcite-label class="tt-settings-item">Attachments section <calcite-switch data-tt-setting="todos.detail.attachments"></calcite-switch></calcite-label>
+            </calcite-accordion-item>
+        </calcite-accordion>
+
+        <calcite-button id="ttSettingsResetBtn" slot="footer-start" appearance="outline" kind="neutral" icon-start="reset">
+            Reset to defaults
+        </calcite-button>
+        <calcite-button id="ttSettingsCloseBtn" slot="footer-end" appearance="solid">
+            Done
+        </calcite-button>
+    `;
+
+    const shell = document.querySelector('calcite-shell');
+    (shell || document.body).appendChild(dlg);
+
+    const syncControls = () => {
+        const s = ttGetSettings();
+        dlg.querySelectorAll('[data-tt-setting]').forEach((el) => {
+            const path = el.getAttribute('data-tt-setting');
+            const v = ttGetByPath(s, path);
+            try {
+                if (el.tagName === 'CALCITE-SWITCH') el.checked = (v !== false);
+                if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') el.value = String(v || 'full');
+            } catch (e) {}
+        });
+    };
+
+    const applyFromEl = (el) => {
+        const path = el && el.getAttribute ? el.getAttribute('data-tt-setting') : '';
+        if (!path) return;
+        const current = ttGetSettings();
+        let nextValue = null;
+
+        try {
+            if (el.tagName === 'CALCITE-SWITCH') nextValue = !!el.checked;
+            else if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') nextValue = String(el.value || 'full');
+            else return;
+        } catch (e) {
+            return;
+        }
+
+        const next = ttDeepMerge(current, {});
+        ttSetByPath(next, path, nextValue);
+        ttSaveSettings(next);
+        // Re-render so list/detail templates immediately reflect visibility changes.
+        ttRerenderCurrentView();
+    };
+
+    dlg.querySelectorAll('calcite-switch[data-tt-setting]').forEach((sw) => {
+        sw.addEventListener('calciteSwitchChange', () => applyFromEl(sw));
+        sw.addEventListener('change', () => applyFromEl(sw));
+    });
+    const widthSeg = dlg.querySelector('#ttSettingsWidthModeSeg');
+    if (widthSeg) {
+        widthSeg.addEventListener('calciteSegmentedControlChange', () => applyFromEl(widthSeg));
+        widthSeg.addEventListener('change', () => applyFromEl(widthSeg));
+    }
+
+    const resetBtn = dlg.querySelector('#ttSettingsResetBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', () => {
+            ttResetSettings();
+            syncControls();
+            ttRerenderCurrentView();
+        });
+    }
+
+    const closeBtn = dlg.querySelector('#ttSettingsCloseBtn');
+    if (closeBtn) closeBtn.addEventListener('click', () => { try { dlg.open = false; } catch (e) {} });
+
+    // Expose for other code paths (and for reliable open behavior).
+    window.ttOpenSettingsDialog = () => {
+        syncControls();
+        try { dlg.open = true; } catch (e) {}
+    };
+
+    // Initial sync
+    syncControls();
+}
+
 function collapseDetailPanel() {
     const { endShell, endPanel } = getShellTargets();
     if (endShell) endShell.setAttribute('collapsed', '');
@@ -857,6 +1160,16 @@ function initializeHeaderControls() {
             }
             const m = document.getElementById('createModal');
             if (m) m.open = true;
+        });
+    }
+
+    // Header "Settings" button (global, left of user placeholder)
+    const settingsBtn = document.getElementById('ttHeaderSettingsBtn');
+    if (settingsBtn && !settingsBtn._ttBound) {
+        settingsBtn._ttBound = true;
+        settingsBtn.addEventListener('click', () => {
+            addSettingsDialog();
+            if (typeof window.ttOpenSettingsDialog === 'function') window.ttOpenSettingsDialog();
         });
     }
 
@@ -1612,6 +1925,8 @@ function initializeTodoDetailView(todo) {
                 el.value = todo[field] || '';
             } else if (field === 'description' || field === 'work_completed' || field === 'work_remaining' || field === 'implementation_issues') {
                 el.value = todo[field] || '';
+            } else if (field === 'completion_percentage') {
+                el.value = todo.completion_percentage == null ? '' : String(todo.completion_percentage);
             }
         } catch (e) {
             // Non-fatal: some Calcite elements may not be ready immediately.
@@ -1701,6 +2016,10 @@ function initializeTodoDetailView(todo) {
                 patch[field] = value;
             } else if (field === 'description' || field === 'work_completed' || field === 'work_remaining' || field === 'implementation_issues') {
                 patch[field] = value;
+            } else if (field === 'completion_percentage') {
+                const s = String(value || '').trim();
+                if (s === '') patch.completion_percentage = null;
+                else patch.completion_percentage = parseInt(s, 10);
             }
 
             if (Object.keys(patch).length === 0) return;
@@ -1711,6 +2030,111 @@ function initializeTodoDetailView(todo) {
         el.addEventListener('calciteInputChange', handler);
         el.addEventListener('calciteSelectChange', handler);
         el.addEventListener('change', handler);
+    });
+
+    // AI instruction toggles (stored under todo.ai_instructions JSON object).
+    const aiState = (todo && typeof todo.ai_instructions === 'object' && todo.ai_instructions) ? { ...todo.ai_instructions } : {};
+    document.querySelectorAll('[data-tt-ai-flag][data-tt-todo-id]').forEach((sw) => {
+        if (sw._ttBoundAiFlag) return;
+        sw._ttBoundAiFlag = true;
+        const flag = String(sw.getAttribute('data-tt-ai-flag') || '').trim();
+        const todoId = parseInt(sw.getAttribute('data-tt-todo-id') || todo.id, 10);
+        if (!flag || !todoId) return;
+
+        try {
+            sw.checked = !!aiState[flag];
+        } catch (e) {}
+
+        const handler = () => {
+            const checked = !!sw.checked;
+            aiState[flag] = checked;
+            scheduleAutosave(todoId, { ai_instructions: { ...aiState } }, 0);
+        };
+
+        sw.addEventListener('calciteSwitchChange', handler);
+        sw.addEventListener('change', handler);
+    });
+
+    // Relations: add/remove
+    const relAddBtn = document.getElementById('ttAddRelBtn');
+    if (relAddBtn && !relAddBtn._ttBound) {
+        relAddBtn._ttBound = true;
+        relAddBtn.addEventListener('click', async () => {
+            const sel = document.getElementById('ttAddRelSelect');
+            const rid = sel ? parseInt(sel.value, 10) : NaN;
+            if (!rid) return;
+            const existing = Array.isArray(todo.relates_to)
+                ? todo.relates_to.map((x) => parseInt(String(x && x.id != null ? x.id : ''), 10)).filter(Boolean)
+                : [];
+            const next = Array.from(new Set([...existing, rid]));
+            try {
+                await apiSetRelatesTo(todo.id, next);
+                await refreshTodoDetail(todo.id);
+            } catch (e) {
+                console.error('Add related todo failed:', e);
+                alert('Failed to add related todo: ' + (e.message || e));
+            }
+        });
+    }
+
+    document.querySelectorAll('[data-tt-rel-remove]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const rid = parseInt(btn.getAttribute('data-tt-rel-remove'), 10);
+            if (!rid) return;
+            if (!confirm('Remove this related link?')) return;
+            const existing = Array.isArray(todo.relates_to)
+                ? todo.relates_to.map((x) => parseInt(String(x && x.id != null ? x.id : ''), 10)).filter(Boolean)
+                : [];
+            const next = existing.filter((x) => x !== rid);
+            try {
+                await apiSetRelatesTo(todo.id, next);
+                await refreshTodoDetail(todo.id);
+            } catch (e) {
+                console.error('Remove related todo failed:', e);
+                alert('Failed to remove related todo: ' + (e.message || e));
+            }
+        });
+    });
+
+    // Attachments: upload/delete
+    const uploadBtn = document.getElementById('ttAttachUploadBtn');
+    if (uploadBtn && !uploadBtn._ttBound) {
+        uploadBtn._ttBound = true;
+        uploadBtn.addEventListener('click', async () => {
+            const input = document.getElementById('ttAttachFileInput');
+            const file = input && input.files && input.files[0] ? input.files[0] : null;
+            if (!file) {
+                alert('Choose a file first.');
+                return;
+            }
+            try {
+                uploadBtn.disabled = true;
+                await apiUploadAttachment(todo.id, file);
+                try { input.value = ''; } catch (e) {}
+                await refreshTodoDetail(todo.id);
+            } catch (e) {
+                console.error('Upload attachment failed:', e);
+                alert('Failed to upload attachment: ' + (e.message || e));
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
+    }
+
+    document.querySelectorAll('[data-tt-att-delete]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const aid = parseInt(btn.getAttribute('data-tt-att-delete'), 10);
+            if (!aid) return;
+            if (!confirm('Delete this attachment?')) return;
+            try {
+                await apiDeleteAttachment(aid);
+                await refreshTodoDetail(todo.id);
+            } catch (e) {
+                console.error('Delete attachment failed:', e);
+                alert('Failed to delete attachment: ' + (e.message || e));
+            }
+        });
     });
 
     // Dependency add
@@ -1782,18 +2206,44 @@ function flattenTodos(todos) {
 }
 
 function renderTodosGridCardsHTML(flatTodos) {
+    const settings = ttGetSettings();
+    const cfg = (settings && settings.todos && settings.todos.list) ? settings.todos.list : {};
+    const showStatus = cfg.status !== false;
+    const showCategory = cfg.category !== false;
+    const showQueue = cfg.queue !== false;
+    const showPriority = cfg.priority_class !== false;
+    const showTaskSize = cfg.task_size !== false;
+    const showTopic = cfg.topic !== false;
+    const showTags = cfg.tags !== false;
+    const showDescription = cfg.description !== false;
+
     const flat = Array.isArray(flatTodos) ? flatTodos : [];
     if (!flat.length) return '';
 
     return flat.map((t) => {
         const title = escapeHtml(t.title || '');
-        const desc = escapeHtml(_truncate(t.description || '', 140));
+        const desc = showDescription ? escapeHtml(_truncate(t.description || '', 140)) : '';
         const status = escapeHtml(t.status || '');
         const category = escapeHtml(t.category || '');
-        const meta = `#${t.id} · ${replaceUnderscores(t.status)}`;
-        const topic = t.topic ? `<calcite-chip appearance="outline" scale="s" icon-start="folder" class="tt-topic-chip">${escapeHtml(t.topic)}</calcite-chip>` : '';
-        const tags = Array.isArray(t.tags)
+        const metaParts = [`#${t.id}`];
+        if (showStatus) metaParts.push(replaceUnderscores(t.status));
+        const meta = metaParts.join(' · ');
+
+        const topic = (showTopic && t.topic)
+            ? `<calcite-chip appearance="outline" scale="s" icon-start="folder" class="tt-topic-chip">${escapeHtml(t.topic)}</calcite-chip>`
+            : '';
+        const tags = (showTags && Array.isArray(t.tags))
             ? t.tags.slice(0, 3).map((x) => `<calcite-chip appearance="outline" scale="s">🏷️ ${escapeHtml(x.name || '')}</calcite-chip>`).join('')
+            : '';
+
+        const queueChip = (showQueue && t.queue && t.queue > 0)
+            ? `<calcite-chip appearance="solid" scale="s" color="blue">⏯️ Queue ${escapeHtml(String(t.queue))}</calcite-chip>`
+            : '';
+        const priorityChip = (showPriority && t.priority_class)
+            ? `<calcite-chip appearance="solid" scale="s" color="orange">🔺 Priority ${escapeHtml(String(t.priority_class))}</calcite-chip>`
+            : '';
+        const sizeChip = (showTaskSize && t.task_size)
+            ? `<calcite-chip appearance="outline" scale="s">📏 Size ${escapeHtml(String(t.task_size))}/5</calcite-chip>`
             : '';
 
         return `
@@ -1802,11 +2252,14 @@ function renderTodosGridCardsHTML(flatTodos) {
                 <div slot="subtitle" class="text-xs text-color-3">${escapeHtml(meta)}</div>
                 <div class="space-y-2">
                     <div class="flex items-center flex-wrap gap-1.5">
-                        <calcite-chip appearance="solid" scale="s" class="status-${status}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>
-                        <calcite-chip appearance="outline" scale="s" class="category-${category}">${category}</calcite-chip>
+                        ${showStatus ? `<calcite-chip appearance="solid" scale="s" class="status-${status}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
+                        ${showCategory ? `<calcite-chip appearance="outline" scale="s" class="category-${category}">${category}</calcite-chip>` : ''}
+                        ${queueChip}
+                        ${priorityChip}
+                        ${sizeChip}
                         ${topic}
                     </div>
-                    <div class="text-sm text-color-2">${desc || 'No description'}</div>
+                    ${showDescription ? `<div class="text-sm text-color-2">${desc || 'No description'}</div>` : ''}
                     ${tags ? `<div class="flex items-center flex-wrap gap-1.5">${tags}</div>` : ''}
                 </div>
             </calcite-card>
@@ -1828,6 +2281,18 @@ function renderTodosGridHTML(todos) {
 }
 
 function renderMainTodosHTML(todosTree, options) {
+    const settings = ttGetSettings();
+    const cfg = (settings && settings.todos && settings.todos.list) ? settings.todos.list : {};
+    const showStatus = cfg.status !== false;
+    const showCategory = cfg.category !== false;
+    const showQueue = cfg.queue !== false;
+    const showPriority = cfg.priority_class !== false;
+    const showTaskSize = cfg.task_size !== false;
+    const showTopic = cfg.topic !== false;
+    const showTags = cfg.tags !== false;
+    const showDescription = cfg.description !== false;
+    const showTimestamps = cfg.timestamps !== false;
+
     const o = options || {};
     const view = (o.view === 'list' || o.view === 'table') ? o.view : 'grid';
 
@@ -1848,46 +2313,77 @@ function renderMainTodosHTML(todosTree, options) {
     } else if (view === 'list') {
         const items = pageItems.map((t) => {
             const label = escapeHtml(t.title || '');
-            const desc = escapeHtml(_truncate(t.description || '', 140));
-            const meta = `#${t.id} · ${replaceUnderscores(t.status)}`;
+            const desc = showDescription ? escapeHtml(_truncate(t.description || '', 140)) : '';
+            const metaParts = [`#${t.id}`];
+            if (showStatus) metaParts.push(replaceUnderscores(t.status));
+            if (showCategory && t.category) metaParts.push(String(t.category));
+            if (showQueue && t.queue && t.queue > 0) metaParts.push(`Queue ${t.queue}`);
+            if (showPriority && t.priority_class) metaParts.push(`Priority ${t.priority_class}`);
+            if (showTaskSize && t.task_size) metaParts.push(`Size ${t.task_size}/5`);
+            if (showTopic && t.topic) metaParts.push(`Topic ${t.topic}`);
+            const meta = metaParts.join(' · ');
             return `
                 <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
-                    <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>
+                    ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                     <div slot="content" class="tt-main-list-content min-w-0">
                         <div class="tt-main-todo-title truncate">${label}</div>
-                        <div class="text-xs text-color-3 truncate">${desc || ''}</div>
+                        ${showDescription ? `<div class="text-xs text-color-3 truncate">${desc || ''}</div>` : ''}
                     </div>
                 </calcite-list-item>
             `;
         }).join('');
         body = `<calcite-list id="ttMainTodosList" selection-mode="single" selection-appearance="highlight">${items}</calcite-list>`;
     } else {
+        const headerCells = [
+            `<calcite-table-header heading="ID" alignment="end"></calcite-table-header>`,
+            `<calcite-table-header heading="Title"></calcite-table-header>`,
+            showStatus ? `<calcite-table-header heading="Status"></calcite-table-header>` : '',
+            showCategory ? `<calcite-table-header heading="Category"></calcite-table-header>` : '',
+            showQueue ? `<calcite-table-header heading="Queue" alignment="end"></calcite-table-header>` : '',
+            showPriority ? `<calcite-table-header heading="Priority"></calcite-table-header>` : '',
+            showTaskSize ? `<calcite-table-header heading="Size" alignment="end"></calcite-table-header>` : '',
+            showTopic ? `<calcite-table-header heading="Topic"></calcite-table-header>` : '',
+            showTags ? `<calcite-table-header heading="Tags"></calcite-table-header>` : '',
+            showDescription ? `<calcite-table-header heading="Description"></calcite-table-header>` : '',
+            showTimestamps ? `<calcite-table-header heading="Updated"></calcite-table-header>` : '',
+        ].filter(Boolean).join('');
+
         const rows = pageItems.map((t) => {
             const title = escapeHtml(_truncate(t.title || '', 80));
-            const status = escapeHtml(replaceUnderscores(t.status || ''));
+            const statusText = escapeHtml(replaceUnderscores(t.status || ''));
             const cat = escapeHtml(t.category || '');
             const queue = escapeHtml(String(t.queue || 0));
+            const pri = escapeHtml(String(t.priority_class || ''));
+            const size = escapeHtml(String(t.task_size || ''));
+            const topic = escapeHtml(String(t.topic || ''));
+            const tagsCsv = Array.isArray(t.tags) ? escapeHtml(t.tags.map((x) => x && x.name ? x.name : '').filter(Boolean).join(', ')) : '';
+            const desc = escapeHtml(_truncate(t.description || '', 120));
             const updated = escapeHtml(formatDate(t.updated_at || t.created_at || ''));
+
+            const cells = [
+                `<calcite-table-cell alignment="end">#${t.id}</calcite-table-cell>`,
+                `<calcite-table-cell>${title}</calcite-table-cell>`,
+                showStatus ? `<calcite-table-cell><calcite-chip scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${statusText}</calcite-chip></calcite-table-cell>` : '',
+                showCategory ? `<calcite-table-cell>${cat}</calcite-table-cell>` : '',
+                showQueue ? `<calcite-table-cell alignment="end">${queue}</calcite-table-cell>` : '',
+                showPriority ? `<calcite-table-cell>${pri || '—'}</calcite-table-cell>` : '',
+                showTaskSize ? `<calcite-table-cell alignment="end">${size || '—'}</calcite-table-cell>` : '',
+                showTopic ? `<calcite-table-cell>${topic || '—'}</calcite-table-cell>` : '',
+                showTags ? `<calcite-table-cell>${tagsCsv || '—'}</calcite-table-cell>` : '',
+                showDescription ? `<calcite-table-cell>${desc || '—'}</calcite-table-cell>` : '',
+                showTimestamps ? `<calcite-table-cell>${updated}</calcite-table-cell>` : '',
+            ].filter(Boolean).join('');
+
             return `
                 <calcite-table-row data-tt-todo-id="${t.id}" class="tt-main-table-row">
-                    <calcite-table-cell alignment="end">#${t.id}</calcite-table-cell>
-                    <calcite-table-cell>${title}</calcite-table-cell>
-                    <calcite-table-cell><calcite-chip scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${status}</calcite-chip></calcite-table-cell>
-                    <calcite-table-cell>${cat}</calcite-table-cell>
-                    <calcite-table-cell alignment="end">${queue}</calcite-table-cell>
-                    <calcite-table-cell>${updated}</calcite-table-cell>
+                    ${cells}
                 </calcite-table-row>
             `;
         }).join('');
         body = `
             <calcite-table bordered striped caption="Todos">
                 <calcite-table-row slot="table-header">
-                    <calcite-table-header heading="ID" alignment="end"></calcite-table-header>
-                    <calcite-table-header heading="Title"></calcite-table-header>
-                    <calcite-table-header heading="Status"></calcite-table-header>
-                    <calcite-table-header heading="Category"></calcite-table-header>
-                    <calcite-table-header heading="Queue" alignment="end"></calcite-table-header>
-                    <calcite-table-header heading="Updated"></calcite-table-header>
+                    ${headerCells}
                 </calcite-table-row>
                 ${rows}
             </calcite-table>
@@ -1929,17 +2425,40 @@ function renderTodoBrowserPanelHTML(todos, stats) {
 }
 
 function renderTodoBrowserListItemsHTML(todos) {
+    const settings = ttGetSettings();
+    const cfg = (settings && settings.todos && settings.todos.list) ? settings.todos.list : {};
+    const showStatus = cfg.status !== false;
+    const showDescription = cfg.description !== false;
+    const showCategory = cfg.category !== false;
+    const showQueue = cfg.queue !== false;
+    const showPriority = cfg.priority_class !== false;
+    const showTaskSize = cfg.task_size !== false;
+    const showTopic = cfg.topic !== false;
+    const showTags = cfg.tags !== false;
+
     const items = [];
     for (const t of todos) {
+        const id = escapeHtml(String(t.id ?? ''));
         const label = escapeHtml(t.title || '');
-        const desc = escapeHtml(_truncate(t.description || '', 120));
-        const meta = `#${t.id} · ${replaceUnderscores(t.status)}`;
+        const desc = showDescription ? escapeHtml(_truncate(t.description || '', 120)) : '';
+        const metaParts = [`#${t.id}`];
+        if (showStatus) metaParts.push(replaceUnderscores(t.status));
+        if (showCategory && t.category) metaParts.push(String(t.category));
+        if (showQueue && t.queue && t.queue > 0) metaParts.push(`Queue ${t.queue}`);
+        if (showPriority && t.priority_class) metaParts.push(`Priority ${t.priority_class}`);
+        if (showTaskSize && t.task_size) metaParts.push(`Size ${t.task_size}/5`);
+        if (showTopic && t.topic) metaParts.push(`Topic ${t.topic}`);
+        if (showTags && Array.isArray(t.tags) && t.tags.length) metaParts.push(`Tags ${t.tags.length}`);
+        const meta = metaParts.join(' · ');
         items.push(`
             <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
-                <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>
+                ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                 <div slot="content" class="tt-browser-item-content min-w-0">
-                    <div class="tt-browser-item-title font-bold">${label}</div>
-                    <div class="tt-browser-item-desc text-xs text-color-3">${desc || ''}</div>
+                    <div class="tt-browser-item-title font-bold">
+                        <span class="tt-browser-item-title-text">${label}</span>
+                        <span class="tt-browser-item-id text-color-3">#${id}</span>
+                        </div>
+                    ${showDescription ? `<div class="tt-browser-item-desc text-xs text-color-3">${desc || ''}</div>` : ''}
                 </div>
                 ${Array.isArray(t.children) && t.children.length ? renderTodoBrowserListItemsHTML(t.children) : ''}
             </calcite-list-item>
@@ -1950,6 +2469,25 @@ function renderTodoBrowserListItemsHTML(todos) {
 
 function renderTodoDetailPanelHTML(todoDetail) {
     const t = todoDetail || {};
+    const settings = ttGetSettings();
+    const cfg = (settings && settings.todos && settings.todos.detail) ? settings.todos.detail : {};
+    const showStatus = cfg.status !== false;
+    const showCategory = cfg.category !== false;
+    const showQueue = cfg.queue !== false;
+    const showPriority = cfg.priority_class !== false;
+    const showTaskSize = cfg.task_size !== false;
+    const showTopic = cfg.topic !== false;
+    const showTags = cfg.tags !== false;
+    const showDescription = cfg.description !== false;
+    const showProgress = cfg.progress !== false;
+    const showTimestamps = cfg.timestamps !== false;
+    const showNotes = cfg.notes !== false;
+    const showDependencies = cfg.dependencies !== false;
+    const showRelatesTo = cfg.relates_to !== false;
+    const showAttachments = cfg.attachments !== false;
+    const showCompletionPct = cfg.completion_percentage !== false;
+    const showAi = cfg.ai_instructions !== false;
+
     const tagsCsv = (t.tags || []).map((x) => x.name).join(', ');
     const depsMet = !!t.dependencies_met;
     const depsChip = depsMet
@@ -2003,6 +2541,232 @@ function renderTodoDetailPanelHTML(todoDetail) {
         `;
     }).join('');
 
+    const completion = (t.completion_percentage == null) ? '' : String(t.completion_percentage);
+    const ai = (t.ai_instructions && typeof t.ai_instructions === 'object') ? t.ai_instructions : {};
+    const researchOnWeb = !!ai.research_on_web;
+
+    const relatesToRows = (t.relates_to || []).map((rt) => {
+        const rid = parseInt(String(rt && rt.id != null ? rt.id : ''), 10) || 0;
+        if (!rid) return '';
+        const label = `#${rid} - ${escapeHtml(String(rt.title || ''))}`;
+        const meta = `${escapeHtml(replaceUnderscores(String(rt.status || '')))} · ${escapeHtml(String(rt.category || ''))}`;
+        return `
+            <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                    <div class="text-sm font-medium truncate">${label}</div>
+                    <div class="text-xs text-color-3">${meta}</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <calcite-button appearance="outline" scale="s" onclick="router.navigate('/todo/${rid}')">Open</calcite-button>
+                    <calcite-button appearance="outline" kind="danger" scale="s" data-tt-rel-remove="${rid}">Remove</calcite-button>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    const attachmentRows = (t.attachments || []).map((a) => {
+        const aid = parseInt(String(a && a.id != null ? a.id : ''), 10) || 0;
+        if (!aid) return '';
+        const name = escapeHtml(String(a.file_name || 'attachment'));
+        const size = (a.file_size != null) ? `${escapeHtml(String(a.file_size))} bytes` : '';
+        const when = a.uploaded_at ? escapeHtml(formatDate(a.uploaded_at)) : '';
+        const meta = [size, when].filter(Boolean).join(' · ');
+        return `
+            <calcite-list-item value="${aid}" label="${name}" description="${meta}">
+                <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="download"
+                    onclick="event.stopPropagation(); window.open('/api/attachments/${aid}/download', '_blank')">Download</calcite-button>
+                <calcite-button slot="actions-end" appearance="transparent" kind="danger" scale="s" icon-start="trash"
+                    data-tt-att-delete="${aid}">Delete</calcite-button>
+            </calcite-list-item>
+        `;
+    }).join('');
+
+    const titleMeta = (function () {
+        const parts = [`Todo #${t.id}`];
+        if (showTimestamps) {
+            parts.push(`Created: ${escapeHtml(formatDate(t.created_at))}`);
+            if (t.updated_at && t.updated_at !== t.created_at) parts.push(`Updated: ${escapeHtml(formatDate(t.updated_at))}`);
+        }
+        return parts.join(' · ');
+    })();
+
+    const topFields = [
+        showStatus ? `
+            <calcite-label>
+                Status
+                <calcite-select data-tt-field="status" data-tt-todo-id="${t.id}">
+                    <calcite-option value="pending" ${t.status === 'pending' ? 'selected' : ''}>pending</calcite-option>
+                    <calcite-option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>in_progress</calcite-option>
+                    <calcite-option value="completed" ${t.status === 'completed' ? 'selected' : ''}>completed</calcite-option>
+                    <calcite-option value="cancelled" ${t.status === 'cancelled' ? 'selected' : ''}>cancelled</calcite-option>
+                </calcite-select>
+            </calcite-label>
+        ` : '',
+        showCategory ? `
+            <calcite-label>
+                Category
+                <calcite-select data-tt-field="category" data-tt-todo-id="${t.id}">
+                    <calcite-option value="feature" ${t.category === 'feature' ? 'selected' : ''}>feature</calcite-option>
+                    <calcite-option value="issue" ${t.category === 'issue' ? 'selected' : ''}>issue</calcite-option>
+                    <calcite-option value="bug" ${t.category === 'bug' ? 'selected' : ''}>bug</calcite-option>
+                </calcite-select>
+            </calcite-label>
+        ` : '',
+        showTopic ? `
+            <calcite-label>
+                Topic
+                <calcite-input data-tt-field="topic" data-tt-todo-id="${t.id}" value="${escapeHtml(t.topic || '')}"></calcite-input>
+            </calcite-label>
+        ` : '',
+    ].filter(Boolean).join('');
+
+    const infoFields = [
+        showQueue ? `
+            <calcite-label>
+                Queue Position
+                <calcite-input type="number" min="0" data-tt-field="queue" data-tt-todo-id="${t.id}" value="${escapeHtml(String(t.queue || 0))}"></calcite-input>
+            </calcite-label>
+        ` : '',
+        showPriority ? `
+            <calcite-label>
+                Priority Class
+                <calcite-select data-tt-field="priority_class" data-tt-todo-id="${t.id}">
+                    <calcite-option value="" ${!t.priority_class ? 'selected' : ''}></calcite-option>
+                    <calcite-option value="A" ${t.priority_class === 'A' ? 'selected' : ''}>A</calcite-option>
+                    <calcite-option value="B" ${t.priority_class === 'B' ? 'selected' : ''}>B</calcite-option>
+                    <calcite-option value="C" ${t.priority_class === 'C' ? 'selected' : ''}>C</calcite-option>
+                    <calcite-option value="D" ${t.priority_class === 'D' ? 'selected' : ''}>D</calcite-option>
+                    <calcite-option value="E" ${t.priority_class === 'E' ? 'selected' : ''}>E</calcite-option>
+                </calcite-select>
+            </calcite-label>
+        ` : '',
+        showTaskSize ? `
+            <calcite-label>
+                Task Size (1-5)
+                <calcite-input type="number" min="1" max="5" data-tt-field="task_size" data-tt-todo-id="${t.id}" value="${escapeHtml(t.task_size == null ? '' : String(t.task_size))}"></calcite-input>
+            </calcite-label>
+        ` : '',
+    ].filter(Boolean).join('');
+
+    const advancedFields = [
+        showCompletionPct ? `
+            <calcite-label>
+                Completion % (0-100)
+                <calcite-input type="number" min="0" max="100" data-tt-field="completion_percentage" data-tt-todo-id="${t.id}" value="${escapeHtml(completion)}"></calcite-input>
+            </calcite-label>
+        ` : '',
+        showAi ? `
+            <calcite-label>
+                AI: Research on web before completing
+                <calcite-switch data-tt-ai-flag="research_on_web" data-tt-todo-id="${t.id}" ${researchOnWeb ? 'checked' : ''}></calcite-switch>
+            </calcite-label>
+        ` : '',
+    ].filter(Boolean).join('');
+
+    const relatesPanel = showRelatesTo ? `
+        <calcite-panel>
+            <div slot="header">Relates to</div>
+            <div class="space-y-3">
+                <div class="space-y-2">
+                    ${relatesToRows || '<div class="text-xs text-color-3">None</div>'}
+                </div>
+                <div class="flex items-end gap-2">
+                    <calcite-label class="flex-1">
+                        Add related todo
+                        <calcite-select id="ttAddRelSelect">
+                            <calcite-option value=""></calcite-option>
+                            ${depOptions}
+                        </calcite-select>
+                    </calcite-label>
+                    <calcite-button id="ttAddRelBtn" appearance="solid">Add</calcite-button>
+                </div>
+            </div>
+        </calcite-panel>
+    ` : '';
+
+    const attachmentsPanel = showAttachments ? `
+        <calcite-panel>
+            <div slot="header">Attachments</div>
+            <div class="space-y-3">
+                <calcite-label>
+                    Upload file
+                    <input id="ttAttachFileInput" type="file" />
+                </calcite-label>
+                <div class="flex items-center gap-2">
+                    <calcite-button id="ttAttachUploadBtn" appearance="solid" icon-start="upload">Upload</calcite-button>
+                </div>
+                <calcite-list id="ttAttachmentsList" selection-mode="none">
+                    ${attachmentRows || '<calcite-list-item label="No attachments"></calcite-list-item>'}
+                </calcite-list>
+            </div>
+        </calcite-panel>
+    ` : '';
+
+    const progressBlock = showProgress ? `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <calcite-label>
+                ✅ Work Completed
+            <tt-md-editor data-tt-field="work_completed" data-tt-todo-id="${t.id}" height="220px" placeholder="Work completed (Markdown)"></tt-md-editor>
+            </calcite-label>
+            <calcite-label>
+                📋 Work Remaining
+            <tt-md-editor data-tt-field="work_remaining" data-tt-todo-id="${t.id}" height="220px" placeholder="Work remaining (Markdown)"></tt-md-editor>
+            </calcite-label>
+            <calcite-label>
+                ⚠️ Implementation Issues
+            <tt-md-editor data-tt-field="implementation_issues" data-tt-todo-id="${t.id}" height="220px" placeholder="Implementation issues (Markdown)"></tt-md-editor>
+            </calcite-label>
+        </div>
+    ` : '';
+
+    const depsPanel = showDependencies ? `
+        <calcite-panel>
+            <div slot="header">Dependencies</div>
+            <div class="space-y-3">
+                <div>
+                    <div class="text-sm font-semibold mb-2">Prerequisites (${(t.dependencies || []).length})</div>
+                    <div class="space-y-2">${prereqRows || '<div class="text-xs text-color-3">None</div>'}</div>
+                </div>
+                <div class="flex items-end gap-2">
+                    <calcite-label class="flex-1">
+                        Add prerequisite
+                        <calcite-select id="ttAddDepSelect">
+                            <calcite-option value=""></calcite-option>
+                            ${depOptions}
+                        </calcite-select>
+                    </calcite-label>
+                    <calcite-button id="ttAddDepBtn" appearance="solid">Add</calcite-button>
+                </div>
+                <div>
+                    <div class="text-sm font-semibold mb-2">Dependents (${(t.dependents || []).length})</div>
+                    <div class="space-y-2">${dependentRows || '<div class="text-xs text-color-3">None</div>'}</div>
+                </div>
+            </div>
+        </calcite-panel>
+    ` : '';
+
+    const notesPanel = showNotes ? `
+        <calcite-panel>
+            <div slot="header">Notes (${(t.notes || []).length})</div>
+            <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
+                onclick="addCreateNoteModal(); (window.ttOpenCreateNoteModal ? window.ttOpenCreateNoteModal({ todoId: ${t.id} }) : (document.getElementById('createNoteModal') && (document.getElementById('createNoteModal').open = true)))">
+                Add note
+            </calcite-button>
+            <div class="space-y-2">
+                ${(t.notes && t.notes.length)
+                    ? t.notes.map((n) => {
+                        const nt = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
+                        const cat = escapeHtml(String(n.category || 'general'));
+                        const title = escapeHtml(String((n.title || '')).trim());
+                        const header = title ? `<div class="font-semibold text-color-1">${title}</div>` : '';
+                        return `<div class="tt-surface p-3 space-y-1"><div class="text-xs text-color-3">${nt} · ${cat}${showTimestamps ? ' · ' + escapeHtml(formatDate(n.created_at)) : ''}</div>${header}<div class="markdown-render">${escapeHtml(n.content || '')}</div></div>`;
+                    }).join('')
+                    : '<div class="text-xs text-color-3">No notes yet.</div>'
+                }
+            </div>
+        </calcite-panel>
+    ` : '';
+
     return `
         <div class="space-y-3">
             <div class="flex items-center justify-between gap-2">
@@ -2014,133 +2778,39 @@ function renderTodoDetailPanelHTML(todoDetail) {
                 <div slot="title" class="space-y-2">
                     <div class="flex items-center justify-between gap-2">
                         <div class="text-xs text-color-3 truncate">
-                            Todo #${t.id}
-                            <span class="text-color-3"> · </span>
-                            Created: ${escapeHtml(formatDate(t.created_at))}
-                            ${t.updated_at && t.updated_at !== t.created_at ? ' · Updated: ' + escapeHtml(formatDate(t.updated_at)) : ''}
+                            ${titleMeta}
                         </div>
                         <calcite-chip id="ttAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <calcite-label>
-                            Status
-                            <calcite-select data-tt-field="status" data-tt-todo-id="${t.id}">
-                                <calcite-option value="pending" ${t.status === 'pending' ? 'selected' : ''}>pending</calcite-option>
-                                <calcite-option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>in_progress</calcite-option>
-                                <calcite-option value="completed" ${t.status === 'completed' ? 'selected' : ''}>completed</calcite-option>
-                                <calcite-option value="cancelled" ${t.status === 'cancelled' ? 'selected' : ''}>cancelled</calcite-option>
-                            </calcite-select>
-                        </calcite-label>
-
-                        <calcite-label>
-                            Category
-                            <calcite-select data-tt-field="category" data-tt-todo-id="${t.id}">
-                                <calcite-option value="feature" ${t.category === 'feature' ? 'selected' : ''}>feature</calcite-option>
-                                <calcite-option value="issue" ${t.category === 'issue' ? 'selected' : ''}>issue</calcite-option>
-                                <calcite-option value="bug" ${t.category === 'bug' ? 'selected' : ''}>bug</calcite-option>
-                            </calcite-select>
-                        </calcite-label>
-
-                        <calcite-label>
-                            Topic
-                            <calcite-input data-tt-field="topic" data-tt-todo-id="${t.id}" value="${escapeHtml(t.topic || '')}"></calcite-input>
-                        </calcite-label>
-                    </div>
+                    ${topFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topFields}</div>` : ''}
 
                     <calcite-input class="tt-title-input" scale="l" data-tt-field="title" data-tt-todo-id="${t.id}" value="${escapeHtml(t.title || '')}"></calcite-input>
 
-                    <calcite-label>
-                        Description (markdown)
-                        <tt-md-editor data-tt-field="description" data-tt-todo-id="${t.id}" height="320px" placeholder="Description (Markdown)"></tt-md-editor>
-                    </calcite-label>
+                    ${showDescription ? `
+                        <calcite-label>
+                            Description (markdown)
+                            <tt-md-editor data-tt-field="description" data-tt-todo-id="${t.id}" height="320px" placeholder="Description (Markdown)"></tt-md-editor>
+                        </calcite-label>
+                    ` : ''}
                 </div>
                 <div class="space-y-3">
-                    <calcite-label>
-                        Tags (comma-separated)
-                        <calcite-input class="tt-tags-input" scale="s" data-tt-field="tag_names" data-tt-todo-id="${t.id}" value="${escapeHtml(tagsCsv)}"></calcite-input>
-                    </calcite-label>
+                    ${showTags ? `
+                        <calcite-label>
+                            Tags (comma-separated)
+                            <calcite-input class="tt-tags-input" scale="s" data-tt-field="tag_names" data-tt-todo-id="${t.id}" value="${escapeHtml(tagsCsv)}"></calcite-input>
+                        </calcite-label>
+                    ` : ''}
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <calcite-label>
-                            Queue Position
-                            <calcite-input type="number" min="0" data-tt-field="queue" data-tt-todo-id="${t.id}" value="${escapeHtml(String(t.queue || 0))}"></calcite-input>
-                        </calcite-label>
-                        <calcite-label>
-                            Priority Class
-                            <calcite-select data-tt-field="priority_class" data-tt-todo-id="${t.id}">
-                                <calcite-option value="" ${!t.priority_class ? 'selected' : ''}></calcite-option>
-                                <calcite-option value="A" ${t.priority_class === 'A' ? 'selected' : ''}>A</calcite-option>
-                                <calcite-option value="B" ${t.priority_class === 'B' ? 'selected' : ''}>B</calcite-option>
-                                <calcite-option value="C" ${t.priority_class === 'C' ? 'selected' : ''}>C</calcite-option>
-                                <calcite-option value="D" ${t.priority_class === 'D' ? 'selected' : ''}>D</calcite-option>
-                                <calcite-option value="E" ${t.priority_class === 'E' ? 'selected' : ''}>E</calcite-option>
-                            </calcite-select>
-                        </calcite-label>
-                        <calcite-label>
-                            Task Size (1-5)
-                            <calcite-input type="number" min="1" max="5" data-tt-field="task_size" data-tt-todo-id="${t.id}" value="${escapeHtml(t.task_size == null ? '' : String(t.task_size))}"></calcite-input>
-                        </calcite-label>
-                    </div>
+                    ${infoFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${infoFields}</div>` : ''}
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <calcite-label>
-                            ✅ Work Completed
-                        <tt-md-editor data-tt-field="work_completed" data-tt-todo-id="${t.id}" height="220px" placeholder="Work completed (Markdown)"></tt-md-editor>
-                        </calcite-label>
-                        <calcite-label>
-                            📋 Work Remaining
-                        <tt-md-editor data-tt-field="work_remaining" data-tt-todo-id="${t.id}" height="220px" placeholder="Work remaining (Markdown)"></tt-md-editor>
-                        </calcite-label>
-                        <calcite-label>
-                            ⚠️ Implementation Issues
-                        <tt-md-editor data-tt-field="implementation_issues" data-tt-todo-id="${t.id}" height="220px" placeholder="Implementation issues (Markdown)"></tt-md-editor>
-                        </calcite-label>
-                    </div>
+                    ${advancedFields ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${advancedFields}</div>` : ''}
 
-                    <calcite-panel>
-                        <div slot="header">Dependencies</div>
-                        <div class="space-y-3">
-                            <div>
-                                <div class="text-sm font-semibold mb-2">Prerequisites (${(t.dependencies || []).length})</div>
-                                <div class="space-y-2">${prereqRows || '<div class="text-xs text-color-3">None</div>'}</div>
-                            </div>
-                            <div class="flex items-end gap-2">
-                                <calcite-label class="flex-1">
-                                    Add prerequisite
-                                    <calcite-select id="ttAddDepSelect">
-                                        <calcite-option value=""></calcite-option>
-                                        ${depOptions}
-                                    </calcite-select>
-                                </calcite-label>
-                                <calcite-button id="ttAddDepBtn" appearance="solid">Add</calcite-button>
-                            </div>
-                            <div>
-                                <div class="text-sm font-semibold mb-2">Dependents (${(t.dependents || []).length})</div>
-                                <div class="space-y-2">${dependentRows || '<div class="text-xs text-color-3">None</div>'}</div>
-                            </div>
-                        </div>
-                    </calcite-panel>
-
-                    <calcite-panel>
-                        <div slot="header">Notes (${(t.notes || []).length})</div>
-                        <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
-                            onclick="addCreateNoteModal(); (window.ttOpenCreateNoteModal ? window.ttOpenCreateNoteModal({ todoId: ${t.id} }) : (document.getElementById('createNoteModal') && (document.getElementById('createNoteModal').open = true)))">
-                            Add note
-                        </calcite-button>
-                        <div class="space-y-2">
-                            ${(t.notes && t.notes.length)
-                                ? t.notes.map((n) => {
-                                    const nt = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
-                                    const cat = escapeHtml(String(n.category || 'general'));
-                                    return `<div class="tt-surface p-3"><div class="text-xs text-color-3 mb-1">${nt} · ${cat} · ${escapeHtml(formatDate(n.created_at))}</div><div class="markdown-render">${escapeHtml(n.content || '')}</div></div>`;
-                                  }).join('')
-                                : '<div class="text-xs text-color-3">No notes yet.</div>'
-                            }
-                        </div>
-                    </calcite-panel>
-
-                    <!-- Created/Updated shown in header next to Todo # -->
+                    ${relatesPanel}
+                    ${attachmentsPanel}
+                    ${progressBlock}
+                    ${depsPanel}
+                    ${notesPanel}
                 </div>
             </calcite-card>
         </div>
@@ -2202,6 +2872,51 @@ async function apiDeleteDependency(depId) {
     const res = await fetch(`/api/dependencies/${depId}`, { method: 'DELETE' });
     if (!res.ok) {
         let msg = 'Failed to delete dependency';
+        try {
+            const j = await res.json();
+            msg = j.detail || j.message || msg;
+        } catch (e) {}
+        throw new Error(msg);
+    }
+    return await res.json();
+}
+
+async function apiSetRelatesTo(todoId, relatesToIds) {
+    const res = await fetch(`/api/todos/${todoId}/relations`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relates_to_ids: Array.isArray(relatesToIds) ? relatesToIds : [] })
+    });
+    if (!res.ok) {
+        let msg = 'Failed to update related todos';
+        try {
+            const j = await res.json();
+            msg = j.detail || j.message || msg;
+        } catch (e) {}
+        throw new Error(msg);
+    }
+    return await res.json();
+}
+
+async function apiUploadAttachment(todoId, file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`/api/todos/${todoId}/attachments`, { method: 'POST', body: fd });
+    if (!res.ok) {
+        let msg = 'Failed to upload attachment';
+        try {
+            const j = await res.json();
+            msg = j.detail || j.message || msg;
+        } catch (e) {}
+        throw new Error(msg);
+    }
+    return await res.json();
+}
+
+async function apiDeleteAttachment(attachmentId) {
+    const res = await fetch(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
+    if (!res.ok) {
+        let msg = 'Failed to delete attachment';
         try {
             const j = await res.json();
             msg = j.detail || j.message || msg;
@@ -2494,21 +3209,34 @@ function getTodoTitleForNote(note) {
 }
 
 function renderNotesBrowserPanelHTML(notes, opts, allNotes) {
+    const settings = ttGetSettings();
+    const cfg = (settings && settings.notes && settings.notes.list) ? settings.notes.list : {};
+    const showType = cfg.note_type !== false;
+    const showCategory = cfg.category !== false;
+    const showAttach = cfg.attachment !== false;
+    const showCreated = cfg.created !== false;
+    const showSnippet = cfg.snippet !== false;
+
     const items = (Array.isArray(notes) ? notes : []);
     const o = opts || getNotesRouteOptions();
 
     const listItems = items.map((n) => {
         const id = escapeHtml(String(n.id || ''));
-        const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
-        const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
-        const category = escapeHtml(String(n.category || 'general'));
-        const meta = todoId
-            ? `Note #${id} · ${noteType} · ${category} · Todo #${todoId}`
-            : `Note #${id} · ${noteType} · ${category}`;
-        const created = escapeHtml(formatDate(n.created_at));
-        const snippet = escapeHtml(_noteSnippet(n.content, 140));
+        const todoIdRaw = n.todo_id != null ? String(n.todo_id) : '';
+        const todoId = todoIdRaw ? escapeHtml(todoIdRaw) : '';
+        const noteTypeRaw = String(n.note_type || (n.todo_id ? 'attached' : 'project'));
+        const categoryRaw = String(n.category || 'general');
+        const title = escapeHtml(String((n.title || '')).trim());
+        const label = title || `Note #${id}`;
+        const metaParts = [`#${id}`];
+        if (showType) metaParts.push(noteTypeRaw);
+        if (showCategory) metaParts.push(categoryRaw);
+        if (showAttach && todoIdRaw) metaParts.push(`Todo #${todoIdRaw}`);
+        const meta = metaParts.join(' · ');
+        const created = showCreated ? escapeHtml(formatDate(n.created_at)) : '';
+        const snippet = showSnippet ? escapeHtml(_noteSnippet(n.content, 140)) : '';
         return `
-            <calcite-list-item value="${id}" label="${escapeHtml(meta)}" description="${snippet || '—'}" metadata="${created}"></calcite-list-item>
+            <calcite-list-item value="${id}" label="${label}" description="${snippet || (showSnippet ? '—' : '')}" metadata="${escapeHtml([meta, created].filter(Boolean).join(' · '))}"></calcite-list-item>
         `;
     }).join('');
 
@@ -2535,6 +3263,14 @@ function renderMainNotesPlaceholderHTML(notes) {
 
 function renderNoteDetailHTML(note) {
     const n = note || {};
+    const settings = ttGetSettings();
+    const cfg = (settings && settings.notes && settings.notes.detail) ? settings.notes.detail : {};
+    const showMeta = cfg.metadata !== false;
+    const showAttach = cfg.attachment !== false;
+    const showTitle = cfg.title !== false;
+    const showCategory = cfg.category !== false;
+    const showContent = cfg.content !== false;
+
     const idNum = parseInt(String(n.id || ''), 10);
     const id = escapeHtml(String(idNum || ''));
     const created = escapeHtml(formatDate(n.created_at));
@@ -2542,7 +3278,7 @@ function renderNoteDetailHTML(note) {
     const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
     const category = escapeHtml(String(n.category || 'general'));
     const todoTitle = todoId ? escapeHtml(getTodoTitleForNote(n)) : '';
-    const todoAttachRow = todoId
+    const todoAttachRow = (showAttach && todoId)
         ? `<div class="flex items-center gap-2">
                 <span class="text-sm text-color-2">Attached to ${todoTitle}</span>
                 <calcite-button appearance="outline" scale="s" icon-start="link" onclick="router.navigate('/todo/${todoId}')">
@@ -2550,26 +3286,38 @@ function renderNoteDetailHTML(note) {
                 </calcite-button>
            </div>`
         : '';
+    const subtitle = showMeta ? `Created: ${created} · ${noteType} · ${category}` : '';
 
     return `
         <calcite-card>
-            <div slot="title">Note #${id}</div>
-            <div slot="subtitle" class="text-xs text-color-3">Created: ${created} · ${noteType} · ${category}</div>
+            <div slot="title">${escapeHtml(String((n.title || '')).trim()) || `Note #${id}`}</div>
+            ${subtitle ? `<div slot="subtitle" class="text-xs text-color-3">${subtitle}</div>` : ''}
             <div class="space-y-3">
                 ${todoAttachRow ? `<div class="flex gap-2">${todoAttachRow}</div>` : ''}
                 <div class="flex items-center justify-between gap-2">
                     <calcite-chip id="ttNoteAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
                 </div>
 
-                <calcite-label>
-                    Category
-                    <calcite-input data-tt-note-field="category" data-tt-note-id="${idNum || 0}" value="${escapeHtml(String(n.category || 'general'))}"></calcite-input>
-                </calcite-label>
+                ${showTitle ? `
+                    <calcite-label>
+                        Title
+                        <calcite-input data-tt-note-field="title" data-tt-note-id="${idNum || 0}" value="${escapeHtml(String((n.title || '')).trim())}"></calcite-input>
+                    </calcite-label>
+                ` : ''}
 
-                <calcite-label>
-                    Content (Markdown)
-                    <tt-md-editor data-tt-note-field="content" data-tt-note-id="${idNum || 0}" height="360px" placeholder="Write a note..."></tt-md-editor>
-                </calcite-label>
+                ${showCategory ? `
+                    <calcite-label>
+                        Category
+                        <calcite-input data-tt-note-field="category" data-tt-note-id="${idNum || 0}" value="${escapeHtml(String(n.category || 'general'))}"></calcite-input>
+                    </calcite-label>
+                ` : ''}
+
+                ${showContent ? `
+                    <calcite-label>
+                        Content (Markdown)
+                        <tt-md-editor data-tt-note-field="content" data-tt-note-id="${idNum || 0}" height="360px" placeholder="Write a note..."></tt-md-editor>
+                    </calcite-label>
+                ` : ''}
 
                 <div class="flex gap-2">
                     <calcite-button appearance="solid" kind="danger" scale="s" icon-start="trash" onclick="deleteNote(${idNum || 0})">Delete</calcite-button>
@@ -2643,6 +3391,7 @@ function initializeNoteDetailView(note) {
             const patch = {};
             if (field === 'content') patch.content = value;
             if (field === 'category') patch.category = value;
+            if (field === 'title') patch.title = value;
             if (!Object.keys(patch).length) return;
             schedule(noteId, patch, 450);
         };
@@ -2654,6 +3403,14 @@ function initializeNoteDetailView(note) {
 }
 
 function renderMainNotesHTML(notes, options) {
+    const settings = ttGetSettings();
+    const cfg = (settings && settings.notes && settings.notes.list) ? settings.notes.list : {};
+    const showType = cfg.note_type !== false;
+    const showCategory = cfg.category !== false;
+    const showAttach = cfg.attachment !== false;
+    const showCreated = cfg.created !== false;
+    const showSnippet = cfg.snippet !== false;
+
     const o = options || {};
     const view = (o.view === 'list' || o.view === 'table') ? o.view : 'grid';
     const itemsAll = Array.isArray(notes) ? notes : [];
@@ -2668,14 +3425,20 @@ function renderMainNotesHTML(notes, options) {
     const noteCard = (n) => {
         const idNum = parseInt(String(n.id || ''), 10) || 0;
         const id = escapeHtml(String(idNum));
-        const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
-        const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
-        const category = escapeHtml(String(n.category || 'general'));
-        const created = escapeHtml(formatDate(n.created_at));
-        const snippet = escapeHtml(_noteSnippet(n.content, 160));
-        const meta = todoId ? `#${id} · ${noteType} · ${category} · Todo #${todoId}` : `#${id} · ${noteType} · ${category}`;
+        const title = escapeHtml(String((n.title || '')).trim());
+        const todoIdRaw = n.todo_id != null ? String(n.todo_id) : '';
+        const todoId = todoIdRaw ? escapeHtml(todoIdRaw) : '';
+        const noteTypeRaw = String(n.note_type || (n.todo_id ? 'attached' : 'project'));
+        const categoryRaw = String(n.category || 'general');
+        const created = showCreated ? escapeHtml(formatDate(n.created_at)) : '';
+        const snippet = showSnippet ? escapeHtml(_noteSnippet(n.content, 160)) : '';
+        const metaParts = [`#${id}`];
+        if (showType) metaParts.push(noteTypeRaw);
+        if (showCategory) metaParts.push(categoryRaw);
+        if (showAttach && todoIdRaw) metaParts.push(`Todo #${todoIdRaw}`);
+        const meta = metaParts.join(' · ');
         const attachedTitle = (n.todo_id != null) ? escapeHtml(getTodoTitleForNote(n)) : '';
-        const attachRow = (n.todo_id != null)
+        const attachRow = (showAttach && n.todo_id != null)
             ? `<div class="flex items-center gap-2 mt-2">
                     <span class="text-sm text-color-2">Attached to ${attachedTitle}</span>
                     <calcite-button appearance="outline" scale="s" icon-start="link"
@@ -2686,9 +3449,9 @@ function renderMainNotesHTML(notes, options) {
             : '';
         return `
             <calcite-card class="tt-note-card cursor-pointer tt-hover-card" onclick="router.navigate('/notes/${idNum}')">
-                <div slot="title">Note #${id}</div>
-                <div slot="subtitle" class="text-xs text-color-3">${meta} · ${created}</div>
-                <div class="text-sm text-color-2">${snippet || '—'}</div>
+                <div slot="title">${title || `Note #${id}`}</div>
+                <div slot="subtitle" class="text-xs text-color-3">${escapeHtml([meta, created].filter(Boolean).join(' · '))}</div>
+                ${showSnippet ? `<div class="text-sm text-color-2">${snippet || '—'}</div>` : ''}
                 ${attachRow}
             </calcite-card>
         `;
@@ -2702,14 +3465,19 @@ function renderMainNotesHTML(notes, options) {
     } else if (view === 'list') {
         const rows = pageItems.map((n) => {
             const idNum = parseInt(String(n.id || ''), 10) || 0;
-            const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
-            const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
-            const category = escapeHtml(String(n.category || 'general'));
-            const created = escapeHtml(formatDate(n.created_at));
-            const meta = todoId ? `#${idNum} · ${noteType} · ${category} · Todo #${todoId}` : `#${idNum} · ${noteType} · ${category}`;
-            const desc = escapeHtml(_noteSnippet(n.content, 140));
+            const todoIdRaw = n.todo_id != null ? String(n.todo_id) : '';
+            const todoId = todoIdRaw ? escapeHtml(todoIdRaw) : '';
+            const noteTypeRaw = String(n.note_type || (n.todo_id ? 'attached' : 'project'));
+            const categoryRaw = String(n.category || 'general');
+            const created = showCreated ? escapeHtml(formatDate(n.created_at)) : '';
+            const metaParts = [`#${idNum}`];
+            if (showType) metaParts.push(noteTypeRaw);
+            if (showCategory) metaParts.push(categoryRaw);
+            if (showAttach && todoIdRaw) metaParts.push(`Todo #${todoIdRaw}`);
+            const meta = metaParts.join(' · ');
+            const desc = showSnippet ? escapeHtml(_noteSnippet(n.content, 140)) : '';
             const attachedTitle = (n.todo_id != null) ? escapeHtml(getTodoTitleForNote(n)) : '';
-            const attachRow = (n.todo_id != null)
+            const attachRow = (showAttach && n.todo_id != null)
                 ? `<div class="flex items-center gap-2">
                         <span class="text-sm text-color-2">Attached to ${attachedTitle}</span>
                         <calcite-button appearance="outline" scale="s" icon-start="link"
@@ -2723,21 +3491,29 @@ function renderMainNotesHTML(notes, options) {
                     <div slot="content-top" class="text-xs text-color-3">${escapeHtml(meta)}</div>
                     <div slot="content-bottom" class="space-y-1">
                         ${attachRow}
-                        <div class="text-sm text-color-2">${desc || '—'}</div>
+                        ${showSnippet ? `<div class="text-sm text-color-2">${desc || '—'}</div>` : ''}
                     </div>
                 </calcite-list-item>
             `;
         }).join('');
         body = `<calcite-list id="ttMainNotesList" selection-mode="single" selection-appearance="highlight">${rows}</calcite-list>`;
     } else {
+        const headerCells = [
+            `<calcite-table-header heading="ID" alignment="end"></calcite-table-header>`,
+            showType ? `<calcite-table-header heading="Type"></calcite-table-header>` : '',
+            showCategory ? `<calcite-table-header heading="Category"></calcite-table-header>` : '',
+            showAttach ? `<calcite-table-header heading="Attachment"></calcite-table-header>` : '',
+            showCreated ? `<calcite-table-header heading="Created"></calcite-table-header>` : '',
+        ].filter(Boolean).join('');
+
         const rows = pageItems.map((n) => {
             const idNum = parseInt(String(n.id || ''), 10) || 0;
             const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
             const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
             const category = escapeHtml(String(n.category || 'general'));
-            const created = escapeHtml(formatDate(n.created_at));
+            const created = showCreated ? escapeHtml(formatDate(n.created_at)) : '';
             const attachedTitle = (n.todo_id != null) ? escapeHtml(getTodoTitleForNote(n)) : '';
-            const attachCell = (n.todo_id != null)
+            const attachCell = (showAttach && n.todo_id != null)
                 ? `<div class="flex items-center gap-2">
                         <span class="text-sm text-color-2">Attached to ${attachedTitle}</span>
                         <calcite-button appearance="outline" scale="s" icon-start="link"
@@ -2746,24 +3522,24 @@ function renderMainNotesHTML(notes, options) {
                         </calcite-button>
                    </div>`
                 : '—';
+            const cells = [
+                `<calcite-table-cell alignment="end">#${idNum}</calcite-table-cell>`,
+                showType ? `<calcite-table-cell>${noteType}</calcite-table-cell>` : '',
+                showCategory ? `<calcite-table-cell>${category}</calcite-table-cell>` : '',
+                showAttach ? `<calcite-table-cell>${attachCell}</calcite-table-cell>` : '',
+                showCreated ? `<calcite-table-cell>${created}</calcite-table-cell>` : '',
+            ].filter(Boolean).join('');
+
             return `
                 <calcite-table-row data-tt-note-id="${idNum}" class="tt-main-note-row">
-                    <calcite-table-cell alignment="end">#${idNum}</calcite-table-cell>
-                    <calcite-table-cell>${noteType}</calcite-table-cell>
-                    <calcite-table-cell>${category}</calcite-table-cell>
-                    <calcite-table-cell>${attachCell}</calcite-table-cell>
-                    <calcite-table-cell>${created}</calcite-table-cell>
+                    ${cells}
                 </calcite-table-row>
             `;
         }).join('');
         body = `
             <calcite-table bordered striped caption="Notes">
                 <calcite-table-row slot="table-header">
-                    <calcite-table-header heading="ID" alignment="end"></calcite-table-header>
-                    <calcite-table-header heading="Type"></calcite-table-header>
-                    <calcite-table-header heading="Category"></calcite-table-header>
-                    <calcite-table-header heading="Attachment"></calcite-table-header>
-                    <calcite-table-header heading="Created"></calcite-table-header>
+                    ${headerCells}
                 </calcite-table-row>
                 ${rows}
             </calcite-table>
@@ -2883,6 +3659,11 @@ function addCreateNoteModal() {
                 <calcite-combobox id="ttCreateNoteTodoBox" selection-mode="single" placeholder="Select a todo...">
                     <calcite-combobox-item value="" text-label="Loading todos..."></calcite-combobox-item>
                 </calcite-combobox>
+            </calcite-label>
+
+            <calcite-label>
+                Title
+                <calcite-input name="title" placeholder="Optional title"></calcite-input>
             </calcite-label>
 
             <calcite-label>

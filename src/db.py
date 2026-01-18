@@ -75,6 +75,10 @@ class Todo(Base):
     task_size = Column(Integer, nullable=True)
     # priority_class: optional A-E scale (importance)
     priority_class = Column(String(1), nullable=True)
+
+    # v6: Numeric progress + per-todo AI instructions (JSON text)
+    completion_percentage = Column(Integer, nullable=True)  # 0-100 (validated in app)
+    ai_instructions = Column(Text, nullable=False, default="{}")
     
     # Hierarchical structure
     parent_id = Column(Integer, ForeignKey("todos.id"), nullable=True)
@@ -123,6 +127,23 @@ class Todo(Base):
     # Tags (many-to-many)
     tags = relationship("Tag", secondary="todo_tags", back_populates="todos")
 
+    # v6: Informational relations ("relates to")
+    relations = relationship(
+        "TodoRelation",
+        foreign_keys="TodoRelation.todo_id",
+        back_populates="todo",
+        cascade="all, delete-orphan",
+    )
+    related_from = relationship(
+        "TodoRelation",
+        foreign_keys="TodoRelation.relates_to_id",
+        cascade="all, delete-orphan",
+        overlaps="relations,todo",
+    )
+
+    # v6: File attachments
+    attachments = relationship("TodoAttachment", back_populates="todo", cascade="all, delete-orphan")
+
 
 class Note(Base):
     """
@@ -131,6 +152,7 @@ class Note(Base):
     __tablename__ = "notes"
 
     id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=True)
     content = Column(Text, nullable=False)
     todo_id = Column(Integer, ForeignKey("todos.id"), nullable=True)
     # New in schema v5:
@@ -142,6 +164,38 @@ class Note(Base):
     
     # Relationships
     todo = relationship("Todo", back_populates="notes")
+
+
+class TodoRelation(Base):
+    """
+    Informational relationship between todos (NOT a dependency).
+    Example: todo A "relates to" todo B.
+    """
+    __tablename__ = "todo_relations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    todo_id = Column(Integer, ForeignKey("todos.id"), nullable=False)
+    relates_to_id = Column(Integer, ForeignKey("todos.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    todo = relationship("Todo", foreign_keys=[todo_id], back_populates="relations", overlaps="related_from")
+    relates_to = relationship("Todo", foreign_keys=[relates_to_id], overlaps="related_from,relations")
+
+
+class TodoAttachment(Base):
+    """
+    File attachment metadata for a todo. The file is stored on disk; the DB stores metadata + path.
+    """
+    __tablename__ = "todo_attachments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    todo_id = Column(Integer, ForeignKey("todos.id"), nullable=False)
+    file_path = Column(Text, nullable=False)
+    file_name = Column(String(255), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    todo = relationship("Todo", back_populates="attachments")
 
 
 class TodoDependency(Base):

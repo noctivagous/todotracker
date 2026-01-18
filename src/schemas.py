@@ -3,7 +3,8 @@ Pydantic schemas for request/response validation and serialization.
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Any, Dict
+import json
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from .db import TodoCategory, TodoStatus, NoteType
 
@@ -49,6 +50,18 @@ class TodoBase(BaseModel):
     work_remaining: Optional[str] = Field(None, description="What still needs to be done")
     implementation_issues: Optional[str] = Field(None, description="Problems, blockers, or concerns encountered")
 
+    # v6: Numeric progress + per-todo AI instruction flags (stored as JSON in DB)
+    completion_percentage: Optional[int] = Field(
+        None,
+        ge=0,
+        le=100,
+        description="Optional numeric completion percentage (0-100).",
+    )
+    ai_instructions: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Optional AI instruction flags (JSON object). Stored as JSON text in DB.",
+    )
+
     @field_validator("priority_class", mode="before")
     @classmethod
     def _normalize_priority_class(cls, v):
@@ -62,6 +75,46 @@ class TodoBase(BaseModel):
                 raise ValueError("priority_class must be one of A, B, C, D, E")
             return s
         raise ValueError("priority_class must be a string")
+
+    @field_validator("completion_percentage", mode="before")
+    @classmethod
+    def _normalize_completion_percentage(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip()
+            if s == "":
+                return None
+            try:
+                v = int(s)
+            except Exception:
+                raise ValueError("completion_percentage must be an integer (0-100)")
+        if isinstance(v, (int,)):
+            if v < 0 or v > 100:
+                raise ValueError("completion_percentage must be between 0 and 100")
+            return v
+        raise ValueError("completion_percentage must be an integer (0-100)")
+
+    @field_validator("ai_instructions", mode="before")
+    @classmethod
+    def _normalize_ai_instructions(cls, v):
+        if v is None:
+            return None
+        # Stored in DB as JSON text; accept either dict or JSON string.
+        if isinstance(v, str):
+            s = v.strip()
+            if s == "":
+                return None
+            try:
+                obj = json.loads(s)
+            except Exception:
+                raise ValueError("ai_instructions must be valid JSON")
+            if not isinstance(obj, dict):
+                raise ValueError("ai_instructions must be a JSON object")
+            return obj
+        if isinstance(v, dict):
+            return v
+        raise ValueError("ai_instructions must be a JSON object (dict) or JSON string")
 
 
 class TodoCreate(TodoBase):
@@ -88,6 +141,10 @@ class TodoUpdate(BaseModel):
     work_completed: Optional[str] = Field(None, description="What has been done on this task")
     work_remaining: Optional[str] = Field(None, description="What still needs to be done")
     implementation_issues: Optional[str] = Field(None, description="Problems, blockers, or concerns encountered")
+
+    # v6: Numeric progress + per-todo AI instruction flags
+    completion_percentage: Optional[int] = Field(None, ge=0, le=100, description="Optional numeric completion percentage (0-100).")
+    ai_instructions: Optional[Dict[str, Any]] = Field(None, description="Optional AI instruction flags (JSON object).")
     
     # Legacy fields (deprecated, use new progress fields above)
     progress_summary: Optional[str] = None
@@ -106,6 +163,16 @@ class TodoUpdate(BaseModel):
                 raise ValueError("priority_class must be one of A, B, C, D, E")
             return s
         raise ValueError("priority_class must be a string")
+
+    @field_validator("completion_percentage", mode="before")
+    @classmethod
+    def _normalize_completion_percentage_update(cls, v):
+        return TodoBase._normalize_completion_percentage(v)
+
+    @field_validator("ai_instructions", mode="before")
+    @classmethod
+    def _normalize_ai_instructions_update(cls, v):
+        return TodoBase._normalize_ai_instructions(v)
 
 
 class TodoInDB(TodoBase):
@@ -142,6 +209,7 @@ def _normalize_note_category(v: Optional[str]) -> Optional[str]:
 
 class NoteCreate(BaseModel):
     """Schema for creating a new note."""
+    title: Optional[str] = Field(None, max_length=500, description="Optional note title")
     content: str = Field(..., min_length=1)
     todo_id: Optional[int] = None
     category: Optional[str] = Field(None, description="Optional note category (e.g., research)")
@@ -154,6 +222,7 @@ class NoteCreate(BaseModel):
 
 class NoteUpdate(BaseModel):
     """Schema for updating a note."""
+    title: Optional[str] = Field(None, max_length=500, description="Optional note title")
     content: Optional[str] = Field(None, min_length=1)
     todo_id: Optional[int] = None
     category: Optional[str] = None
@@ -167,6 +236,7 @@ class NoteUpdate(BaseModel):
 class NoteInDB(BaseModel):
     """Schema for Note in database."""
     id: int
+    title: Optional[str] = None
     content: str
     todo_id: Optional[int] = None
     note_type: NoteType
@@ -229,6 +299,10 @@ class TodoDetail(TodoInDB):
     dependencies: List[TodoDependencyEdge] = []  # prerequisites for this todo
     dependents: List[TodoDependencyEdge] = []    # todos that depend on this todo
     dependencies_met: bool = True
+
+    # v6: Relations + attachments (optional; populated by API detail endpoint)
+    relates_to: List[TodoSummary] = []
+    attachments: List[dict] = []
 
 
 # Search/Filter Schemas

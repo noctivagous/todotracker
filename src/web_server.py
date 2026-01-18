@@ -3,7 +3,7 @@ FastAPI Web Server for TodoTracker.
 Provides a web UI for humans to interact with the todo system.
 """
 
-from fastapi import FastAPI, Request, Depends, HTTPException, Form
+from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -16,8 +16,10 @@ import json
 import csv
 import io
 from datetime import datetime
+from uuid import uuid4
+import shutil
 
-from .db import init_db, get_db, get_db_path, TodoCategory, TodoStatus, Note, TodoDependency, Tag
+from .db import init_db, get_db, get_db_path, TodoCategory, TodoStatus, Note, TodoDependency, Tag, Todo
 from .schemas import (
     TodoCreate, TodoUpdate, TodoInDB, TodoWithChildren,
     NoteCreate, NoteUpdate, NoteInDB,
@@ -158,7 +160,210 @@ async def api_get_todo_detail(todo_id: int, db: Session = Depends(get_db)):
     data["dependencies"] = prerequisites
     data["dependents"] = dependents
     data["dependencies_met"] = bool(deps_met)
+
+    # v6: informational relations ("relates to") + attachments
+    try:
+        relates_to_ids = crud.get_relates_to_ids(db, todo_id)
+        if relates_to_ids:
+            related = db.query(Todo).filter(Todo.id.in_(relates_to_ids)).all()
+            by_id = {t.id: t for t in related}
+            data["relates_to"] = [
+                {
+                    "id": by_id[rid].id,
+                    "title": by_id[rid].title,
+                    "status": by_id[rid].status,
+                    "category": by_id[rid].category,
+                }
+                for rid in relates_to_ids
+                if rid in by_id
+            ]
+        else:
+            data["relates_to"] = []
+    except Exception:
+        data["relates_to"] = []
+
+    try:
+        attachments = crud.get_todo_attachments(db, todo_id)
+        data["attachments"] = [
+            {
+                "id": a.id,
+                "todo_id": a.todo_id,
+                "file_path": a.file_path,
+                "file_name": a.file_name,
+                "file_size": a.file_size,
+                "uploaded_at": a.uploaded_at.isoformat() if getattr(a, "uploaded_at", None) else None,
+            }
+            for a in (attachments or [])
+        ]
+    except Exception:
+        data["attachments"] = []
+
     return data
+
+
+def _attachments_dir() -> Path:
+    """
+    Attachment storage directory next to the active database file.
+    Example: <project>/.todos/attachments/
+    """
+    p = Path(get_db_path()).expanduser().resolve()
+    return p.parent / "attachments"
+
+
+def _safe_filename(name: str) -> str:
+    s = (name or "").strip()
+    # Basic path traversal defense.
+    s = s.replace("\\", "/").split("/")[-1]
+    if not s:
+        s = "attachment"
+    return s
+
+
+# ----------------------------------------------------------------------------
+# v6: Todo relations ("relates to")
+# ----------------------------------------------------------------------------
+
+@app.get("/api/todos/{todo_id}/relations")
+async def api_get_relations(todo_id: int, db: Session = Depends(get_db)):
+    """Get relates_to IDs for a todo (informational links)."""
+    ids = crud.get_relates_to_ids(db, todo_id)
+    return {"todo_id": todo_id, "relates_to_ids": ids}
+
+
+@app.put("/api/todos/{todo_id}/relations")
+async def api_set_relations(todo_id: int, payload: dict, db: Session = Depends(get_db)):
+    """Replace relates_to links for a todo."""
+    ids = payload.get("relates_to_ids") if isinstance(payload, dict) else None
+    if ids is None:
+        raise HTTPException(status_code=400, detail="relates_to_ids is required")
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail="relates_to_ids must be a list of todo IDs")
+    crud.set_relates_to_ids(db, todo_id, ids)
+    return {"message": "Relations updated", "todo_id": todo_id, "relates_to_ids": crud.get_relates_to_ids(db, todo_id)}
+
+
+# ----------------------------------------------------------------------------
+# v6: Todo attachments
+# ----------------------------------------------------------------------------
+
+@app.post("/api/todos/{todo_id}/attachments")
+async def api_upload_attachment(todo_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload an attachment for a todo."""
+    # Ensure todo exists
+    todo = crud.get_todo(db, todo_id)
+    if not todo:
+        raise HTTPException(status_code=404, detail="Todo not found")
+
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="file is required")
+
+    att_dir = _attachments_dir()
+    att_dir.mkdir(parents=True, exist_ok=True)
+
+    orig_name = _safe_filename(file.filename)
+    unique = uuid4().hex
+    stored_name = f"{unique}__{orig_name}"
+    stored_path = (att_dir / stored_name).resolve()
+
+    # Save to disk
+    try:
+        with stored_path.open("wb") as out:
+            shutil.copyfileobj(file.file, out)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
+
+    # Determine file size
+    size = None
+    try:
+        size = stored_path.stat().st_size
+    except Exception:
+        pass
+
+    att = crud.create_todo_attachment(
+        db,
+        todo_id=todo_id,
+        file_path=str(stored_path),
+        file_name=orig_name,
+        file_size=size,
+    )
+    return {
+        "message": "Attachment uploaded",
+        "attachment": {
+            "id": att.id,
+            "todo_id": att.todo_id,
+            "file_path": att.file_path,
+            "file_name": att.file_name,
+            "file_size": att.file_size,
+            "uploaded_at": att.uploaded_at.isoformat() if getattr(att, "uploaded_at", None) else None,
+        },
+    }
+
+
+@app.get("/api/todos/{todo_id}/attachments")
+async def api_list_attachments(todo_id: int, db: Session = Depends(get_db)):
+    """List attachments for a todo."""
+    todo = crud.get_todo(db, todo_id)
+    if not todo:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    atts = crud.get_todo_attachments(db, todo_id)
+    return [
+        {
+            "id": a.id,
+            "todo_id": a.todo_id,
+            "file_path": a.file_path,
+            "file_name": a.file_name,
+            "file_size": a.file_size,
+            "uploaded_at": a.uploaded_at.isoformat() if getattr(a, "uploaded_at", None) else None,
+        }
+        for a in (atts or [])
+    ]
+
+
+@app.get("/api/attachments/{attachment_id}/download")
+async def api_download_attachment(attachment_id: int, db: Session = Depends(get_db)):
+    """Download an attachment by ID."""
+    # Query directly via SQLAlchemy session (crud helper keeps minimal surface)
+    from .db import TodoAttachment
+    att = db.query(TodoAttachment).filter(TodoAttachment.id == int(attachment_id)).first()
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    path = Path(str(att.file_path)).expanduser()
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="Attachment file missing on disk")
+
+    def _iterfile(p: Path, chunk_size: int = 1024 * 1024):
+        with p.open("rb") as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+
+    headers = {"Content-Disposition": f'attachment; filename="{_safe_filename(att.file_name)}"'}
+    return StreamingResponse(_iterfile(path), media_type="application/octet-stream", headers=headers)
+
+
+@app.delete("/api/attachments/{attachment_id}", response_model=MessageResponse)
+async def api_delete_attachment(attachment_id: int, db: Session = Depends(get_db)):
+    """Delete an attachment (removes DB row; best-effort deletes file on disk)."""
+    from .db import TodoAttachment
+    att = db.query(TodoAttachment).filter(TodoAttachment.id == int(attachment_id)).first()
+    if not att:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # Best-effort file removal before deleting row
+    try:
+        p = Path(str(att.file_path)).expanduser()
+        if p.exists() and p.is_file():
+            p.unlink()
+    except Exception:
+        pass
+
+    ok = crud.delete_todo_attachment(db, int(attachment_id))
+    if not ok:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return MessageResponse(message="Attachment deleted successfully")
 
 
 @app.post("/api/todos", response_model=TodoInDB)
@@ -451,13 +656,14 @@ async def api_update_note(note_id: int, note_update: NoteUpdate, db: Session = D
 
 @app.post("/api/notes/form")
 async def api_create_note_form(
+    title: Optional[str] = Form(None),
     content: str = Form(...),
     todo_id: Optional[int] = Form(None),
     category: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """Create a new note from form data."""
-    note_create = NoteCreate(content=content, todo_id=todo_id, category=category)
+    note_create = NoteCreate(title=title, content=content, todo_id=todo_id, category=category)
     crud.create_note(db, note_create)
     
     if todo_id:
@@ -555,6 +761,8 @@ async def export_json(db: Session = Depends(get_db)):
                 "queue": getattr(todo, "queue", 0) or 0,
                 "task_size": getattr(todo, "task_size", None),
                 "priority_class": getattr(todo, "priority_class", None),
+                "completion_percentage": getattr(todo, "completion_percentage", None),
+                "ai_instructions": getattr(todo, "ai_instructions", None),
                 "progress_summary": todo.progress_summary,
                 "remaining_work": todo.remaining_work,
                 "created_at": todo.created_at.isoformat(),
@@ -565,6 +773,7 @@ async def export_json(db: Session = Depends(get_db)):
         "notes": [
             {
                 "id": note.id,
+                "title": getattr(note, "title", None),
                 "content": note.content,
                 "todo_id": note.todo_id,
                 "note_type": note.note_type.value if getattr(note, "note_type", None) else None,

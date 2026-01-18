@@ -303,6 +303,16 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                         "type": "string",
                         "description": "Optional priority class (A-E)",
                     },
+                    "completion_percentage": {
+                        "type": "integer",
+                        "description": "Optional numeric completion percentage (0-100).",
+                        "minimum": 0,
+                        "maximum": 100,
+                    },
+                    "ai_instructions": {
+                        "type": "object",
+                        "description": "Optional AI instruction flags (JSON object), e.g. {\"research_on_web\": true}.",
+                    },
                 },
                 "required": ["title"],
             }),
@@ -340,6 +350,8 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                                 "queue": {"type": "integer", "description": "Execution queue position. 0 means not in queue.", "minimum": 0, "default": 0},
                                 "task_size": {"type": "integer", "description": "Optional task size (1-5)", "minimum": 1, "maximum": 5},
                                 "priority_class": {"type": "string", "description": "Optional priority class (A-E)"},
+                                "completion_percentage": {"type": "integer", "description": "Optional numeric completion percentage (0-100).", "minimum": 0, "maximum": 100},
+                                "ai_instructions": {"type": "object", "description": "Optional AI instruction flags (JSON object)"},
                             },
                             "required": ["title"],
                         },
@@ -505,6 +517,16 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                         "type": "string",
                         "description": "Optional priority class (A-E)",
                     },
+                    "completion_percentage": {
+                        "type": "integer",
+                        "description": "Optional numeric completion percentage (0-100).",
+                        "minimum": 0,
+                        "maximum": 100,
+                    },
+                    "ai_instructions": {
+                        "type": "object",
+                        "description": "Optional AI instruction flags (JSON object), e.g. {\"research_on_web\": true}.",
+                    },
                 },
                 "required": ["todo_id"],
             }),
@@ -536,6 +558,8 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                                 "queue": {"type": "integer", "description": "Execution queue position. 0 means not in queue.", "minimum": 0},
                                 "task_size": {"type": "integer", "description": "Optional task size (1-5)", "minimum": 1, "maximum": 5},
                                 "priority_class": {"type": "string", "description": "Optional priority class (A-E)"},
+                                "completion_percentage": {"type": "integer", "description": "Optional numeric completion percentage (0-100).", "minimum": 0, "maximum": 100},
+                                "ai_instructions": {"type": "object", "description": "Optional AI instruction flags (JSON object)"},
                             },
                             "required": ["todo_id"],
                         },
@@ -632,6 +656,10 @@ Note: When starting work on any returned todo, call update_todo to update progre
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Optional note title",
+                    },
                     "content": {
                         "type": "string",
                         "description": "The content of the note",
@@ -675,6 +703,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
                         "items": {
                             "type": "object",
                             "properties": {
+                                "title": {"type": "string", "description": "Optional note title"},
                                 "content": {"type": "string", "description": "The note content"},
                                 "todo_id": {"type": "integer", "description": "Optional: Todo ID to attach the note to"},
                                 "category": {"type": "string", "description": "Optional note category (e.g., research)"},
@@ -696,6 +725,10 @@ Note: When starting work on any returned todo, call update_todo to update progre
                     "note_id": {
                         "type": "integer",
                         "description": "The ID of the note to update",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Optional note title",
                     },
                     "content": {
                         "type": "string",
@@ -979,6 +1012,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 work_completed=arguments.get("work_completed"),
                 work_remaining=arguments.get("work_remaining"),
                 implementation_issues=arguments.get("implementation_issues"),
+                completion_percentage=arguments.get("completion_percentage"),
+                ai_instructions=arguments.get("ai_instructions"),
             )
             todo = crud.create_todo(db, todo_create)
             return [TextContent(
@@ -1014,6 +1049,8 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         work_completed=item.get("work_completed"),
                         work_remaining=item.get("work_remaining"),
                         implementation_issues=item.get("implementation_issues"),
+                        completion_percentage=item.get("completion_percentage"),
+                        ai_instructions=item.get("ai_instructions"),
                     )
                     todo = crud.create_todo(db, todo_create)
                     created.append(_serialize_todo(todo))
@@ -1205,6 +1242,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         
         elif name == "create_note":
             note_create = NoteCreate(
+                title=arguments.get("title"),
                 content=arguments["content"],
                 todo_id=arguments.get("todo_id"),
                 category=arguments.get("category"),
@@ -1216,6 +1254,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     "message": "Note created successfully",
                     "note": {
                         "id": note.id,
+                        "title": getattr(note, "title", None),
                         "content": note.content,
                         "todo_id": note.todo_id,
                         "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
@@ -1238,6 +1277,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         continue
                     found.append({
                         "id": note.id,
+                        "title": getattr(note, "title", None),
                         "content": note.content,
                         "todo_id": note.todo_id,
                         "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
@@ -1265,6 +1305,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             for idx, item in enumerate(items):
                 try:
                     note_create = NoteCreate(
+                        title=item.get("title"),
                         content=item["content"],
                         todo_id=item.get("todo_id"),
                         category=item.get("category"),
@@ -1272,6 +1313,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     note = crud.create_note(db, note_create)
                     created.append({
                         "id": note.id,
+                        "title": getattr(note, "title", None),
                         "content": note.content,
                         "todo_id": note.todo_id,
                         "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
@@ -1308,6 +1350,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                     "message": "Note updated successfully",
                     "note": {
                         "id": note.id,
+                        "title": getattr(note, "title", None),
                         "content": note.content,
                         "todo_id": note.todo_id,
                         "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
@@ -1789,6 +1832,13 @@ async def read_resource(uri: str) -> str:
 
 def _serialize_todo(todo) -> dict:
     """Serialize a todo to a dictionary."""
+    ai_raw = getattr(todo, "ai_instructions", None)
+    ai_obj = None
+    if ai_raw is not None:
+        try:
+            ai_obj = json.loads(ai_raw) if isinstance(ai_raw, str) else ai_raw
+        except Exception:
+            ai_obj = None
     return {
         "id": todo.id,
         "title": todo.title,
@@ -1801,6 +1851,8 @@ def _serialize_todo(todo) -> dict:
         "queue": getattr(todo, "queue", 0) or 0,
         "task_size": getattr(todo, "task_size", None),
         "priority_class": getattr(todo, "priority_class", None),
+        "completion_percentage": getattr(todo, "completion_percentage", None),
+        "ai_instructions": ai_obj,
         # Progress tracking fields
         "work_completed": getattr(todo, 'work_completed', None),
         "work_remaining": getattr(todo, 'work_remaining', None),
@@ -1841,11 +1893,37 @@ def _serialize_todo_tree(
     data["notes"] = [
         {
             "id": note.id,
+            "title": getattr(note, "title", None),
             "content": note.content,
+            "todo_id": getattr(note, "todo_id", None),
+            "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
+            "category": getattr(note, "category", None),
             "created_at": note.created_at.isoformat() if note.created_at else None
         }
         for note in _as_list(getattr(todo, "notes", None))
     ]
+
+    # v6: relations + attachments (best-effort)
+    if db is not None:
+        try:
+            data["relates_to_ids"] = crud.get_relates_to_ids(db, todo.id)
+        except Exception:
+            data["relates_to_ids"] = []
+        try:
+            atts = crud.get_todo_attachments(db, todo.id)
+            data["attachments"] = [
+                {
+                    "id": a.id,
+                    "todo_id": a.todo_id,
+                    "file_path": a.file_path,
+                    "file_name": a.file_name,
+                    "file_size": a.file_size,
+                    "uploaded_at": a.uploaded_at.isoformat() if getattr(a, "uploaded_at", None) else None,
+                }
+                for a in (atts or [])
+            ]
+        except Exception:
+            data["attachments"] = []
 
     if db is not None and include_dependency_status:
         try:

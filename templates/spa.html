@@ -19,7 +19,7 @@
     <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
     
     <!-- Custom TodoTracker styles -->
-    <link rel="stylesheet" href="/static/css/custom.css?v=20260118-03">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20260118-06">
     
     <script>
         // Set theme ASAP to avoid flash
@@ -99,6 +99,11 @@
                     </div>
                 </calcite-navigation>
 
+                <!-- Settings (left of user placeholder) -->
+                <calcite-button id="ttHeaderSettingsBtn" slot="content-end" appearance="transparent" scale="s" icon-start="gear" title="Settings">
+                    Settings
+                </calcite-button>
+
                 <calcite-navigation-user slot="user">
                     <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
                         <span id="ttThemeLabel">🌙 Dark</span>
@@ -110,7 +115,7 @@
 
         <!-- Main Content -->
         <main id="app-content">
-            <div class="p-6">
+            <div class="p-6 tt-content-container">
                 <calcite-loader id="app-loader" label="Loading" hidden></calcite-loader>
                 <div id="app-view" style="display: none;"></div>
             </div>
@@ -125,10 +130,10 @@
     <script src="/static/js/vendor/jsviews.min.js"></script>
 
     <!-- Load application JavaScript -->
-    <script src="/static/js/router.js?v=20260118-03"></script>
-    <script src="/static/js/tt_md_editor.js?v=20260118-03"></script>
-    <script src="/static/js/views.js?v=20260118-03"></script>
-    <script src="/static/js/app.js?v=20260118-03"></script>
+    <script src="/static/js/router.js?v=20260118-06"></script>
+    <script src="/static/js/tt_md_editor.js?v=20260118-06"></script>
+    <script src="/static/js/views.js?v=20260118-06"></script>
+    <script src="/static/js/app.js?v=20260118-06"></script>
     <script>
         // SPA nav "tabs"
         (function () {

@@ -4,9 +4,22 @@ These functions are used by both the MCP server and web server.
 """
 
 from typing import List, Optional
+import json
+from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, and_, func
-from .db import Todo, Note, TodoDependency, TodoStatus, TodoCategory, Tag, TodoTag, NoteType
+from .db import (
+    Todo,
+    Note,
+    TodoDependency,
+    TodoStatus,
+    TodoCategory,
+    Tag,
+    TodoTag,
+    NoteType,
+    TodoRelation,
+    TodoAttachment,
+)
 from .schemas import TodoCreate, TodoUpdate, NoteCreate, NoteUpdate, TodoSearch
 
 
@@ -28,7 +41,9 @@ def get_todo(db: Session, todo_id: int) -> Optional[Todo]:
     return db.query(Todo).options(
         joinedload(Todo.children),
         joinedload(Todo.notes),
-        joinedload(Todo.dependencies)
+        joinedload(Todo.dependencies),
+        joinedload(Todo.relations),
+        joinedload(Todo.attachments),
     ).filter(Todo.id == todo_id).first()
 
 
@@ -79,6 +94,16 @@ def create_todo(db: Session, todo: TodoCreate) -> Todo:
     if not _is_queue_relevant(getattr(todo, "status", None)):
         requested_queue = 0
 
+    ai_instr = getattr(todo, "ai_instructions", None)
+    if ai_instr is None:
+        ai_instr_json = "{}"
+    else:
+        try:
+            ai_instr_json = json.dumps(ai_instr)
+        except Exception:
+            # Be defensive: fall back to empty.
+            ai_instr_json = "{}"
+
     db_todo = Todo(
         title=todo.title,
         description=todo.description,
@@ -92,6 +117,8 @@ def create_todo(db: Session, todo: TodoCreate) -> Todo:
         work_completed=todo.work_completed,
         work_remaining=todo.work_remaining,
         implementation_issues=todo.implementation_issues,
+        completion_percentage=getattr(todo, "completion_percentage", None),
+        ai_instructions=ai_instr_json,
     )
     db.add(db_todo)
     db.flush()  # Get the ID before adding tags
@@ -120,6 +147,14 @@ def update_todo(db: Session, todo_id: int, todo_update: TodoUpdate) -> Optional[
     
     prev_queue = int(getattr(db_todo, "queue", 0) or 0)
     update_data = todo_update.model_dump(exclude_unset=True)
+
+    # v6: Serialize ai_instructions dict to JSON text for DB storage.
+    if "ai_instructions" in update_data:
+        ai_instr = update_data.get("ai_instructions")
+        if ai_instr is None:
+            update_data["ai_instructions"] = "{}"
+        else:
+            update_data["ai_instructions"] = json.dumps(ai_instr)
     
     # Handle tags separately
     tag_names = update_data.pop('tag_names', None)
@@ -516,6 +551,7 @@ def create_note(db: Session, note: NoteCreate) -> Note:
     nt = NoteType.ATTACHED if todo_id is not None else NoteType.PROJECT
     cat = (note.category or "").strip() or "general"
     db_note = Note(
+        title=getattr(note, "title", None),
         content=note.content,
         todo_id=todo_id,
         note_type=nt,
@@ -546,6 +582,70 @@ def update_note(db: Session, note_id: int, note_update: NoteUpdate) -> Optional[
     db.commit()
     db.refresh(db_note)
     return db_note
+
+
+# -----------------------------------------------------------------------------
+# v6: Todo relations ("relates to") + attachments
+# -----------------------------------------------------------------------------
+
+def get_relates_to_ids(db: Session, todo_id: int) -> List[int]:
+    """Get IDs that this todo relates to (informational links)."""
+    rows = db.query(TodoRelation.relates_to_id).filter(TodoRelation.todo_id == todo_id).all()
+    return [r[0] for r in rows if r and r[0] is not None]
+
+
+def set_relates_to_ids(db: Session, todo_id: int, relates_to_ids: List[int]) -> None:
+    """
+    Replace relates_to links for a todo. Idempotent.
+    """
+    db.query(TodoRelation).filter(TodoRelation.todo_id == todo_id).delete()
+    seen: set[int] = set()
+    for rid in relates_to_ids or []:
+        try:
+            rid_int = int(rid)
+        except Exception:
+            continue
+        if rid_int == int(todo_id):
+            continue
+        if rid_int in seen:
+            continue
+        seen.add(rid_int)
+        db.add(TodoRelation(todo_id=int(todo_id), relates_to_id=rid_int))
+    db.commit()
+
+
+def get_todo_attachments(db: Session, todo_id: int) -> List[TodoAttachment]:
+    return db.query(TodoAttachment).filter(TodoAttachment.todo_id == todo_id).order_by(TodoAttachment.uploaded_at.desc()).all()
+
+
+def create_todo_attachment(
+    db: Session,
+    *,
+    todo_id: int,
+    file_path: str,
+    file_name: str,
+    file_size: Optional[int] = None,
+) -> TodoAttachment:
+    att = TodoAttachment(
+        todo_id=int(todo_id),
+        file_path=file_path,
+        file_name=file_name,
+        file_size=file_size,
+        uploaded_at=datetime.utcnow(),
+    )
+    db.add(att)
+    db.commit()
+    db.refresh(att)
+    return att
+
+
+def delete_todo_attachment(db: Session, attachment_id: int) -> bool:
+    att = db.query(TodoAttachment).filter(TodoAttachment.id == int(attachment_id)).first()
+    if not att:
+        return False
+    db.delete(att)
+    db.commit()
+    return True
 
 
 def delete_note(db: Session, note_id: int) -> bool:
