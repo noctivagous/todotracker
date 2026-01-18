@@ -1,6 +1,7 @@
 /**
  * Simple client-side router for TodoTracker SPA
- * Uses hash-based routing (#/path) for compatibility
+ * Uses history API (pushState/replaceState) for clean URLs (/todos, /notes, /settings).
+ * Still supports legacy hash URLs (/#/notes, /#/todo/123) by migrating them to clean paths.
  */
 
 class Router {
@@ -24,49 +25,84 @@ class Router {
      * Navigate to a route
      * @param {string} path - Route path
      */
-    navigate(path) {
-        if (path.startsWith('#')) {
-            path = path.substring(1);
-        }
-        if (!path.startsWith('/')) {
-            path = '/' + path;
-        }
-        // Special-case: allow clean /settings URL (no hash) for direct routing.
-        // Keep the rest of the SPA hash-based for compatibility with existing query parsing.
-        if (path === '/settings' || path.startsWith('/settings?')) {
-            try {
-                window.history.pushState({}, '', path);
-                this.handleRoute();
-                this.updateNavigation();
-                return;
-            } catch (e) {
-                // fall back to hash
+    navigate(path, options) {
+        const opts = options || {};
+        const normalized = this.normalizePath(path);
+        try {
+            if (opts.replace) {
+                window.history.replaceState({}, '', normalized);
+            } else {
+                window.history.pushState({}, '', normalized);
             }
+            this.handleRoute();
+            this.updateNavigation();
+        } catch (e) {
+            // Hard fallback: if pushState is unavailable, try hash navigation.
+            try {
+                window.location.hash = '#' + normalized;
+            } catch (e2) {}
         }
-        window.location.hash = path;
     }
 
     /**
-     * Get current route from hash
+     * Canonicalize legacy routes and ensure leading slash.
+     * Also normalizes old "/todo/:id" to "/todos/:id" and "/" to "/todos".
+     */
+    normalizePath(path) {
+        let raw = String(path || "");
+        if (raw.startsWith("#")) raw = raw.substring(1);
+        if (!raw.startsWith("/")) raw = "/" + raw;
+
+        const parts = raw.split("?");
+        let p = parts[0] || "/";
+        const qs = parts.length > 1 ? "?" + parts.slice(1).join("?") : "";
+
+        // Canonical routes
+        if (p === "/" || p === "") p = "/todos";
+        if (p.startsWith("/todo/")) p = "/todos/" + p.substring("/todo/".length);
+
+        return p + qs;
+    }
+
+    /**
+     * Get current route path (without query string) for route matching.
+     * Prefers pathname routing. If a legacy hash route is present, we will migrate it on start.
      */
     getCurrentRoute() {
-        const hash = window.location.hash || "";
-
-        // Prefer hash-based routing whenever a hash is present (including "#/" for home).
-        // Only fall back to pathname routing when there is no meaningful hash.
-        if (hash && hash !== "#") {
-            const full = hash.substring(1) || "/";
-            // Ignore query string for route matching (views parse query params separately).
-            const pathOnly = full.split("?")[0] || "/";
-            return pathOnly;
-        }
-
-        // Support direct path routing for SPA entrypoints (e.g. /settings).
         try {
             const p = window.location.pathname || "/";
-            return p || "/";
+            return this.normalizePath(p).split("?")[0] || "/todos";
         } catch (e) {
-            return "/";
+            return "/todos";
+        }
+    }
+
+    /**
+     * Get current full path including query string (used for migrations).
+     */
+    getCurrentFullPath() {
+        try {
+            const p = (window.location.pathname || "/") + (window.location.search || "");
+            return this.normalizePath(p);
+        } catch (e) {
+            return "/todos";
+        }
+    }
+
+    /**
+     * If the URL is using the old hash scheme, migrate to a clean pathname.
+     * Example: "/#/notes?q=x" -> "/notes?q=x", "/settings#/notes" -> "/notes"
+     */
+    migrateLegacyHashRoute() {
+        try {
+            const hash = window.location.hash || "";
+            if (!hash || hash === "#" || !hash.startsWith("#/")) return false;
+            const full = hash.substring(1) || "/"; // "/notes?q=x"
+            const target = this.normalizePath(full);
+            window.history.replaceState({}, "", target);
+            return true;
+        } catch (e) {
+            return false;
         }
     }
 
@@ -139,13 +175,20 @@ class Router {
      * Start the router
      */
     start() {
+        // Migrate any legacy hash route to a clean pathname before first render.
+        this.migrateLegacyHashRoute();
+
+        // Canonicalize "/" -> "/todos" and "/todo/:id" -> "/todos/:id" without adding history entries.
+        try {
+            const raw = (window.location.pathname || "/") + (window.location.search || "");
+            const norm = this.normalizePath(raw);
+            if (norm !== raw) {
+                window.history.replaceState({}, "", norm);
+            }
+        } catch (e) {}
+
         // Handle initial route
         this.handleRoute();
-
-        // Listen for hash changes
-        window.addEventListener('hashchange', () => {
-            this.handleRoute();
-        });
 
         // Listen for history navigation (back/forward) when we use path-based routing.
         window.addEventListener('popstate', () => {
@@ -166,14 +209,21 @@ class Router {
         navItems.forEach(item => {
             const href = item.getAttribute('href');
             if (href) {
-                const route = href.substring(1); // Remove #
-                if (route === currentPath || (route === '/' && currentPath === '/')) {
+                let route = href;
+                if (route.startsWith("#")) route = route.substring(1);
+                route = this.normalizePath(route).split("?")[0];
+                if (route === currentPath) {
                     item.setAttribute('active', '');
                 } else {
                     item.removeAttribute('active');
                 }
             }
         });
+
+        // Let other UI bits (tabs, etc.) synchronize without having to hook router internals.
+        try {
+            window.dispatchEvent(new CustomEvent("tt-route-changed", { detail: { path: currentPath } }));
+        } catch (e) {}
     }
 }
 

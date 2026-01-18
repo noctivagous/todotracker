@@ -19,7 +19,7 @@
     <script src="https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js"></script>
     
     <!-- Custom TodoTracker styles -->
-    <link rel="stylesheet" href="/static/css/custom.css?v=20260118-11">
+    <link rel="stylesheet" href="/static/css/custom.css?v=20260118-12">
     
     <script>
         // Set theme ASAP to avoid flash
@@ -45,7 +45,8 @@
         <!-- Header -->
         <header slot="header">
             <calcite-navigation>
-                <calcite-button slot="logo" href="#/" appearance="solid" kind="brand" scale="m" icon-start="check-square">
+                <calcite-button slot="logo" href="/todos" appearance="solid" kind="brand" scale="m" icon-start="check-square"
+                    onclick="try{event&&event.preventDefault&&event.preventDefault(); if(window.router){ router.navigate('/todos'); } else { window.location.href='/todos'; }}catch(e){}">
                     TodoTracker
                 </calcite-button>
 
@@ -130,20 +131,31 @@
     <script src="/static/js/vendor/jsviews.min.js"></script>
 
     <!-- Load application JavaScript -->
-    <script src="/static/js/router.js?v=20260118-11"></script>
-    <script src="/static/js/tt_md_editor.js?v=20260118-11"></script>
-    <script src="/static/js/views.js?v=20260118-11"></script>
-    <script src="/static/js/app.js?v=20260118-11"></script>
+    <script src="/static/js/router.js?v=20260118-12"></script>
+    <script src="/static/js/tt_md_editor.js?v=20260118-12"></script>
+    <script src="/static/js/views.js?v=20260118-12"></script>
+    <script src="/static/js/app.js?v=20260118-12"></script>
     <script>
-        // SPA nav "tabs"
+        // SPA nav "tabs" (uses clean routes: /todos, /notes)
         (function () {
             var tabs = document.getElementById("ttSpaNavTabs");
             var select = document.getElementById("ttSpaNavSelect");
             if (!tabs && !select) return;
-            function syncFromHash() {
+            function getRoute() {
                 try {
-                    var h = window.location.hash || "#/";
-                    var v = h.indexOf("#/notes") === 0 ? "notes" : "todos";
+                    if (window.router && typeof window.router.getCurrentRoute === "function") {
+                        return window.router.getCurrentRoute() || "/todos";
+                    }
+                } catch (e) {}
+                try {
+                    return window.location.pathname || "/todos";
+                } catch (e2) {}
+                return "/todos";
+            }
+            function syncFromRoute() {
+                try {
+                    var r = String(getRoute() || "");
+                    var v = r.indexOf("/notes") === 0 ? "notes" : "todos";
                     // Calcite components may not be upgraded yet on first paint; apply a few times.
                     var apply = function () {
                         try { if (tabs) tabs.value = v; } catch (e) {}
@@ -157,18 +169,23 @@
             function navigate() {
                 try {
                     var val = (tabs && tabs.value) || (select && select.value);
-                    window.location.hash = val === "notes" ? "#/notes" : "#/";
+                    if (window.router && typeof window.router.navigate === "function") {
+                        window.router.navigate(val === "notes" ? "/notes" : "/todos");
+                    } else {
+                        window.location.href = val === "notes" ? "/notes" : "/todos";
+                    }
                 } catch (e) {}
             }
-            syncFromHash();
-            window.addEventListener("hashchange", syncFromHash);
-            window.addEventListener("load", syncFromHash);
+            syncFromRoute();
+            window.addEventListener("tt-route-changed", syncFromRoute);
+            window.addEventListener("popstate", syncFromRoute);
+            window.addEventListener("load", syncFromRoute);
             try {
                 if (window.customElements && window.customElements.whenDefined) {
                     Promise.all([
                         customElements.whenDefined("calcite-segmented-control"),
                         customElements.whenDefined("calcite-select")
-                    ]).then(syncFromHash);
+                    ]).then(syncFromRoute);
                 }
             } catch (e) {}
             if (tabs) {

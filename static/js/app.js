@@ -36,12 +36,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load project name
     loadProjectName();
     
-    // Set up router
-    router.on('/', renderTodosView);
+    // Set up router (clean, pathname-based routes)
+    router.on('/todos', renderTodosView);
+    router.on('/todos/:id', (params) => renderTodoDetailView(params));
     router.on('/notes', renderNotesView);
     router.on('/notes/:id', (params) => renderNoteDetailView(params));
-    router.on('/todo/:id', (params) => renderTodoDetailView(params));
     router.on('/settings', renderSettingsView);
+
+    // Back-compat + canonicalization
+    router.on('/', () => router.navigate('/todos', { replace: true }));
+    router.on('/todo/:id', (params) => router.navigate(`/todos/${params.id}`, { replace: true }));
     
     // Start router
     router.start();

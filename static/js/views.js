@@ -242,7 +242,7 @@ const templates = {
                         </div>
                         <div slot="footer" class="text-sm text-muted-foreground">
                             {{:~formatDate(created_at)}}
-                            {{if todo_id}} | <a href="#/todo/{{:todo_id}}" class="underline">Linked to todo #{{:todo_id}}</a> {{/if}}
+                            {{if todo_id}} | <a href="/todos/{{:todo_id}}" class="underline" onclick="event.preventDefault(); router.navigate('/todos/{{:todo_id}}')">Linked to todo #{{:todo_id}}</a> {{/if}}
                         </div>
                     </calcite-card>
                 {{/for}}
@@ -558,6 +558,11 @@ function getShellTargets() {
 const TT_SETTINGS_STORAGE_KEY = 'tt-settings-v1';
 
 const TT_SETTINGS_DEFAULTS = {
+    features: {
+        // Feature flags intended to coordinate behavior between UI + MCP tools.
+        // These are also persisted to project config so MCP tools can respect them.
+        subtasks_enabled: true,
+    },
     layout: {
         // 'full' (viewport width) | 'max' (1100px centered)
         width_mode: 'full',
@@ -731,6 +736,35 @@ function ttSettingsApplyFromEl(el) {
     ttSetByPath(next, path, nextValue);
     ttSaveSettings(next);
 
+    // Persist feature flags to server-side project config so MCP tools can respect them.
+    if (path === 'features.subtasks_enabled') {
+        (async () => {
+            try {
+                const res = await fetch('/api/config/features', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ subtasks_enabled: !!nextValue }),
+                });
+                if (!res.ok) {
+                    let msg = 'Failed to save feature flags';
+                    try {
+                        const j = await res.json();
+                        msg = j.detail || j.message || msg;
+                    } catch (e) {}
+                    throw new Error(msg);
+                }
+            } catch (e) {
+                console.error('Feature flag save failed:', e);
+                // Revert local setting + control on failure.
+                try { if (el && el.tagName === 'CALCITE-SWITCH') el.checked = !nextValue; } catch (err) {}
+                const revert = ttDeepMerge(ttGetSettings(), {});
+                ttSetByPath(revert, path, !nextValue);
+                ttSaveSettings(revert);
+                alert('Failed to save feature flag to project config: ' + (e && e.message ? e.message : e));
+            }
+        })();
+    }
+
     // If we're not currently on /settings, re-render to apply immediately.
     try {
         const r = (window.router && typeof window.router.getCurrentRoute === 'function') ? window.router.getCurrentRoute() : '';
@@ -796,14 +830,15 @@ function openDetailPanel() {
  */
 function getQueryParams() {
     const params = {};
-    const hash = window.location.hash || '';
-    let queryString = hash.includes('?') ? (hash.split('?')[1] || '') : '';
-
-    // If route is using direct path routing (e.g. /settings) there may be no hash query.
+    let queryString = '';
+    // Prefer clean pathname routing query params first.
+    try {
+        queryString = (window.location.search || '').replace(/^\?/, '');
+    } catch (e) {}
+    // Back-compat: legacy hash routing (?...) after "#/route".
     if (!queryString) {
-        try {
-            queryString = (window.location.search || '').replace(/^\?/, '');
-        } catch (e) {}
+        const hash = window.location.hash || '';
+        queryString = hash.includes('?') ? (hash.split('?')[1] || '') : '';
     }
     
     if (queryString) {
@@ -1101,7 +1136,7 @@ function initializeHeaderControls() {
             try {
                 router.navigate('/settings');
             } catch (e) {
-                window.location.hash = '#/settings';
+                window.location.href = '/settings';
             }
         });
     }
@@ -1715,6 +1750,7 @@ function addCreateTodoModal() {
     
     modal.innerHTML = `
         <form id="createModalForm" class="space-y-4">
+            <input type="hidden" name="parent_id" id="ttCreateTodoParentId" value="" />
             <calcite-label>
                 Title*
                 <calcite-input type="text" name="title" required></calcite-input>
@@ -1772,6 +1808,14 @@ function addCreateTodoModal() {
     // Reset form whenever dialog closes.
     modal.addEventListener('calciteDialogClose', () => {
         try { form && form.reset(); } catch (e) {}
+        try {
+            const parentInput = document.getElementById('ttCreateTodoParentId');
+            if (parentInput) parentInput.value = '';
+        } catch (e) {}
+        try {
+            modal.setAttribute('heading', 'New Todo');
+            modal.setAttribute('description', 'Create a new todo item');
+        } catch (e) {}
     });
 
     form.addEventListener('submit', async (e) => {
@@ -1797,6 +1841,26 @@ function addCreateTodoModal() {
             alert('Failed to create todo');
         }
     });
+
+    // Allow other parts of the SPA to open the create-todo dialog with context (e.g., create subtask under a parent).
+    window.ttOpenCreateTodoModal = function ttOpenCreateTodoModal(opts) {
+        const o = opts || {};
+        const parentId = (o && o.parentId != null) ? (parseInt(String(o.parentId), 10) || 0) : 0;
+        const parentInput = document.getElementById('ttCreateTodoParentId');
+        if (parentInput) parentInput.value = (parentId && parentId > 0) ? String(parentId) : '';
+
+        try {
+            if (parentId && parentId > 0) {
+                modal.setAttribute('heading', 'New Subtask');
+                modal.setAttribute('description', `Create a subtask under Todo #${parentId}`);
+            } else {
+                modal.setAttribute('heading', 'New Todo');
+                modal.setAttribute('description', 'Create a new todo item');
+            }
+        } catch (e) {}
+
+        modal.open = true;
+    };
 }
 
 /**
@@ -2186,9 +2250,133 @@ function flattenTodos(todos) {
     return out;
 }
 
+function ttCountSubtasks(todo) {
+    // Count all descendants (not just direct children).
+    let n = 0;
+    const walk = (t) => {
+        const kids = (t && Array.isArray(t.children)) ? t.children : [];
+        for (const c of kids) {
+            n += 1;
+            walk(c);
+        }
+    };
+    walk(todo || {});
+    return n;
+}
+
+function ttFlattenWithDepth(todos, depth = 0, out = []) {
+    const arr = Array.isArray(todos) ? todos : [];
+    for (const t of arr) {
+        out.push({ todo: t, depth: depth || 0 });
+        const kids = Array.isArray(t && t.children) ? t.children : [];
+        if (kids.length) ttFlattenWithDepth(kids, (depth || 0) + 1, out);
+    }
+    return out;
+}
+
+function ttRenderSubtasksPreviewHTML(todo, maxItems = 6) {
+    const max = Math.max(0, parseInt(String(maxItems || 0), 10) || 0);
+    if (!max) return '';
+    const items = [];
+    const all = ttFlattenWithDepth((todo && todo.children) ? todo.children : [], 1, []);
+    for (const row of all) {
+        if (items.length >= max) break;
+        const t = row.todo || {};
+        const depth = row.depth || 0;
+        const id = parseInt(String(t.id || ''), 10) || 0;
+        if (!id) continue;
+        const title = escapeHtml(_truncate(String(t.title || ''), 70));
+        const pad = Math.min(48, (depth - 1) * 14); // cap indent so cards stay readable
+        items.push(`
+            <div class="tt-subtask-line" style="padding-inline-start: ${pad}px">
+                <calcite-link href="/todos/${id}" onclick="event.preventDefault(); event.stopPropagation(); router.navigate('/todos/${id}');">${title}</calcite-link>
+            </div>
+        `);
+    }
+    const remaining = Math.max(0, all.length - items.length);
+    const more = remaining ? `<div class="tt-subtask-more">… +${remaining} more</div>` : '';
+    return `
+        <div class="tt-subtasks-preview">
+            <div class="tt-subtasks-preview-title text-xs text-color-3">Subtasks</div>
+            ${items.join('')}
+            ${more}
+        </div>
+    `;
+}
+
+function ttFindTodoInTree(todos, todoId) {
+    const idNum = parseInt(String(todoId || ''), 10) || 0;
+    if (!idNum) return null;
+    const walk = (arr) => {
+        for (const t of arr || []) {
+            if (!t) continue;
+            if (parseInt(String(t.id || ''), 10) === idNum) return t;
+            const kids = Array.isArray(t.children) ? t.children : [];
+            if (kids.length) {
+                const found = walk(kids);
+                if (found) return found;
+            }
+        }
+        return null;
+    };
+    return walk(Array.isArray(todos) ? todos : []);
+}
+
+function ttRenderSubtaskListItemsHTML(children) {
+    const items = [];
+    for (const t of (Array.isArray(children) ? children : [])) {
+        const id = parseInt(String(t && t.id != null ? t.id : ''), 10) || 0;
+        if (!id) continue;
+        const label = `#${id} - ${escapeHtml(_truncate(String(t.title || ''), 90))}`;
+        const desc = escapeHtml(_truncate(String(t.description || ''), 120));
+        const status = escapeHtml(replaceUnderscores(String(t.status || '')));
+        const subCount = ttCountSubtasks(t);
+        items.push(`
+            <calcite-list-item value="${id}" label="${label}" description="${desc}">
+                <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${status || ''}</calcite-chip>
+                ${subCount > 0 ? `<calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks (${subCount})</calcite-chip>` : ''}
+                <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="launch"
+                    onclick="event.stopPropagation(); router.navigate('/todo/${id}')">Open</calcite-button>
+                ${Array.isArray(t.children) && t.children.length ? ttRenderSubtaskListItemsHTML(t.children) : ''}
+            </calcite-list-item>
+        `);
+    }
+    return items.join('');
+}
+
+function renderMainTodosListItemsHTML(todos, opts) {
+    const o = opts || {};
+    const showStatus = o.showStatus !== false;
+    const showDescription = o.showDescription !== false;
+
+    const items = [];
+    for (const t of (Array.isArray(todos) ? todos : [])) {
+        const label = escapeHtml(t.title || '');
+        const desc = showDescription ? escapeHtml(_truncate(t.description || '', 140)) : '';
+        const metaParts = [`#${t.id}`];
+        if (showStatus) metaParts.push(replaceUnderscores(t.status));
+        const meta = metaParts.join(' · ');
+        const subCount = ttCountSubtasks(t);
+
+        items.push(`
+            <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
+                ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
+                ${subCount > 0 ? `<calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks (${subCount})</calcite-chip>` : ''}
+                <div slot="content" class="tt-main-list-content min-w-0">
+                    <div class="tt-main-todo-title truncate">${label}</div>
+                    ${showDescription ? `<div class="text-xs text-color-3 truncate">${desc || ''}</div>` : ''}
+                </div>
+                ${Array.isArray(t.children) && t.children.length ? renderMainTodosListItemsHTML(t.children, o) : ''}
+            </calcite-list-item>
+        `);
+    }
+    return items.join('');
+}
+
 function renderTodosGridCardsHTML(flatTodos) {
     const settings = ttGetSettings();
     const cfg = (settings && settings.todos && settings.todos.list) ? settings.todos.list : {};
+    const subtasksEnabled = !settings || !settings.features ? true : (settings.features.subtasks_enabled !== false);
     const showStatus = cfg.status !== false;
     const showCategory = cfg.category !== false;
     const showQueue = cfg.queue !== false;
@@ -2206,6 +2394,7 @@ function renderTodosGridCardsHTML(flatTodos) {
         const desc = showDescription ? escapeHtml(_truncate(t.description || '', 140)) : '';
         const status = escapeHtml(t.status || '');
         const category = escapeHtml(t.category || '');
+        const subCount = subtasksEnabled ? ttCountSubtasks(t) : 0;
         const metaParts = [`#${t.id}`];
         if (showStatus) metaParts.push(replaceUnderscores(t.status));
         const meta = metaParts.join(' · ');
@@ -2228,7 +2417,7 @@ function renderTodosGridCardsHTML(flatTodos) {
             : '';
 
         return `
-            <calcite-card class="cursor-pointer tt-hover-card" onclick="router.navigate('/todo/${t.id}')">
+            <calcite-card class="cursor-pointer tt-hover-card tt-todo-grid-card" onclick="router.navigate('/todo/${t.id}')">
                 <div slot="title" class="tt-main-todo-title truncate">${title}</div>
                 <div slot="subtitle" class="text-xs text-color-3">${escapeHtml(meta)}</div>
                 <div class="space-y-2">
@@ -2242,7 +2431,9 @@ function renderTodosGridCardsHTML(flatTodos) {
                     </div>
                     ${showDescription ? `<div class="text-sm text-color-2">${desc || 'No description'}</div>` : ''}
                     ${tags ? `<div class="flex items-center flex-wrap gap-1.5">${tags}</div>` : ''}
+                    ${subCount > 0 ? ttRenderSubtasksPreviewHTML(t, 6) : ''}
                 </div>
+                ${subCount > 0 ? `<calcite-badge class="tt-subtasks-badge" scale="s" color="blue">Subtasks (${subCount})</calcite-badge>` : ''}
             </calcite-card>
         `;
     }).join('');
@@ -2264,6 +2455,7 @@ function renderTodosGridHTML(todos) {
 function renderMainTodosHTML(todosTree, options) {
     const settings = ttGetSettings();
     const cfg = (settings && settings.todos && settings.todos.list) ? settings.todos.list : {};
+    const subtasksEnabled = !settings || !settings.features ? true : (settings.features.subtasks_enabled !== false);
     const showStatus = cfg.status !== false;
     const showCategory = cfg.category !== false;
     const showQueue = cfg.queue !== false;
@@ -2277,13 +2469,17 @@ function renderMainTodosHTML(todosTree, options) {
     const o = options || {};
     const view = (o.view === 'list' || o.view === 'table') ? o.view : 'grid';
 
-    const flatAll = flattenTodos(todosTree || []);
-    const totalItems = flatAll.length;
+    // IMPORTANT: main listing should only show root todos as top-level items.
+    // Subtasks are rendered inline/nested under their parent.
+    const rootTodos = subtasksEnabled
+        ? (Array.isArray(todosTree) ? todosTree : [])
+        : flattenTodos(todosTree || []);
+    const totalItems = rootTodos.length;
     const pageSize = clampInt(o.pageSize, 24, 5, 200);
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
     const page = Math.min(Math.max(1, clampInt(o.page, 1, 1, 999999)), totalPages);
     const startIdx = (page - 1) * pageSize;
-    const pageItems = flatAll.slice(startIdx, startIdx + pageSize);
+    const pageItems = rootTodos.slice(startIdx, startIdx + pageSize);
     const startItem = totalItems ? (startIdx + 1) : 1;
 
     let body = '';
@@ -2292,32 +2488,33 @@ function renderMainTodosHTML(todosTree, options) {
     } else if (view === 'grid') {
         body = `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${renderTodosGridCardsHTML(pageItems)}</div>`;
     } else if (view === 'list') {
-        const items = pageItems.map((t) => {
-            const label = escapeHtml(t.title || '');
-            const desc = showDescription ? escapeHtml(_truncate(t.description || '', 140)) : '';
-            const metaParts = [`#${t.id}`];
-            if (showStatus) metaParts.push(replaceUnderscores(t.status));
-            if (showCategory && t.category) metaParts.push(String(t.category));
-            if (showQueue && t.queue && t.queue > 0) metaParts.push(`Queue ${t.queue}`);
-            if (showPriority && t.priority_class) metaParts.push(`Priority ${t.priority_class}`);
-            if (showTaskSize && t.task_size) metaParts.push(`Size ${t.task_size}/5`);
-            if (showTopic && t.topic) metaParts.push(`Topic ${t.topic}`);
-            const meta = metaParts.join(' · ');
-            return `
-                <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
-                    ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
-                    <div slot="content" class="tt-main-list-content min-w-0">
-                        <div class="tt-main-todo-title truncate">${label}</div>
-                        ${showDescription ? `<div class="text-xs text-color-3 truncate">${desc || ''}</div>` : ''}
-                    </div>
-                </calcite-list-item>
-            `;
-        }).join('');
-        body = `<calcite-list id="ttMainTodosList" selection-mode="single" selection-appearance="highlight">${items}</calcite-list>`;
+        if (subtasksEnabled) {
+            const items = renderMainTodosListItemsHTML(pageItems, { showStatus, showDescription });
+            body = `<calcite-list id="ttMainTodosList" display-mode="nested" selection-mode="single" selection-appearance="highlight">${items}</calcite-list>`;
+        } else {
+            const items = pageItems.map((t) => {
+                const label = escapeHtml(t.title || '');
+                const desc = showDescription ? escapeHtml(_truncate(t.description || '', 140)) : '';
+                const metaParts = [`#${t.id}`];
+                if (showStatus) metaParts.push(replaceUnderscores(t.status));
+                const meta = metaParts.join(' · ');
+                return `
+                    <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
+                        ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
+                        <div slot="content" class="tt-main-list-content min-w-0">
+                            <div class="tt-main-todo-title truncate">${label}</div>
+                            ${showDescription ? `<div class="text-xs text-color-3 truncate">${desc || ''}</div>` : ''}
+                        </div>
+                    </calcite-list-item>
+                `;
+            }).join('');
+            body = `<calcite-list id="ttMainTodosList" selection-mode="single" selection-appearance="highlight">${items}</calcite-list>`;
+        }
     } else {
         const headerCells = [
             `<calcite-table-header heading="ID" alignment="end"></calcite-table-header>`,
             `<calcite-table-header heading="Title"></calcite-table-header>`,
+            subtasksEnabled ? `<calcite-table-header heading="Subtasks" alignment="end"></calcite-table-header>` : '',
             showStatus ? `<calcite-table-header heading="Status"></calcite-table-header>` : '',
             showCategory ? `<calcite-table-header heading="Category"></calcite-table-header>` : '',
             showQueue ? `<calcite-table-header heading="Queue" alignment="end"></calcite-table-header>` : '',
@@ -2329,7 +2526,10 @@ function renderMainTodosHTML(todosTree, options) {
             showTimestamps ? `<calcite-table-header heading="Updated"></calcite-table-header>` : '',
         ].filter(Boolean).join('');
 
-        const rows = pageItems.map((t) => {
+        const ordered = subtasksEnabled ? ttFlattenWithDepth(pageItems, 0, []) : pageItems.map((t) => ({ todo: t, depth: 0 }));
+        const rows = ordered.map((row) => {
+            const t = row.todo || {};
+            const depth = subtasksEnabled ? (row.depth || 0) : 0;
             const title = escapeHtml(_truncate(t.title || '', 80));
             const statusText = escapeHtml(replaceUnderscores(t.status || ''));
             const cat = escapeHtml(t.category || '');
@@ -2340,10 +2540,17 @@ function renderMainTodosHTML(todosTree, options) {
             const tagsCsv = Array.isArray(t.tags) ? escapeHtml(t.tags.map((x) => x && x.name ? x.name : '').filter(Boolean).join(', ')) : '';
             const desc = escapeHtml(_truncate(t.description || '', 120));
             const updated = escapeHtml(formatDate(t.updated_at || t.created_at || ''));
+            const subCount = subtasksEnabled ? ttCountSubtasks(t) : 0;
+            const pad = subtasksEnabled ? Math.min(64, depth * 16) : 0;
+            const titleCell = `<calcite-table-cell><span class="tt-table-title" style="padding-inline-start: ${pad}px">${subtasksEnabled && depth ? '↳ ' : ''}${title}</span></calcite-table-cell>`;
+            const subtasksCell = subtasksEnabled
+                ? `<calcite-table-cell alignment="end">${subCount > 0 ? `<calcite-badge scale="s" color="blue">Subtasks (${subCount})</calcite-badge>` : '—'}</calcite-table-cell>`
+                : '';
 
             const cells = [
                 `<calcite-table-cell alignment="end">#${t.id}</calcite-table-cell>`,
-                `<calcite-table-cell>${title}</calcite-table-cell>`,
+                titleCell,
+                subtasksCell,
                 showStatus ? `<calcite-table-cell><calcite-chip scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${statusText}</calcite-chip></calcite-table-cell>` : '',
                 showCategory ? `<calcite-table-cell>${cat}</calcite-table-cell>` : '',
                 showQueue ? `<calcite-table-cell alignment="end">${queue}</calcite-table-cell>` : '',
@@ -2453,6 +2660,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
     const t = todoDetail || {};
     const settings = ttGetSettings();
     const cfg = (settings && settings.todos && settings.todos.detail) ? settings.todos.detail : {};
+    const subtasksEnabled = !settings || !settings.features ? true : (settings.features.subtasks_enabled !== false);
     const showStatus = cfg.status !== false;
     const showCategory = cfg.category !== false;
     const showQueue = cfg.queue !== false;
@@ -2749,6 +2957,29 @@ function renderTodoDetailPanelHTML(todoDetail) {
         </calcite-panel>
     ` : '';
 
+    const subtasksPanel = subtasksEnabled ? (function () {
+        // Subtasks: use cached todo tree so we can render children even though /api/todos/{id}/detail doesn't include them.
+        const cachedTree = window.ttAllTodosCache || [];
+        const cachedNode = ttFindTodoInTree(cachedTree, t.id);
+        const children = (cachedNode && Array.isArray(cachedNode.children)) ? cachedNode.children : [];
+        const subtasksCount = ttCountSubtasks(cachedNode || {});
+        return `
+            <calcite-panel class="tt-subtasks-panel">
+                <div slot="header">Subtasks (${subtasksCount})</div>
+                <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
+                    onclick="addCreateTodoModal(); (window.ttOpenCreateTodoModal ? window.ttOpenCreateTodoModal({ parentId: ${t.id} }) : (document.getElementById('createModal') && (document.getElementById('createModal').open = true)))">
+                    Add subtask
+                </calcite-button>
+                <div class="space-y-2">
+                    ${(children && children.length)
+                        ? `<calcite-list display-mode="nested" selection-mode="none">${ttRenderSubtaskListItemsHTML(children)}</calcite-list>`
+                        : '<div class="text-xs text-color-3">No subtasks yet.</div>'
+                    }
+                </div>
+            </calcite-panel>
+        `;
+    })() : '';
+
     return `
         <div class="space-y-3">
             <div class="flex items-center justify-between gap-2">
@@ -2790,6 +3021,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
 
                     ${relatesPanel}
                     ${attachmentsPanel}
+                    ${subtasksPanel}
                     ${progressBlock}
                     ${depsPanel}
                     ${notesPanel}
@@ -3061,6 +3293,7 @@ function renderSettingsViewHTML() {
         <calcite-block-group>
             <calcite-block heading="Advanced" description="Optional sections and future-facing controls" open>
                 <calcite-list>
+                    ${ttSettingsSwitchRow('Enable subtasks', 'Allow child todos (subtasks). If off, the UI hides subtasks and MCP tools will refuse parent_id.', 'features.subtasks_enabled')}
                     ${ttSettingsSwitchRow('Completion percentage', 'Show completion percentage field', 'todos.detail.completion_percentage')}
                     ${ttSettingsSwitchRow('AI instructions', 'Show AI instruction toggles', 'todos.detail.ai_instructions')}
                     ${ttSettingsSwitchRow('Relates-to section', 'Show relates-to links section', 'todos.detail.relates_to')}
@@ -3098,6 +3331,19 @@ async function renderSettingsView() {
     showLoading();
     try {
         setHeaderMode('settings');
+
+        // Sync feature flags from project config into local settings (best-effort).
+        try {
+            const res = await fetch('/api/config/features');
+            if (res.ok) {
+                const flags = await res.json();
+                const merged = ttDeepMerge(ttGetSettings(), {});
+                if (flags && typeof flags.subtasks_enabled === 'boolean') {
+                    ttSetByPath(merged, 'features.subtasks_enabled', !!flags.subtasks_enabled);
+                    ttSaveSettings(merged);
+                }
+            }
+        } catch (e) {}
 
         // Collapse master-detail panels to focus on settings.
         const { startShell, startPanel, endShell, endPanel, mainView } = getShellTargets();

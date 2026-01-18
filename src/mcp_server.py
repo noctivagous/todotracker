@@ -22,6 +22,7 @@ from mcp.types import (
 from pydantic import ValidationError
 
 from .db import init_db, SessionLocal, TodoCategory, TodoStatus, TodoDependency, get_db_path
+from .project_config import ProjectConfig, find_project_config
 from .schemas import TodoCreate, TodoUpdate, NoteCreate, NoteUpdate, TodoSearch
 from . import crud
 
@@ -153,6 +154,44 @@ def find_project_database(start_path: Optional[str] = None) -> Optional[str]:
 # Initialize the MCP server
 app = Server("todotracker")
 
+def _subtasks_enabled_for_db_path(db_path: Optional[str]) -> bool:
+    """
+    Feature flag read from <project_root>/.todos/config.json.
+    Defaults to enabled if missing/invalid.
+    """
+    try:
+        if not db_path:
+            return True
+        p = Path(str(db_path)).expanduser().resolve()
+        project_root: Optional[Path] = None
+        if p.name == "project.db" and p.parent.name == ".todos":
+            project_root = p.parent.parent
+        # Fallback: locate .todos/config.json by walking up from the DB directory.
+        if project_root is None:
+            pc = find_project_config(p.parent)
+            if pc:
+                project_root = pc.project_root
+        if project_root is None:
+            return True
+        cfg = ProjectConfig(project_root).load_config()
+        if not isinstance(cfg, dict):
+            return True
+        features = cfg.get("features")
+        if not isinstance(features, dict):
+            return True
+        return bool(features.get("subtasks_enabled", True))
+    except Exception:
+        return True
+
+def _subtasks_enabled_for_call(arguments: Any) -> bool:
+    override_db_path = _resolve_db_path_from_arguments(arguments) if isinstance(arguments, dict) else None
+    if override_db_path:
+        return _subtasks_enabled_for_db_path(override_db_path)
+    try:
+        return _subtasks_enabled_for_db_path(get_db_path())
+    except Exception:
+        return True
+
 
 def get_db_session():
     """Helper to get a database session."""
@@ -166,6 +205,7 @@ def get_db_session():
 @app.list_tools()
 async def list_tools() -> list[Tool]:
     """List all available tools for the AI."""
+    subtasks_enabled = _subtasks_enabled_for_call({})
     return [
         Tool(
             name="list_todos",
@@ -244,7 +284,16 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="create_todo",
-            description="Create a new todo or subtask. Use parent_id to create a subtask under an existing todo. You can optionally include progress tracking fields to document initial plans.",
+            description=(
+                "Create a new todo (top-level) or subtask (child todo). "
+                "To create a subtask, set parent_id to the parent todo ID. "
+                "Subtasks are first-class todos (can be long, have notes/deps/queue/etc.) and are intended for breaking down work "
+                "without cluttering the top-level listing (the web UI renders them nested under their parent). "
+                "You can optionally include progress tracking fields to document initial plans."
+            ) if subtasks_enabled else (
+                "Create a new todo (top-level). NOTE: Subtasks are disabled for this project "
+                "(project config features.subtasks_enabled=false), so parent_id must be omitted."
+            ),
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
@@ -264,7 +313,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                     },
                     "parent_id": {
                         "type": "integer",
-                        "description": "Parent todo ID (for creating subtasks)",
+                        "description": "Parent todo ID. If set, this todo is a subtask and will appear nested under its parent in the UI.",
                     },
                     "topic": {
                         "type": "string",
@@ -319,7 +368,11 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="create_todos_batch",
-            description="Create multiple todos/subtasks in one call. Each item uses the same fields as create_todo.",
+            description=(
+                "Create multiple todos/subtasks in one call. Each item uses the same fields as create_todo. "
+                "Best practice: when you are breaking down a larger task, create subtasks by setting parent_id "
+                "so they remain nested under the parent in the UI."
+            ),
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
@@ -337,7 +390,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                                     "description": "Category",
                                     "default": "feature",
                                 },
-                                "parent_id": {"type": "integer", "description": "Parent todo ID (for creating subtasks)"},
+                                "parent_id": {"type": "integer", "description": "Parent todo ID. If set, this todo is a subtask and will appear nested under its parent in the UI."},
                                 "topic": {"type": "string", "description": "Optional topic/theme"},
                                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional list of tags"},
                                 "depends_on_id": {
@@ -999,6 +1052,11 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             )]
         
         elif name == "create_todo":
+            if not _subtasks_enabled_for_call(arguments) and arguments.get("parent_id") is not None:
+                return [TextContent(type="text", text=json.dumps({
+                    "success": False,
+                    "error": "Subtasks are disabled for this project (features.subtasks_enabled=false). Omit parent_id.",
+                }, indent=2))]
             todo_create = TodoCreate(
                 title=arguments["title"],
                 description=arguments.get("description"),
@@ -1029,6 +1087,13 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             name = "create_todos_batch"
 
         elif name == "create_todos_batch":
+            if not _subtasks_enabled_for_call(arguments):
+                for item in (arguments.get("todos") or []):
+                    if isinstance(item, dict) and item.get("parent_id") is not None:
+                        return [TextContent(type="text", text=json.dumps({
+                            "success": False,
+                            "error": "Subtasks are disabled for this project (features.subtasks_enabled=false). Omit parent_id on batch items.",
+                        }, indent=2))]
             items = arguments.get("todos") or []
             created: list[dict] = []
             errors: list[dict] = []

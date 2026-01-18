@@ -27,7 +27,7 @@ from .schemas import (
     TodoSearch, MessageResponse
 )
 from . import crud
-from .project_config import ProjectConfig
+from .project_config import ProjectConfig, find_project_config
 
 
 # Initialize FastAPI app
@@ -75,6 +75,50 @@ def _get_project_name() -> Optional[str]:
 # Expose as a Jinja global so every page (base template) can display it
 templates.env.globals["project_name"] = _get_project_name()
 
+def _get_active_project_root() -> Optional[Path]:
+    """
+    Resolve the active project root from the active DB path.
+    Typical layout: <project_root>/.todos/project.db
+    """
+    try:
+        db_path = Path(get_db_path()).resolve()
+        if db_path.name == "project.db" and db_path.parent.name == ".todos":
+            return db_path.parent.parent
+    except Exception:
+        pass
+    # Fallback: walk up from DB path to find .todos/config.json.
+    try:
+        db_path = Path(get_db_path()).resolve()
+        pc = find_project_config(db_path.parent)
+        if pc:
+            return pc.project_root
+    except Exception:
+        pass
+    return None
+
+def _get_project_config() -> dict:
+    pr = _get_active_project_root()
+    if not pr:
+        return {}
+    try:
+        cfg = ProjectConfig(pr).load_config()
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception:
+        return {}
+
+def _set_project_feature_flag(key: str, value: bool) -> dict:
+    pr = _get_active_project_root()
+    if not pr:
+        return {}
+    pc = ProjectConfig(pr)
+    existing = pc.load_config() or {}
+    cfg = dict(existing) if isinstance(existing, dict) else {}
+    features = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
+    features = dict(features)
+    features[key] = bool(value)
+    cfg["features"] = features
+    return pc.update_config(cfg)
+
 
 def _redirect_back(request: Request, default: str = "/") -> RedirectResponse:
     """Best-effort redirect back to the page that initiated an action (keeps filters)."""
@@ -89,6 +133,14 @@ def _redirect_back(request: Request, default: str = "/") -> RedirectResponse:
 @app.get("/", response_class=HTMLResponse)
 async def spa_index(request: Request):
     """Serve SPA entry point."""
+    return templates.TemplateResponse("spa.html", {"request": request})
+
+@app.get("/todos", response_class=HTMLResponse)
+@app.get("/todos/", response_class=HTMLResponse)
+@app.get("/todos/{todo_id}", response_class=HTMLResponse)
+@app.get("/todos/{todo_id}/", response_class=HTMLResponse)
+async def spa_todos(request: Request, todo_id: int | None = None):
+    """Serve SPA entry point for Todos routes (list + detail)."""
     return templates.TemplateResponse("spa.html", {"request": request})
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -106,15 +158,18 @@ async def search_page_legacy(request: Request):
 
 
 @app.get("/notes", response_class=HTMLResponse)
-async def notes_page_legacy(request: Request):
-    """Legacy notes page - redirects to SPA."""
-    return RedirectResponse(url="/#/notes", status_code=303)
+@app.get("/notes/", response_class=HTMLResponse)
+@app.get("/notes/{note_id}", response_class=HTMLResponse)
+@app.get("/notes/{note_id}/", response_class=HTMLResponse)
+async def spa_notes(request: Request, note_id: int | None = None):
+    """Serve SPA entry point for Notes routes (list + detail)."""
+    return templates.TemplateResponse("spa.html", {"request": request})
 
 
 @app.get("/todo/{todo_id}", response_class=HTMLResponse)
 async def todo_detail_legacy(request: Request, todo_id: int):
-    """Legacy todo detail page - redirects to SPA."""
-    return RedirectResponse(url=f"/#/todo/{todo_id}", status_code=303)
+    """Legacy todo detail page - redirect to canonical SPA route."""
+    return RedirectResponse(url=f"/todos/{todo_id}", status_code=303)
 
 
 # Legacy multi-page routes have been removed - SPA mode is now active
@@ -510,7 +565,7 @@ async def api_update_todo_form(
     if not todo:
         raise HTTPException(status_code=404, detail="Todo not found")
     
-    return RedirectResponse(url=f"/todo/{todo_id}", status_code=303)
+    return RedirectResponse(url=f"/todos/{todo_id}", status_code=303)
 
 
 # Queue endpoints (web UI helpers)
@@ -673,7 +728,7 @@ async def api_create_note_form(
     crud.create_note(db, note_create)
     
     if todo_id:
-        return RedirectResponse(url=f"/todo/{todo_id}", status_code=303)
+        return RedirectResponse(url=f"/todos/{todo_id}", status_code=303)
     return RedirectResponse(url="/notes", status_code=303)
 
 
@@ -697,7 +752,7 @@ async def api_delete_note_form(note_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Note not found")
     
     if todo_id:
-        return RedirectResponse(url=f"/todo/{todo_id}", status_code=303)
+        return RedirectResponse(url=f"/todos/{todo_id}", status_code=303)
     return RedirectResponse(url="/notes", status_code=303)
 
 
@@ -716,7 +771,7 @@ async def api_create_dependency(
         raise HTTPException(status_code=400, detail=str(e))
     if not dependency:
         raise HTTPException(status_code=400, detail="Failed to create dependency (one or both todos not found)")
-    return RedirectResponse(url=f"/todo/{todo_id}", status_code=303)
+    return RedirectResponse(url=f"/todos/{todo_id}", status_code=303)
 
 
 @app.post("/api/dependencies/json", response_model=DependencyInDB)
@@ -914,6 +969,36 @@ async def health_check(db: Session = Depends(get_db)):
             "needs_upgrade": compat.get("needs_upgrade", False),
         },
         "timestamp": datetime.now().isoformat()
+    }
+
+
+@app.get("/api/config/features")
+async def api_get_feature_flags():
+    """
+    Read project-level feature flags from .todos/config.json (ProjectConfig).
+    These are intended to coordinate behavior between the Web UI and MCP tools.
+    """
+    cfg = _get_project_config()
+    features = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
+    return {
+        "subtasks_enabled": bool(features.get("subtasks_enabled", True)),
+    }
+
+
+@app.put("/api/config/features")
+async def api_set_feature_flags(payload: dict):
+    """
+    Update project-level feature flags in .todos/config.json (ProjectConfig).
+    """
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object")
+    if "subtasks_enabled" not in payload:
+        raise HTTPException(status_code=400, detail="subtasks_enabled is required")
+    updated = _set_project_feature_flag("subtasks_enabled", bool(payload.get("subtasks_enabled")))
+    features = updated.get("features") if isinstance(updated.get("features"), dict) else {}
+    return {
+        "message": "Feature flags updated",
+        "subtasks_enabled": bool(features.get("subtasks_enabled", True)),
     }
 
 

@@ -37,13 +37,30 @@ class ProjectConfig:
         if project_name is None:
             project_name = self.project_root.name
         
-        config = {
+        # Preserve existing keys (e.g., feature flags) instead of overwriting.
+        existing = self.load_config() or {}
+        config = dict(existing) if isinstance(existing, dict) else {}
+        config.update({
             "todotracker_path": str(Path(todotracker_path).resolve()),
             "project_name": project_name,
             "project_root": str(self.project_root),
-        }
-        
+        })
+
         self.config_file.write_text(json.dumps(config, indent=2))
+
+    def update_config(self, patch: dict) -> dict:
+        """
+        Shallow-merge a patch into the current config and persist.
+
+        NOTE: For nested updates, callers should pre-merge nested dicts (e.g., config['features']).
+        """
+        self.todos_dir.mkdir(parents=True, exist_ok=True)
+        existing = self.load_config() or {}
+        config = dict(existing) if isinstance(existing, dict) else {}
+        if isinstance(patch, dict):
+            config.update(patch)
+        self.config_file.write_text(json.dumps(config, indent=2))
+        return config
     
     def load_config(self) -> Optional[dict]:
         """
