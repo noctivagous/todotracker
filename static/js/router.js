@@ -31,6 +31,18 @@ class Router {
         if (!path.startsWith('/')) {
             path = '/' + path;
         }
+        // Special-case: allow clean /settings URL (no hash) for direct routing.
+        // Keep the rest of the SPA hash-based for compatibility with existing query parsing.
+        if (path === '/settings' || path.startsWith('/settings?')) {
+            try {
+                window.history.pushState({}, '', path);
+                this.handleRoute();
+                this.updateNavigation();
+                return;
+            } catch (e) {
+                // fall back to hash
+            }
+        }
         window.location.hash = path;
     }
 
@@ -38,11 +50,22 @@ class Router {
      * Get current route from hash
      */
     getCurrentRoute() {
-        const hash = window.location.hash || '#/';
-        const full = hash.substring(1) || '/';
-        // Ignore query string for route matching (views parse query params separately from location.hash).
-        const pathOnly = full.split('?')[0] || '/';
-        return pathOnly;
+        const hash = window.location.hash || '';
+        // Prefer hash-based routing when present (default SPA mode).
+        if (hash && hash !== '#' && hash !== '#/') {
+            const full = hash.substring(1) || '/';
+            // Ignore query string for route matching (views parse query params separately).
+            const pathOnly = full.split('?')[0] || '/';
+            return pathOnly;
+        }
+
+        // Support direct path routing for a small set of SPA entrypoints (e.g. /settings).
+        try {
+            const p = window.location.pathname || '/';
+            return p || '/';
+        } catch (e) {
+            return '/';
+        }
     }
 
     /**
@@ -119,6 +142,11 @@ class Router {
 
         // Listen for hash changes
         window.addEventListener('hashchange', () => {
+            this.handleRoute();
+        });
+
+        // Listen for history navigation (back/forward) when we use path-based routing.
+        window.addEventListener('popstate', () => {
             this.handleRoute();
         });
 

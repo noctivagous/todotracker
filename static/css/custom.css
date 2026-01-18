@@ -183,35 +183,9 @@ calcite-shell main {
     margin-inline: auto;
 }
 
-/* Settings dialog: drawer-like panel anchored to right (uses placement="cover"). */
-calcite-dialog.tt-settings-dialog {
-    --tt-settings-panel-width: 420px;
-    --calcite-dialog-size-x: var(--tt-settings-panel-width);
-    --calcite-dialog-size-y: 100vh;
-    --calcite-dialog-min-size-y: 100vh;
-    --calcite-dialog-max-size-y: 100vh;
-    --calcite-dialog-offset-y: 0px;
-    --calcite-dialog-offset-x: calc(100vw - var(--tt-settings-panel-width));
-    --calcite-dialog-corner-radius: 0;
-}
-
-@media (max-width: 768px) {
-    calcite-dialog.tt-settings-dialog {
-        --tt-settings-panel-width: 100vw;
-        --calcite-dialog-offset-x: 0px;
-    }
-}
-
-/* Settings dialog content: make toggle rows align nicely */
-calcite-dialog.tt-settings-dialog calcite-label.tt-settings-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--calcite-spacing-md);
-}
-
-calcite-dialog.tt-settings-dialog calcite-label.tt-settings-item calcite-switch {
-    flex: 0 0 auto;
+/* Settings page */
+.tt-settings-page calcite-panel {
+    --calcite-panel-space: var(--calcite-spacing-md);
 }
 
 /* Navigation layout helpers (Calcite slots do most of the work; these are small tweaks). */

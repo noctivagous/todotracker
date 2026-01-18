@@ -91,6 +91,12 @@ async def spa_index(request: Request):
     """Serve SPA entry point."""
     return templates.TemplateResponse("spa.html", {"request": request})
 
+@app.get("/settings", response_class=HTMLResponse)
+@app.get("/settings/", response_class=HTMLResponse)
+async def spa_settings(request: Request):
+    """Serve SPA entry point for /settings (direct navigation without hash)."""
+    return templates.TemplateResponse("spa.html", {"request": request})
+
 
 # Legacy routes kept for backward compatibility, but redirect to SPA
 @app.get("/search", response_class=HTMLResponse)

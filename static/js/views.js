@@ -500,7 +500,7 @@ function syncNotesNavFilters(allNotes, opts) {
 }
 
 function setHeaderMode(mode) {
-    const m = mode === 'notes' ? 'notes' : 'todos';
+    const m = (mode === 'notes' || mode === 'settings') ? mode : 'todos';
     const headerStatusSeg = document.getElementById('ttHeaderStatusSeg');
     const headerStatusSelect = document.getElementById('ttHeaderStatusSelect');
     const navSearch = document.getElementById('ttNavSearchInput');
@@ -520,10 +520,10 @@ function setHeaderMode(mode) {
     }
 
     if (navSearch) {
-        navSearch.placeholder = m === 'notes' ? 'Search notes (Enter)...' : 'Search todos (Enter)...';
+        navSearch.placeholder = m === 'notes' ? 'Search notes (Enter)...' : (m === 'settings' ? 'Search (disabled in Settings)...' : 'Search todos (Enter)...');
     }
     if (navFilter) {
-        navFilter.placeholder = m === 'notes' ? 'Filter notes (live)...' : 'Filter (live)...';
+        navFilter.placeholder = m === 'notes' ? 'Filter notes (live)...' : (m === 'settings' ? 'Filter (disabled in Settings)...' : 'Filter (live)...');
     }
     if (headerNewBtn) {
         headerNewBtn.innerHTML = 'New';
@@ -700,158 +700,81 @@ function ttRerenderCurrentView() {
     } catch (e) {}
 }
 
-function addSettingsDialog() {
-    if (document.getElementById('ttSettingsDialog')) return;
-
-    const dlg = document.createElement('calcite-dialog');
-    dlg.id = 'ttSettingsDialog';
-    // Match other dialogs: set `label` for accessibility.
-    try { dlg.label = 'Settings'; } catch (e) {}
-    dlg.setAttribute('heading', 'Settings');
-    dlg.setAttribute('description', 'Customize layout and visible properties');
-    dlg.setAttribute('modal', '');
-    // Calcite dialog does not currently support a "right drawer" placement; use cover + CSS vars to anchor right.
-    dlg.setAttribute('placement', 'cover');
-    dlg.setAttribute('scale', 'm');
-    dlg.setAttribute('width-scale', 's');
-    dlg.setAttribute('slot', 'dialogs');
-    dlg.classList.add('tt-settings-dialog');
-
-    dlg.innerHTML = `
-        <calcite-accordion selection-mode="multiple">
-            <calcite-accordion-item item-title="Layout" open>
-                <calcite-label>
-                    Content width
-                    <calcite-segmented-control id="ttSettingsWidthModeSeg" scale="s" data-tt-setting="layout.width_mode">
-                        <calcite-segmented-control-item value="full">Full width</calcite-segmented-control-item>
-                        <calcite-segmented-control-item value="max">Centered (1100px)</calcite-segmented-control-item>
-                    </calcite-segmented-control>
-                </calcite-label>
-                <div class="text-xs text-color-3 mt-2">Master–detail layout is currently fixed (left browser + right/main detail).</div>
-            </calcite-accordion-item>
-
-            <calcite-accordion-item item-title="Todos · List view">
-                <calcite-label class="tt-settings-item">Status <calcite-switch data-tt-setting="todos.list.status"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Category <calcite-switch data-tt-setting="todos.list.category"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Queue position <calcite-switch data-tt-setting="todos.list.queue"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Priority class <calcite-switch data-tt-setting="todos.list.priority_class"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Task size <calcite-switch data-tt-setting="todos.list.task_size"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Topic <calcite-switch data-tt-setting="todos.list.topic"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Tags <calcite-switch data-tt-setting="todos.list.tags"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Description <calcite-switch data-tt-setting="todos.list.description"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Timestamps <calcite-switch data-tt-setting="todos.list.timestamps"></calcite-switch></calcite-label>
-            </calcite-accordion-item>
-
-            <calcite-accordion-item item-title="Todos · Detail view">
-                <calcite-label class="tt-settings-item">Status <calcite-switch data-tt-setting="todos.detail.status"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Category <calcite-switch data-tt-setting="todos.detail.category"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Queue position <calcite-switch data-tt-setting="todos.detail.queue"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Priority class <calcite-switch data-tt-setting="todos.detail.priority_class"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Task size <calcite-switch data-tt-setting="todos.detail.task_size"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Topic <calcite-switch data-tt-setting="todos.detail.topic"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Tags <calcite-switch data-tt-setting="todos.detail.tags"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Description <calcite-switch data-tt-setting="todos.detail.description"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Progress fields (work_*) <calcite-switch data-tt-setting="todos.detail.progress"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Timestamps <calcite-switch data-tt-setting="todos.detail.timestamps"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Notes section <calcite-switch data-tt-setting="todos.detail.notes"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Dependencies section <calcite-switch data-tt-setting="todos.detail.dependencies"></calcite-switch></calcite-label>
-            </calcite-accordion-item>
-
-            <calcite-accordion-item item-title="Notes · List view">
-                <calcite-label class="tt-settings-item">Type <calcite-switch data-tt-setting="notes.list.note_type"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Category <calcite-switch data-tt-setting="notes.list.category"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Attachment (todo link) <calcite-switch data-tt-setting="notes.list.attachment"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Created timestamp <calcite-switch data-tt-setting="notes.list.created"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Content snippet <calcite-switch data-tt-setting="notes.list.snippet"></calcite-switch></calcite-label>
-            </calcite-accordion-item>
-
-            <calcite-accordion-item item-title="Notes · Detail view">
-                <calcite-label class="tt-settings-item">Metadata (created/type/category) <calcite-switch data-tt-setting="notes.detail.metadata"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Attachment (todo link) <calcite-switch data-tt-setting="notes.detail.attachment"></calcite-switch></calcite-label>
-            </calcite-accordion-item>
-
-            <calcite-accordion-item item-title="Advanced">
-                <calcite-label class="tt-settings-item">Completion percentage <calcite-switch data-tt-setting="todos.detail.completion_percentage"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">AI instructions <calcite-switch data-tt-setting="todos.detail.ai_instructions"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Relates-to section <calcite-switch data-tt-setting="todos.detail.relates_to"></calcite-switch></calcite-label>
-                <calcite-label class="tt-settings-item">Attachments section <calcite-switch data-tt-setting="todos.detail.attachments"></calcite-switch></calcite-label>
-            </calcite-accordion-item>
-        </calcite-accordion>
-
-        <calcite-button id="ttSettingsResetBtn" slot="footer-start" appearance="outline" kind="neutral" icon-start="reset">
-            Reset to defaults
-        </calcite-button>
-        <calcite-button id="ttSettingsCloseBtn" slot="footer-end" appearance="solid">
-            Done
-        </calcite-button>
-    `;
-
-    const shell = document.querySelector('calcite-shell');
-    (shell || document.body).appendChild(dlg);
-
-    const syncControls = () => {
-        const s = ttGetSettings();
-        dlg.querySelectorAll('[data-tt-setting]').forEach((el) => {
-            const path = el.getAttribute('data-tt-setting');
-            const v = ttGetByPath(s, path);
-            try {
-                if (el.tagName === 'CALCITE-SWITCH') el.checked = (v !== false);
-                if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') el.value = String(v || 'full');
-            } catch (e) {}
-        });
-    };
-
-    const applyFromEl = (el) => {
-        const path = el && el.getAttribute ? el.getAttribute('data-tt-setting') : '';
-        if (!path) return;
-        const current = ttGetSettings();
-        let nextValue = null;
-
+function ttSettingsSyncControls(rootEl) {
+    const root = rootEl || document;
+    const s = ttGetSettings();
+    root.querySelectorAll('[data-tt-setting]').forEach((el) => {
+        const path = el.getAttribute('data-tt-setting');
+        const v = ttGetByPath(s, path);
         try {
-            if (el.tagName === 'CALCITE-SWITCH') nextValue = !!el.checked;
-            else if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') nextValue = String(el.value || 'full');
-            else return;
-        } catch (e) {
-            return;
-        }
-
-        const next = ttDeepMerge(current, {});
-        ttSetByPath(next, path, nextValue);
-        ttSaveSettings(next);
-        // Re-render so list/detail templates immediately reflect visibility changes.
-        ttRerenderCurrentView();
-    };
-
-    dlg.querySelectorAll('calcite-switch[data-tt-setting]').forEach((sw) => {
-        sw.addEventListener('calciteSwitchChange', () => applyFromEl(sw));
-        sw.addEventListener('change', () => applyFromEl(sw));
+            if (el.tagName === 'CALCITE-SWITCH') el.checked = (v !== false);
+            if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') el.value = String(v || 'full');
+        } catch (e) {}
     });
-    const widthSeg = dlg.querySelector('#ttSettingsWidthModeSeg');
-    if (widthSeg) {
-        widthSeg.addEventListener('calciteSegmentedControlChange', () => applyFromEl(widthSeg));
-        widthSeg.addEventListener('change', () => applyFromEl(widthSeg));
+}
+
+function ttSettingsApplyFromEl(el) {
+    const path = el && el.getAttribute ? el.getAttribute('data-tt-setting') : '';
+    if (!path) return;
+    const current = ttGetSettings();
+    let nextValue = null;
+
+    try {
+        if (el.tagName === 'CALCITE-SWITCH') nextValue = !!el.checked;
+        else if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') nextValue = String(el.value || 'full');
+        else return;
+    } catch (e) {
+        return;
     }
 
-    const resetBtn = dlg.querySelector('#ttSettingsResetBtn');
-    if (resetBtn) {
+    const next = ttDeepMerge(current, {});
+    ttSetByPath(next, path, nextValue);
+    ttSaveSettings(next);
+
+    // If we're not currently on /settings, re-render to apply immediately.
+    try {
+        const r = (window.router && typeof window.router.getCurrentRoute === 'function') ? window.router.getCurrentRoute() : '';
+        if (String(r || '') !== '/settings') {
+            ttRerenderCurrentView();
+        }
+    } catch (e) {
+        ttRerenderCurrentView();
+    }
+}
+
+function ttBindSettingsControls(rootEl) {
+    const root = rootEl || document;
+
+    root.querySelectorAll('calcite-switch[data-tt-setting]').forEach((sw) => {
+        if (sw._ttBoundSettings) return;
+        sw._ttBoundSettings = true;
+        sw.addEventListener('calciteSwitchChange', () => ttSettingsApplyFromEl(sw));
+        sw.addEventListener('change', () => ttSettingsApplyFromEl(sw));
+    });
+
+    root.querySelectorAll('calcite-segmented-control[data-tt-setting]').forEach((seg) => {
+        if (seg._ttBoundSettings) return;
+        seg._ttBoundSettings = true;
+        seg.addEventListener('calciteSegmentedControlChange', () => ttSettingsApplyFromEl(seg));
+        seg.addEventListener('change', () => ttSettingsApplyFromEl(seg));
+    });
+
+    const resetBtn = root.querySelector('#ttSettingsResetBtn');
+    if (resetBtn && !resetBtn._ttBoundSettings) {
+        resetBtn._ttBoundSettings = true;
         resetBtn.addEventListener('click', () => {
             ttResetSettings();
-            syncControls();
-            ttRerenderCurrentView();
+            ttSettingsSyncControls(root);
+            try {
+                const r = (window.router && typeof window.router.getCurrentRoute === 'function') ? window.router.getCurrentRoute() : '';
+                if (String(r || '') !== '/settings') {
+                    ttRerenderCurrentView();
+                }
+            } catch (e) {
+                ttRerenderCurrentView();
+            }
         });
     }
-
-    const closeBtn = dlg.querySelector('#ttSettingsCloseBtn');
-    if (closeBtn) closeBtn.addEventListener('click', () => { try { dlg.open = false; } catch (e) {} });
-
-    // Expose for other code paths (and for reliable open behavior).
-    window.ttOpenSettingsDialog = () => {
-        syncControls();
-        try { dlg.open = true; } catch (e) {}
-    };
-
-    // Initial sync
-    syncControls();
 }
 
 function collapseDetailPanel() {
@@ -873,8 +796,15 @@ function openDetailPanel() {
  */
 function getQueryParams() {
     const params = {};
-    const hash = window.location.hash;
-    const queryString = hash.includes('?') ? hash.split('?')[1] : '';
+    const hash = window.location.hash || '';
+    let queryString = hash.includes('?') ? (hash.split('?')[1] || '') : '';
+
+    // If route is using direct path routing (e.g. /settings) there may be no hash query.
+    if (!queryString) {
+        try {
+            queryString = (window.location.search || '').replace(/^\?/, '');
+        } catch (e) {}
+    }
     
     if (queryString) {
         queryString.split('&').forEach(param => {
@@ -1168,8 +1098,11 @@ function initializeHeaderControls() {
     if (settingsBtn && !settingsBtn._ttBound) {
         settingsBtn._ttBound = true;
         settingsBtn.addEventListener('click', () => {
-            addSettingsDialog();
-            if (typeof window.ttOpenSettingsDialog === 'function') window.ttOpenSettingsDialog();
+            try {
+                router.navigate('/settings');
+            } catch (e) {
+                window.location.hash = '#/settings';
+            }
         });
     }
 
@@ -1293,7 +1226,8 @@ async function renderTodosView() {
         const filteredTree = applyClientTextFilter(todos, opts.filterText);
 
         // Render browser panel + main placeholder (master-detail)
-        const { startPanel, mainView } = getShellTargets();
+        const { startPanel, startShell, mainView } = getShellTargets();
+        if (startShell) startShell.removeAttribute('collapsed');
         if (startPanel) {
             startPanel.innerHTML = renderTodoBrowserPanelHTML(filteredTree, stats);
         }
@@ -2981,6 +2915,164 @@ async function renderNotesView() {
         showError('Failed to load notes. Please try again.');
         hideLoading(); // Ensure loader is hidden on error
     }
+}
+
+/**
+ * Settings View
+ */
+function ttSettingsSwitchRow(label, description, path) {
+    const l = escapeHtml(String(label || ''));
+    const d = escapeHtml(String(description || ''));
+    const p = escapeHtml(String(path || ''));
+    return `
+        <calcite-list-item label="${l}" description="${d}">
+            <calcite-switch slot="actions-end" data-tt-setting="${p}"></calcite-switch>
+        </calcite-list-item>
+    `;
+}
+
+function renderSettingsViewHTML() {
+    // Ensure settings are loaded so layout is applied on first paint.
+    const s = ttGetSettings();
+    const widthMode = escapeHtml(String((s && s.layout && s.layout.width_mode) || 'full'));
+
+    const layoutTab = `
+        <calcite-block-group>
+            <calcite-block heading="Layout" description="Tune the SPA shell defaults" open>
+                <calcite-label>
+                    Content width
+                    <calcite-segmented-control scale="s" data-tt-setting="layout.width_mode" value="${widthMode}">
+                        <calcite-segmented-control-item value="full">Full width</calcite-segmented-control-item>
+                        <calcite-segmented-control-item value="max">Centered (1100px)</calcite-segmented-control-item>
+                    </calcite-segmented-control>
+                </calcite-label>
+                <calcite-notice open kind="info">
+                    <div slot="message">Master–detail layout is currently fixed: left browser panel + right/main detail.</div>
+                </calcite-notice>
+            </calcite-block>
+        </calcite-block-group>
+    `;
+
+    const todosListTab = `
+        <calcite-block-group>
+            <calcite-block heading="Todos · List view" description="Browse/list and grid cards" open>
+                <calcite-list>
+                    ${ttSettingsSwitchRow('Status', 'Show status chips/metadata', 'todos.list.status')}
+                    ${ttSettingsSwitchRow('Category', 'Show category chips/metadata', 'todos.list.category')}
+                    ${ttSettingsSwitchRow('Queue position', 'Show queue position (where applicable)', 'todos.list.queue')}
+                    ${ttSettingsSwitchRow('Priority class', 'Show priority class', 'todos.list.priority_class')}
+                    ${ttSettingsSwitchRow('Task size', 'Show task size', 'todos.list.task_size')}
+                    ${ttSettingsSwitchRow('Topic', 'Show topic', 'todos.list.topic')}
+                    ${ttSettingsSwitchRow('Tags', 'Show tags', 'todos.list.tags')}
+                    ${ttSettingsSwitchRow('Description', 'Show description/snippet', 'todos.list.description')}
+                    ${ttSettingsSwitchRow('Timestamps', 'Show created/updated timestamps (table/list metadata)', 'todos.list.timestamps')}
+                </calcite-list>
+            </calcite-block>
+
+            <calcite-block heading="Todos · Detail view" description="Todo inspector/editor fields" open>
+                <calcite-list>
+                    ${ttSettingsSwitchRow('Status', 'Show status field', 'todos.detail.status')}
+                    ${ttSettingsSwitchRow('Category', 'Show category field', 'todos.detail.category')}
+                    ${ttSettingsSwitchRow('Queue position', 'Show queue field', 'todos.detail.queue')}
+                    ${ttSettingsSwitchRow('Priority class', 'Show priority class field', 'todos.detail.priority_class')}
+                    ${ttSettingsSwitchRow('Task size', 'Show task size field', 'todos.detail.task_size')}
+                    ${ttSettingsSwitchRow('Topic', 'Show topic field', 'todos.detail.topic')}
+                    ${ttSettingsSwitchRow('Tags', 'Show tags field', 'todos.detail.tags')}
+                    ${ttSettingsSwitchRow('Description', 'Show description editor', 'todos.detail.description')}
+                    ${ttSettingsSwitchRow('Progress fields (work_*)', 'Show work_completed / work_remaining / implementation_issues', 'todos.detail.progress')}
+                    ${ttSettingsSwitchRow('Timestamps', 'Show created/updated timestamps in header', 'todos.detail.timestamps')}
+                    ${ttSettingsSwitchRow('Notes section', 'Show attached notes section', 'todos.detail.notes')}
+                    ${ttSettingsSwitchRow('Dependencies section', 'Show prerequisites + dependents', 'todos.detail.dependencies')}
+                </calcite-list>
+            </calcite-block>
+        </calcite-block-group>
+    `;
+
+    const notesTab = `
+        <calcite-block-group>
+            <calcite-block heading="Notes · List view" description="Notes browser and main listing" open>
+                <calcite-list>
+                    ${ttSettingsSwitchRow('Type', 'Show note type in metadata', 'notes.list.note_type')}
+                    ${ttSettingsSwitchRow('Category', 'Show category in metadata', 'notes.list.category')}
+                    ${ttSettingsSwitchRow('Attachment (todo link)', 'Show todo attachment info', 'notes.list.attachment')}
+                    ${ttSettingsSwitchRow('Created timestamp', 'Show created timestamp', 'notes.list.created')}
+                    ${ttSettingsSwitchRow('Content snippet', 'Show content snippet in list/cards', 'notes.list.snippet')}
+                </calcite-list>
+            </calcite-block>
+
+            <calcite-block heading="Notes · Detail view" description="Note inspector/editor" open>
+                <calcite-list>
+                    ${ttSettingsSwitchRow('Metadata', 'Show created/type/category row', 'notes.detail.metadata')}
+                    ${ttSettingsSwitchRow('Attachment (todo link)', 'Show attached todo link', 'notes.detail.attachment')}
+                </calcite-list>
+            </calcite-block>
+        </calcite-block-group>
+    `;
+
+    const advancedTab = `
+        <calcite-block-group>
+            <calcite-block heading="Advanced" description="Optional sections and future-facing controls" open>
+                <calcite-list>
+                    ${ttSettingsSwitchRow('Completion percentage', 'Show completion percentage field', 'todos.detail.completion_percentage')}
+                    ${ttSettingsSwitchRow('AI instructions', 'Show AI instruction toggles', 'todos.detail.ai_instructions')}
+                    ${ttSettingsSwitchRow('Relates-to section', 'Show relates-to links section', 'todos.detail.relates_to')}
+                    ${ttSettingsSwitchRow('Attachments section', 'Show attachments upload/list section', 'todos.detail.attachments')}
+                </calcite-list>
+            </calcite-block>
+        </calcite-block-group>
+    `;
+
+    return `
+        <div class="tt-settings-page">
+            <calcite-panel heading="Settings" description="Customize layout and visible properties">
+                <calcite-button slot="header-actions-start" appearance="outline" scale="s" onclick="router.navigate('/')">Back</calcite-button>
+                <calcite-button id="ttSettingsResetBtn" slot="header-actions-end" appearance="outline" scale="s" icon-start="reset">Reset</calcite-button>
+
+                <calcite-tabs bordered scale="m">
+                    <calcite-tab-nav slot="title-group">
+                        <calcite-tab-title selected>Layout</calcite-tab-title>
+                        <calcite-tab-title>Todos</calcite-tab-title>
+                        <calcite-tab-title>Notes</calcite-tab-title>
+                        <calcite-tab-title>Advanced</calcite-tab-title>
+                    </calcite-tab-nav>
+
+                    <calcite-tab selected>${layoutTab}</calcite-tab>
+                    <calcite-tab>${todosListTab}</calcite-tab>
+                    <calcite-tab>${notesTab}</calcite-tab>
+                    <calcite-tab>${advancedTab}</calcite-tab>
+                </calcite-tabs>
+            </calcite-panel>
+        </div>
+    `;
+}
+
+async function renderSettingsView() {
+    showLoading();
+    try {
+        setHeaderMode('settings');
+
+        // Collapse master-detail panels to focus on settings.
+        const { startShell, startPanel, endShell, endPanel, mainView } = getShellTargets();
+        if (startShell) startShell.setAttribute('collapsed', '');
+        if (startPanel) startPanel.innerHTML = '';
+        if (endShell) endShell.setAttribute('collapsed', '');
+        if (endPanel) endPanel.innerHTML = '';
+
+        if (mainView) mainView.innerHTML = renderSettingsViewHTML();
+        hideLoading();
+        initializeSettingsView();
+    } catch (e) {
+        console.error('Error loading settings view:', e);
+        showError('Failed to load settings. Please try again.');
+        hideLoading();
+    }
+}
+
+function initializeSettingsView() {
+    initializeHeaderControls();
+    // Load + sync settings, then bind controls.
+    ttSettingsSyncControls(document);
+    ttBindSettingsControls(document);
 }
 
 /**
