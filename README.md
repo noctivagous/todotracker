@@ -3,47 +3,42 @@
 
 Description
 
-TodoTracker is an AI-powered todo management system with **Model Context Protocol (MCP)** integration for agentic code editors (AI assistants like Claude, Windsurf, Cursor IDE, Codex, etc. ) plus a web UI for manual management.
+TodoTracker is an AI-powered todo management system with  a web UI
+and **Model Context Protocol (MCP)** integration for agentic code editors (AI assistants like Claude, Windsurf, Cursor IDE, Codex, etc. ).
 
-Use the power of AI to enter todos in the AI chat of the agentic IDE
+You can use the power of AI to enter todos in the AI chat pane
+of the agentic IDE and then view and edit them in the web UI.
 
 
 Purpose
 
-When using AI to make code, the software development process changes.  The software developer spends more time on planning
-and todo lists: making features, functionality, and issue descriptions large and small.  Integrating this with AI
-chat allows the power of AI to bring in different considerations into the to-dos that were previously made manually, 
-which then allows the software developer to review them before instructing the AI to implement them.
+When using AI to make code, the software developer spends more time on planning
+and todo lists: making features, functionality, and issue descriptions large and small.  Integrating this with AI chat allows the AI to bring in different considerations into the to-dos that were previously made manually, which then allows the software developer to review them before instructing the AI to implement them.
 
+When you generate code with AI, you are often working in areas of software
+development where you have a general understanding but need the AI to
+assist in the planning.
 
 
 How It Works
 
-Each project gets its own isolated todo database. The installation creates the .todo directory
-if it doesn't exist and puts a project.db file in it.  The MCP server is passed the path to this
+The installation creates the .todo directory where each project gets its own isolated todo database with a project.db (SQLlite).  The MCP server is passed the path to this
 db and uses it to make and update todos according to your commands.
 
 
 
 Benefits
 
-You can take todos you typed out previously in a plain text file, paste them into the chat, and instruct 
-the AI to put them in the database and it will do that.  Then you can use the web UI to add and edit
-anything.
-
-You can ask the AI to carry out any tasks in the database. If you put notes in the task, the AI will see it 
-and use it during work.
+You can take todos you typed out previously in a plain text file, paste them into the chat, and instruct the AI to put them in the database and it will do that.  Then you can use the web UI to add and edit anything before you can ask the AI to carry out any tasks in the database. If you put notes in the task, the AI will see it and use it during work.
 
 You can have AI analyze requirements for any todos and add notes to them
 after doing research.  ("Research [todo item] and add notes it about how to do it").
 
 You can have it make todos by itself with any kind of command: "Go through the project
 and look for ... and make todos."  Then afterwards, you can inspect the todos it made
-in the web ui and edit them.   Then you can have it carry out those todos.
+in the web ui and edit them.
 
-Short todos you tell the AI to add to the database will be automatically expanded by it with improved
-descriptions, with more accurate and specific terms than you would want to bother coming up with for just a 
-todo item, resulting in a readable todo directory as if you had an expert team member working with you.
+Short todos you tell the AI to add to the database will be automatically expanded by it with improved descriptions, with more accurate and specific terms than you would want to labor to com up with for just a single todo item, resulting in a readable todo directory as if you had an expert team member working with you.
 
 You can tell your AI to carry out entire categories of todos and it will retrieve them,
 execute them, then mark them as completed.  If something isn't completed fully, the AI
@@ -58,6 +53,9 @@ add the results to the "notes" section, such as a generated report on how to exe
 of the code base.  This allows you to come back later.
 
 Reference multiple todo items in an instruction and the AI can update them.
+
+You can have AI look through the project and post project notes.
+
 
 
 ## 🌟 Key Features

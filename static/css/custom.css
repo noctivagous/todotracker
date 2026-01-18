@@ -546,3 +546,43 @@ calcite-accordion-item .tt-todo-details-content {
 #app-loader:not([hidden]) {
     display: block;
 }
+
+/* Clickable cards in main pane: provide consistent hover affordance (Calcite tokens) */
+calcite-card.tt-hover-card {
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+calcite-card.tt-hover-card:hover {
+    box-shadow: var(--calcite-shadow-sm);
+    transform: translateY(calc(-1 * var(--calcite-spacing-px)));
+}
+
+/* Clickable table rows in main pane: cursor + subtle hover background */
+calcite-table-row.tt-main-table-row,
+calcite-table-row.tt-main-note-row {
+    cursor: pointer;
+}
+
+calcite-table-row.tt-main-table-row:hover,
+calcite-table-row.tt-main-note-row:hover {
+    --calcite-table-row-background-color: var(--calcite-color-foreground-2);
+}
+
+/* Left pane: allow todo titles to wrap (undo truncation) */
+.tt-browser-item-content {
+    min-width: 0;
+}
+
+.tt-browser-item-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
+}
+
+.tt-browser-item-desc {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
+}

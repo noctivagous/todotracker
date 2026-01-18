@@ -104,7 +104,8 @@ const templates = {
                                id="searchInput"
                                placeholder="Search todos..."
                                value="{{:searchQuery}}"
-                               scale="m">
+                               scale="m"
+                               clearable>
                 </calcite-input>
                 <calcite-button onclick="document.getElementById('createModal').open = true" appearance="solid">
                     + New Todo
@@ -1796,7 +1797,7 @@ function renderTodosGridCardsHTML(flatTodos) {
             : '';
 
         return `
-            <calcite-card class="cursor-pointer" onclick="router.navigate('/todo/${t.id}')">
+            <calcite-card class="cursor-pointer tt-hover-card" onclick="router.navigate('/todo/${t.id}')">
                 <div slot="title" class="tt-main-todo-title truncate">${title}</div>
                 <div slot="subtitle" class="text-xs text-color-3">${escapeHtml(meta)}</div>
                 <div class="space-y-2">
@@ -1936,6 +1937,10 @@ function renderTodoBrowserListItemsHTML(todos) {
         items.push(`
             <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
                 <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>
+                <div slot="content" class="tt-browser-item-content min-w-0">
+                    <div class="tt-browser-item-title font-bold">${label}</div>
+                    <div class="tt-browser-item-desc text-xs text-color-3">${desc || ''}</div>
+                </div>
                 ${Array.isArray(t.children) && t.children.length ? renderTodoBrowserListItemsHTML(t.children) : ''}
             </calcite-list-item>
         `);
@@ -2322,6 +2327,17 @@ function initializeNotesView() {
             if (!id) return;
             router.navigate(`/notes/${id}`);
         });
+        // Ensure clicks anywhere within a list item select/navigate (including slotted content areas).
+        list.addEventListener('click', (e) => {
+            try {
+                const path = (e && e.composedPath) ? e.composedPath() : [];
+                const item = path.find((n) => n && n.tagName === 'CALCITE-LIST-ITEM');
+                if (!item) return;
+                const id = parseInt(item.value, 10);
+                if (!id) return;
+                router.navigate(`/notes/${id}`);
+            } catch (err) {}
+        });
     }
 
     const typeSeg = document.getElementById('ttNotesTypeSeg');
@@ -2361,6 +2377,17 @@ function initializeNotesView() {
             const id = parseInt(item.value, 10);
             if (!id) return;
             router.navigate(`/notes/${id}`);
+        });
+        // Same as left panel: make the full row clickable even when custom slotted content is present.
+        mainList.addEventListener('click', (e) => {
+            try {
+                const path = (e && e.composedPath) ? e.composedPath() : [];
+                const item = path.find((n) => n && n.tagName === 'CALCITE-LIST-ITEM');
+                if (!item) return;
+                const id = parseInt(item.value, 10);
+                if (!id) return;
+                router.navigate(`/notes/${id}`);
+            } catch (err) {}
         });
     }
 
@@ -2481,10 +2508,7 @@ function renderNotesBrowserPanelHTML(notes, opts, allNotes) {
         const created = escapeHtml(formatDate(n.created_at));
         const snippet = escapeHtml(_noteSnippet(n.content, 140));
         return `
-            <calcite-list-item value="${id}" label="${escapeHtml(meta)}" description="${created}">
-                <div slot="content-top" class="text-xs text-color-3">${escapeHtml(meta)}</div>
-                <div slot="content-bottom" class="text-sm text-color-2">${snippet || '—'}</div>
-            </calcite-list-item>
+            <calcite-list-item value="${id}" label="${escapeHtml(meta)}" description="${snippet || '—'}" metadata="${created}"></calcite-list-item>
         `;
     }).join('');
 
@@ -2661,7 +2685,7 @@ function renderMainNotesHTML(notes, options) {
                </div>`
             : '';
         return `
-            <calcite-card class="tt-note-card" onclick="router.navigate('/notes/${idNum}')">
+            <calcite-card class="tt-note-card cursor-pointer tt-hover-card" onclick="router.navigate('/notes/${idNum}')">
                 <div slot="title">Note #${id}</div>
                 <div slot="subtitle" class="text-xs text-color-3">${meta} · ${created}</div>
                 <div class="text-sm text-color-2">${snippet || '—'}</div>

@@ -288,7 +288,8 @@
                        placeholder="Search todos..."
                        value="{{ search_query or '' }}"
                        onkeydown="if(event.key === 'Enter') { handleSearch(event); }"
-                       scale="m">
+                       scale="m"
+                       clearable>
         </calcite-input>
 
         <!-- Sort Controls (preserve filters) -->
