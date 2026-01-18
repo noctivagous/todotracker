@@ -602,3 +602,17 @@ calcite-table-row.tt-main-note-row:hover {
     text-overflow: unset;
     word-break: break-word;
 }
+
+/* Left pane: status chip placement switches when panel is near its minimum width. */
+.tt-browser-status-chip--top {
+    display: none;
+    margin-block-end: var(--calcite-spacing-xxs);
+}
+
+#tt-panel-start[data-tt-status-chips-top="true"] .tt-browser-status-chip--side {
+    display: none;
+}
+
+#tt-panel-start[data-tt-status-chips-top="true"] .tt-browser-status-chip--top {
+    display: inline-flex;
+}

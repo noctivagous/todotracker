@@ -1484,6 +1484,43 @@ function initializeTodosView() {
     // Header controls are global (Todos + Notes).
     initializeHeaderControls();
 
+    // Responsive left panel: when the panel is near its min width, stack the status chip above title/description.
+    // Uses ResizeObserver (Calcite removed shell-panel toggle resize events in favor of observers).
+    const { startShell: _ttStartShellResponsive, startPanel: _ttStartPanelResponsive } = getShellTargets();
+    if (_ttStartShellResponsive && _ttStartPanelResponsive && !_ttStartShellResponsive._ttResponsiveBound) {
+        _ttStartShellResponsive._ttResponsiveBound = true;
+        const apply = () => {
+            try {
+                const sh = _ttStartShellResponsive;
+                const panel = _ttStartPanelResponsive;
+                const content = sh.shadowRoot && sh.shadowRoot.querySelector && sh.shadowRoot.querySelector('.content');
+                if (!content) return;
+                const cs = window.getComputedStyle(content);
+                const minInline = parseFloat(cs.minInlineSize || '0') || 0;
+                const w = content.getBoundingClientRect().width || 0;
+                const shouldStack = (minInline > 0) && (w <= (minInline + 30));
+                if (shouldStack) panel.setAttribute('data-tt-status-chips-top', 'true');
+                else panel.removeAttribute('data-tt-status-chips-top');
+            } catch (e) {}
+        };
+        try {
+            const ready = (_ttStartShellResponsive.componentOnReady && _ttStartShellResponsive.componentOnReady()) || Promise.resolve();
+            ready.then(() => {
+                try {
+                    const content = _ttStartShellResponsive.shadowRoot && _ttStartShellResponsive.shadowRoot.querySelector && _ttStartShellResponsive.shadowRoot.querySelector('.content');
+                    if (!content || typeof ResizeObserver === 'undefined') {
+                        apply();
+                        return;
+                    }
+                    const ro = new ResizeObserver(() => apply());
+                    _ttStartShellResponsive._ttResponsiveRO = ro;
+                    ro.observe(content);
+                    apply();
+                } catch (e) {}
+            }).catch(() => {});
+        } catch (e) {}
+    }
+
     // Left panel minimize toggle
     const leftToggle = document.getElementById('ttLeftPanelToggleBtn');
     if (leftToggle && !leftToggle._ttBound) {
@@ -1508,13 +1545,20 @@ function initializeTodosView() {
                 // Turn resizable off to clear any internal constraints
                 startShell.removeAttribute('resizable');
 
+                // Calcite ShellPanel reads computed min/max on (re)enabling resizable.
+                // If we just came from the minimized rail, max-inline-size can be transiently ~20px due to transition timing,
+                // which leads to an invalid clamp range (min>max) and the separator "sticks".
+                // Force transitions off briefly during the restore so computed min/max stabilize immediately.
+                let _ttPrevAnimTiming = null;
+                try {
+                    _ttPrevAnimTiming = startShell.style.getPropertyValue('--calcite-animation-timing') || null;
+                    startShell.style.setProperty('--calcite-animation-timing', '0s');
+                } catch (e) {}
+
                 // First, clear any inline size constraints to reset Calcite's internal state
                 try {
                     await startShell.updateSize({ inline: null });
                 } catch (e) {}
-
-                // Wait a tick for the size reset to propagate
-                await new Promise(resolve => setTimeout(resolve, 0));
 
                 // Restore previous width (or use default if too small)
                 // If the saved width is too small (at/near minimum), reset to default instead
@@ -1530,12 +1574,15 @@ function initializeTodosView() {
                     }
                 } catch (e) {}
 
-                // Wait another tick before re-enabling resizable to ensure size is fully set
-                await new Promise(resolve => setTimeout(resolve, 0));
-
                 if (prevResizable === 'true') {
                     try { startShell.setAttribute('resizable', ''); } catch (e) {}
                 }
+
+                // Restore Calcite animation timing back to normal.
+                try {
+                    if (_ttPrevAnimTiming) startShell.style.setProperty('--calcite-animation-timing', _ttPrevAnimTiming);
+                    else startShell.style.removeProperty('--calcite-animation-timing');
+                } catch (e) {}
 
                 startShell.removeAttribute('data-tt-resizable-prev');
                 startShell.removeAttribute('data-tt-prev-inline');
@@ -2386,8 +2433,9 @@ function renderTodoBrowserListItemsHTML(todos) {
         const meta = metaParts.join(' · ');
         items.push(`
             <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
-                ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
+                ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="tt-browser-status-chip tt-browser-status-chip--side status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                 <div slot="content" class="tt-browser-item-content min-w-0">
+                    ${showStatus ? `<calcite-chip scale="s" appearance="solid" class="tt-browser-status-chip tt-browser-status-chip--top status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                     <div class="tt-browser-item-title font-bold">
                         <span class="tt-browser-item-title-text">${label}</span>
                         <span class="tt-browser-item-id text-color-3">#${id}</span>
