@@ -3,6 +3,32 @@
 
 set -e  # Exit on any error
 
+# -----------------------------------------------------------------------------
+# IMPORTANT (Cursor/MCP stdio):
+# MCP over stdio requires stdout to be reserved for JSON-RPC messages only.
+# Any logging from this wrapper (or child wrapper tools like `uv`) to stdout can
+# corrupt the protocol stream, causing Cursor to restart the server and re-prompt
+# "Run" / "Allowlist" repeatedly.
+#
+# We detect non-interactive stdout (not a TTY) as "stdio mode" and:
+# - Send wrapper logs to stderr
+# - Avoid `uv run` (it may print to stdout)
+# - Avoid dependency auto-install prompts/noise
+# -----------------------------------------------------------------------------
+
+STDIO_MODE=0
+if [ ! -t 1 ]; then
+    STDIO_MODE=1
+fi
+
+log() {
+    if [ "${STDIO_MODE}" -eq 1 ]; then
+        echo "$@" >&2
+    else
+        echo "$@"
+    fi
+}
+
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -140,35 +166,35 @@ command_exists() {
 # Function to check if dependencies are installed
 check_dependencies() {
     local python_cmd="$1"
-    echo "Checking dependencies..."
+    log "Checking dependencies..."
 
     # Try to import required modules
     if ! "$python_cmd" -c "import mcp, fastapi, sqlalchemy, uvicorn" 2>/dev/null; then
-        echo "❌ Required dependencies not found."
-        echo "Please install dependencies first:"
-        echo ""
-        echo "Option 1 (recommended): uv pip install -r requirements.txt"
-        echo "Option 2: pip install -r requirements.txt"
-        echo "Option 3: python -m pip install -r requirements.txt"
-        echo ""
+        log "❌ Required dependencies not found."
+        log "Please install dependencies first:"
+        log ""
+        log "Option 1 (recommended): uv pip install -r requirements.txt"
+        log "Option 2: pip install -r requirements.txt"
+        log "Option 3: python -m pip install -r requirements.txt"
+        log ""
         exit 1
     fi
 
-    echo "✅ Dependencies are installed."
+    log "✅ Dependencies are installed."
 }
 
 # Try uv first (preferred)
-if command_exists uv; then
-    echo "Using uv environment..."
+if [ "${STDIO_MODE}" -eq 0 ] && command_exists uv; then
+    log "Using uv environment..."
 
     # Check if dependencies are available via uv (run from TodoTracker directory)
     if ! uv run --directory "${SCRIPT_DIR}" python -c "import mcp, fastapi, sqlalchemy, uvicorn" 2>/dev/null; then
-        echo "❌ Dependencies not available in uv environment."
-        echo "Installing dependencies with uv..."
+        log "❌ Dependencies not available in uv environment."
+        log "Installing dependencies with uv..."
         uv pip install -r requirements.txt
     fi
 
-    echo "Launching MCP server with uv..."
+    log "Launching MCP server with uv..."
     # If we have an explicit DB path, pass it as argv[1] so the MCP server cannot
     # accidentally re-auto-detect using its own cwd.
     if [ -n "${TODOTRACKER_DB_PATH:-}" ]; then
@@ -178,12 +204,12 @@ if command_exists uv; then
 
 # Fall back to virtual environment
 elif [ -f ".venv/bin/python" ]; then
-    echo "Using virtual environment (.venv)..."
+    log "Using virtual environment (.venv)..."
 
     VENV_PYTHON=".venv/bin/python"
     check_dependencies "$VENV_PYTHON"
 
-    echo "Launching MCP server with venv..."
+    log "Launching MCP server with venv..."
     if [ -n "${TODOTRACKER_DB_PATH:-}" ]; then
         exec "$VENV_PYTHON" -m src.mcp_server "${TODOTRACKER_DB_PATH}" "$@"
     fi
@@ -191,11 +217,11 @@ elif [ -f ".venv/bin/python" ]; then
 
 # Fall back to system Python
 elif command_exists python3; then
-    echo "Using system Python3 (no uv or venv found)..."
+    log "Using system Python3 (no uv or venv found)..."
 
     check_dependencies "python3"
 
-    echo "Launching MCP server with system Python..."
+    log "Launching MCP server with system Python..."
     if [ -n "${TODOTRACKER_DB_PATH:-}" ]; then
         exec python3 -m src.mcp_server "${TODOTRACKER_DB_PATH}" "$@"
     fi
@@ -203,21 +229,21 @@ elif command_exists python3; then
 
 # No Python found
 else
-    echo "❌ No Python environment found!"
-    echo ""
-    echo "Please install Python 3.10+ and set up the environment:"
-    echo ""
-    echo "1. Install uv (recommended):"
-    echo "   curl -LsSf https://astral.sh/uv/install.sh | sh"
-    echo ""
-    echo "2. Install dependencies:"
-    echo "   uv pip install -r requirements.txt"
-    echo ""
-    echo "3. Or create a virtual environment:"
-    echo "   python3 -m venv .venv"
-    echo "   source .venv/bin/activate"
-    echo "   pip install -r requirements.txt"
-    echo ""
+    log "❌ No Python environment found!"
+    log ""
+    log "Please install Python 3.10+ and set up the environment:"
+    log ""
+    log "1. Install uv (recommended):"
+    log "   curl -LsSf https://astral.sh/uv/install.sh | sh"
+    log ""
+    log "2. Install dependencies:"
+    log "   uv pip install -r requirements.txt"
+    log ""
+    log "3. Or create a virtual environment:"
+    log "   python3 -m venv .venv"
+    log "   source .venv/bin/activate"
+    log "   pip install -r requirements.txt"
+    log ""
     exit 1
 fi
 
