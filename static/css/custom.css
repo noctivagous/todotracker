@@ -422,6 +422,10 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
     display: none;
 }
 
+#tt-panel-start-shell[data-tt-minimized="true"] #ttNotesBrowserList {
+    display: none;
+}
+
 #tt-panel-start-shell[data-tt-minimized="true"] #ttLeftPanelToggleBtn {
     width: 15pt;
     min-width: 15pt;

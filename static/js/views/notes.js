@@ -297,6 +297,9 @@ function initializeNotesView() {
 
     // Markdown editing uses Toast UI via <tt-md-editor>.
 
+    // Left panel minimize toggle (shared helper, used by Todos + Notes)
+    try { ttBindLeftPanelMinimizeToggle(); } catch (e) {}
+
     // Left panel list selection
     const list = document.getElementById('ttNotesBrowserList');
     if (list && !list._ttBound) {
@@ -515,12 +518,15 @@ function renderNotesBrowserPanelHTML(notes, opts, allNotes) {
     }).join('');
 
     return `
-        <calcite-panel>
-            <div slot="header">Notes</div>
-            <calcite-list id="ttNotesBrowserList" selection-mode="single" filter-enabled>
+        <div class="space-y-3 tt-browser-panel">
+            <div class="flex items-center gap-2">
+                <calcite-button id="ttLeftPanelToggleBtn" appearance="transparent" scale="s" kind="neutral" title="Minimize/expand left panel" icon-start="chevrons-left"></calcite-button>
+            </div>
+
+            <calcite-list id="ttNotesBrowserList" display-mode="nested" selection-mode="single" selection-appearance="highlight">
                 ${listItems || '<calcite-list-item label="No notes" description="Create your first note with New."></calcite-list-item>'}
             </calcite-list>
-        </calcite-panel>
+        </div>
     `;
 }
 
