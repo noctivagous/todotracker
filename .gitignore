@@ -83,3 +83,6 @@ temp/
 # Calcite Design System repository
 designsys/
 designsys_backup/
+
+# Tests
+tests/
