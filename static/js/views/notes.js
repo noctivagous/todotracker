@@ -74,7 +74,7 @@ function renderSettingsViewHTML() {
 
     const layoutTab = `
         <calcite-block-group>
-            <calcite-block heading="Layout" description="Tune the SPA shell defaults" open>
+            <calcite-block heading="Layout" description="Adjust defaults" open>
                 <calcite-list>
                     ${ttSettingsSwitchRow('Dark theme', 'Use dark theme instead of light (default: light)', 'layout.theme_dark')}
                     <calcite-list-item

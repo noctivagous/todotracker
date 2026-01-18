@@ -88,6 +88,42 @@
                 </calcite-text-area>
             </div>
             
+ <!-- Progress Tracking (AI and User) - Always shown, inline editable - Horizontal Layout -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <!-- Work Completed -->
+        <calcite-card>
+            <h3 class="text-sm font-semibold mb-2">✅ Work Completed</h3>
+            <div id="workCompletedDisplay" class="{% if not todo.work_completed %}text-muted-foreground italic{% endif %} markdown-render">
+                {{ todo.work_completed or 'No work completed yet' }}
+            </div>
+            <calcite-text-area id="workCompletedInput" name="work_completed" rows="5" class="hidden">
+                {{ todo.work_completed or '' }}
+            </calcite-text-area>
+        </calcite-card>
+        
+        <!-- Work Remaining -->
+        <calcite-card>
+            <h3 class="text-sm font-semibold mb-2">📋 Work Remaining</h3>
+            <div id="workRemainingDisplay" class="{% if not todo.work_remaining %}text-muted-foreground italic{% endif %} markdown-render">
+                {{ todo.work_remaining or 'No remaining work specified' }}
+            </div>
+            <calcite-text-area id="workRemainingInput" name="work_remaining" rows="5" class="hidden">
+                {{ todo.work_remaining or '' }}
+            </calcite-text-area>
+        </calcite-card>
+        
+        <!-- Implementation Issues -->
+        <calcite-card>
+            <h3 class="text-sm font-semibold mb-2">⚠️ Implementation Issues</h3>
+            <div id="implementationIssuesDisplay" class="{% if not todo.implementation_issues %}text-muted-foreground italic{% endif %} markdown-render">
+                {{ todo.implementation_issues or 'No implementation issues' }}
+            </div>
+            <calcite-text-area id="implementationIssuesInput" name="implementation_issues" rows="5" class="hidden">
+                {{ todo.implementation_issues or '' }}
+            </calcite-text-area>
+        </calcite-card>
+    </div>
+
             <!-- Category and Tags - Inline Editable -->
             <div class="flex flex-wrap gap-2 mb-4">
                 <calcite-chip appearance="solid" scale="s" class="status-{{ todo.status.value }}">
@@ -229,41 +265,7 @@
         </div>
     </div>
     
-    <!-- Progress Tracking (AI and User) - Always shown, inline editable - Horizontal Layout -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <!-- Work Completed -->
-        <calcite-card>
-            <h3 class="text-sm font-semibold mb-2">✅ Work Completed</h3>
-            <div id="workCompletedDisplay" class="{% if not todo.work_completed %}text-muted-foreground italic{% endif %} markdown-render">
-                {{ todo.work_completed or 'No work completed yet' }}
-            </div>
-            <calcite-text-area id="workCompletedInput" name="work_completed" rows="5" class="hidden">
-                {{ todo.work_completed or '' }}
-            </calcite-text-area>
-        </calcite-card>
-        
-        <!-- Work Remaining -->
-        <calcite-card>
-            <h3 class="text-sm font-semibold mb-2">📋 Work Remaining</h3>
-            <div id="workRemainingDisplay" class="{% if not todo.work_remaining %}text-muted-foreground italic{% endif %} markdown-render">
-                {{ todo.work_remaining or 'No remaining work specified' }}
-            </div>
-            <calcite-text-area id="workRemainingInput" name="work_remaining" rows="5" class="hidden">
-                {{ todo.work_remaining or '' }}
-            </calcite-text-area>
-        </calcite-card>
-        
-        <!-- Implementation Issues -->
-        <calcite-card>
-            <h3 class="text-sm font-semibold mb-2">⚠️ Implementation Issues</h3>
-            <div id="implementationIssuesDisplay" class="{% if not todo.implementation_issues %}text-muted-foreground italic{% endif %} markdown-render">
-                {{ todo.implementation_issues or 'No implementation issues' }}
-            </div>
-            <calcite-text-area id="implementationIssuesInput" name="implementation_issues" rows="5" class="hidden">
-                {{ todo.implementation_issues or '' }}
-            </calcite-text-area>
-        </calcite-card>
-    </div>
+   
     
     <div class="text-sm text-muted-foreground mb-4">
         <div class="flex items-center gap-3 flex-wrap">
