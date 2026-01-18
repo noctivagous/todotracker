@@ -1,6 +1,3 @@
-/**
- * Render markdown content
- */
 function renderMarkdown(element) {
     if (!element || typeof marked === 'undefined') return;
     const markdownText = element.textContent || element.innerText;
@@ -870,4 +867,3 @@ function initializeHeaderControls() {
     }
 }
 
-/**

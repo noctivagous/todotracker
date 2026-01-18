@@ -319,7 +319,7 @@ function ensureTemplatesRegistered() {
     return true;
 }
 
+
 // NOTE: In the split-file setup, helpers like `renderTodoItem` are declared in later scripts.
 // We intentionally do NOT auto-register templates here.
 // `app.js` calls `ensureTemplatesRegistered()` once all view scripts are loaded.
-
