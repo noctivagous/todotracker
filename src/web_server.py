@@ -440,6 +440,7 @@ async def api_create_todo_form(
     category: str = Form("feature"),
     parent_id: Optional[int] = Form(None),
     topic: Optional[str] = Form(None),
+    author: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),  # Comma-separated tag names
     db: Session = Depends(get_db)
 ):
@@ -455,6 +456,7 @@ async def api_create_todo_form(
         category=TodoCategory(category),
         parent_id=parent_id,
         topic=topic if topic else None,
+        author=author if author else None,
         tag_names=tag_list
     )
     crud.create_todo(db, todo_create)
@@ -482,6 +484,7 @@ async def api_update_todo_form(
     category: Optional[str] = Form(None),
     status: Optional[str] = Form(None),
     topic: Optional[str] = Form(None),
+    author: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),  # Comma-separated tag names
     work_completed: Optional[str] = Form(None),
     work_remaining: Optional[str] = Form(None),
@@ -506,6 +509,8 @@ async def api_update_todo_form(
         update_data["status"] = TodoStatus(status)
     if topic is not None:
         update_data["topic"] = topic if topic else None
+    if author is not None:
+        update_data["author"] = author if author else None
     if tags is not None:
         # Parse tags from comma-separated string
         tag_list = [t.strip() for t in tags.split(',') if t.strip()]
@@ -721,10 +726,11 @@ async def api_create_note_form(
     content: str = Form(...),
     todo_id: Optional[int] = Form(None),
     category: Optional[str] = Form(None),
+    author: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """Create a new note from form data."""
-    note_create = NoteCreate(title=title, content=content, todo_id=todo_id, category=category)
+    note_create = NoteCreate(title=title, content=content, todo_id=todo_id, category=category, author=author if author else None)
     crud.create_note(db, note_create)
     
     if todo_id:

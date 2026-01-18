@@ -319,6 +319,10 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                         "type": "string",
                         "description": "Optional topic/theme for grouping related todos (e.g., 'window layout', 'authentication')",
                     },
+                    "author": {
+                        "type": "string",
+                        "description": "Optional author attribution (may be blank).",
+                    },
                     "tags": {
                         "type": "array",
                         "items": {"type": "string"},
@@ -392,6 +396,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                                 },
                                 "parent_id": {"type": "integer", "description": "Parent todo ID. If set, this todo is a subtask and will appear nested under its parent in the UI."},
                                 "topic": {"type": "string", "description": "Optional topic/theme"},
+                                "author": {"type": "string", "description": "Optional author attribution (may be blank)."},
                                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional list of tags"},
                                 "depends_on_id": {
                                     "type": "integer",
@@ -524,6 +529,10 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                     "topic": {
                         "type": "string",
                         "description": "Topic/theme for grouping",
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Optional author attribution (may be blank).",
                     },
                     "tags": {
                         "type": "array",
@@ -725,6 +734,10 @@ Note: When starting work on any returned todo, call update_todo to update progre
                         "type": "string",
                         "description": "Optional note category (e.g., research)",
                     },
+                    "author": {
+                        "type": "string",
+                        "description": "Optional author attribution (may be blank).",
+                    },
                 },
                 "required": ["content"],
             }),
@@ -760,6 +773,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
                                 "content": {"type": "string", "description": "The note content"},
                                 "todo_id": {"type": "integer", "description": "Optional: Todo ID to attach the note to"},
                                 "category": {"type": "string", "description": "Optional note category (e.g., research)"},
+                                "author": {"type": "string", "description": "Optional author attribution (may be blank)."},
                             },
                             "required": ["content"],
                         },
@@ -794,6 +808,10 @@ Note: When starting work on any returned todo, call update_todo to update progre
                     "category": {
                         "type": "string",
                         "description": "Optional note category (e.g., research)",
+                    },
+                    "author": {
+                        "type": "string",
+                        "description": "Optional author attribution (may be blank).",
                     },
                 },
                 "required": ["note_id"],
@@ -1063,6 +1081,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 category=TodoCategory(arguments.get("category", "feature")),
                 parent_id=arguments.get("parent_id"),
                 topic=arguments.get("topic"),
+                author=arguments.get("author"),
                 tag_names=arguments.get("tags", []),
                 queue=arguments.get("queue", 0),
                 task_size=arguments.get("task_size"),
@@ -1107,6 +1126,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         category=TodoCategory(item.get("category", "feature")),
                         parent_id=item.get("parent_id"),
                         topic=item.get("topic"),
+                        author=item.get("author"),
                         tag_names=item.get("tags", []),
                         queue=item.get("queue", 0),
                         task_size=item.get("task_size"),
@@ -1311,6 +1331,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 content=arguments["content"],
                 todo_id=arguments.get("todo_id"),
                 category=arguments.get("category"),
+                author=arguments.get("author"),
             )
             note = crud.create_note(db, note_create)
             return [TextContent(
@@ -1321,6 +1342,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         "id": note.id,
                         "title": getattr(note, "title", None),
                         "content": note.content,
+                        "author": getattr(note, "author", None),
                         "todo_id": note.todo_id,
                         "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
                         "category": getattr(note, "category", None),
@@ -1344,6 +1366,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         "id": note.id,
                         "title": getattr(note, "title", None),
                         "content": note.content,
+                        "author": getattr(note, "author", None),
                         "todo_id": note.todo_id,
                         "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
                         "category": getattr(note, "category", None),
@@ -1374,12 +1397,14 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                         content=item["content"],
                         todo_id=item.get("todo_id"),
                         category=item.get("category"),
+                        author=item.get("author"),
                     )
                     note = crud.create_note(db, note_create)
                     created.append({
                         "id": note.id,
                         "title": getattr(note, "title", None),
                         "content": note.content,
+                        "author": getattr(note, "author", None),
                         "todo_id": note.todo_id,
                         "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
                         "category": getattr(note, "category", None),
@@ -1908,6 +1933,7 @@ def _serialize_todo(todo) -> dict:
         "id": todo.id,
         "title": todo.title,
         "description": todo.description,
+        "author": getattr(todo, "author", None),
         "category": todo.category.value if todo.category else None,
         "status": todo.status.value if todo.status else None,
         "parent_id": todo.parent_id,
@@ -1960,6 +1986,7 @@ def _serialize_todo_tree(
             "id": note.id,
             "title": getattr(note, "title", None),
             "content": note.content,
+            "author": getattr(note, "author", None),
             "todo_id": getattr(note, "todo_id", None),
             "note_type": note.note_type.value if getattr(note, "note_type", None) else None,
             "category": getattr(note, "category", None),

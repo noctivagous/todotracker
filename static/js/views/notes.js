@@ -51,6 +51,19 @@ function ttSettingsSwitchRow(label, description, path) {
     `;
 }
 
+function ttSettingsTextRow(label, description, path, placeholder) {
+    const l = escapeHtml(String(label || ''));
+    const d = escapeHtml(String(description || ''));
+    const p = escapeHtml(String(path || ''));
+    const ph = escapeHtml(String(placeholder || ''));
+    // Value is synced via ttSettingsSyncControls() after render.
+    return `
+        <calcite-list-item label="${l}" description="${d}">
+            <calcite-input slot="actions-end" scale="s" placeholder="${ph}" data-tt-setting="${p}"></calcite-input>
+        </calcite-list-item>
+    `;
+}
+
 function renderSettingsViewHTML() {
     // Ensure settings are loaded so layout is applied on first paint.
     const s = ttGetSettings();
@@ -134,6 +147,8 @@ function renderSettingsViewHTML() {
             <calcite-block heading="Advanced" description="Optional sections and future-facing controls" open>
                 <calcite-list>
                     ${ttSettingsSwitchRow('Enable subtasks', 'Allow child todos (subtasks). If off, the UI hides subtasks and MCP tools will refuse parent_id.', 'features.subtasks_enabled')}
+                    ${ttSettingsSwitchRow('Sign posts with author name', 'Show author attribution on todo/note cards and list items', 'advanced.sign_posts_with_author_name')}
+                    ${ttSettingsTextRow('Author name', 'Default author to prefill on new todos/notes (when sign posts are enabled)', 'advanced.author_name', 'admin')}
                     ${ttSettingsSwitchRow('Completion percentage', 'Show completion percentage field', 'todos.detail.completion_percentage')}
                     ${ttSettingsSwitchRow('AI instructions', 'Show AI instruction toggles', 'todos.detail.ai_instructions')}
                     ${ttSettingsSwitchRow('Relates-to section', 'Show relates-to links section', 'todos.detail.relates_to')}
@@ -302,11 +317,8 @@ function initializeNotesView() {
         });
     }
 
-    // Apply navigation-secondary filter text to the notes list
-    if (list) {
-        const filterText = (document.getElementById('ttNavFilterInput') && document.getElementById('ttNavFilterInput').value) || '';
-        try { list.filterText = filterText; } catch (e) {}
-    }
+    // NOTE: We already filter notes in JS before rendering; applying Calcite list.filterText
+    // can cause "double filtering" when the snippet is rendered via slotted content (not description attr).
 
     // Main panel list selection
     const mainList = document.getElementById('ttMainNotesList');
@@ -442,6 +454,7 @@ function renderNotesBrowserPanelHTML(notes, opts, allNotes) {
     const showAttach = cfg.attachment !== false;
     const showCreated = cfg.created !== false;
     const showSnippet = cfg.snippet !== false;
+    const showAuthorSignposts = !!(settings && settings.advanced && settings.advanced.sign_posts_with_author_name);
 
     const items = (Array.isArray(notes) ? notes : []);
     const o = opts || getNotesRouteOptions();
@@ -454,6 +467,7 @@ function renderNotesBrowserPanelHTML(notes, opts, allNotes) {
         const categoryRaw = String(n.category || 'general');
         const title = escapeHtml(String((n.title || '')).trim());
         const label = title || `Note #${id}`;
+        const author = escapeHtml(String((n.author || '')).trim());
         const metaParts = [`#${id}`];
         if (showType) metaParts.push(noteTypeRaw);
         if (showCategory) metaParts.push(categoryRaw);
@@ -461,8 +475,17 @@ function renderNotesBrowserPanelHTML(notes, opts, allNotes) {
         const meta = metaParts.join(' · ');
         const created = showCreated ? escapeHtml(formatDate(n.created_at)) : '';
         const snippet = showSnippet ? escapeHtml(_noteSnippet(n.content, 140)) : '';
+        const authorRow = (showAuthorSignposts && author)
+            ? `<div class="text-xs text-color-3">${author}</div>`
+            : '';
         return `
-            <calcite-list-item value="${id}" label="${label}" description="${snippet || (showSnippet ? '—' : '')}" metadata="${escapeHtml([meta, created].filter(Boolean).join(' · '))}"></calcite-list-item>
+            <calcite-list-item value="${id}" label="${label}" description="${created}" metadata="${escapeHtml(meta)}">
+                <div slot="content-top" class="text-xs text-color-3">${escapeHtml(meta)}</div>
+                <div slot="content-bottom" class="space-y-1">
+                    ${showSnippet ? `<div class="markdown-render text-sm text-color-2">${snippet || '—'}</div>` : ''}
+                    ${authorRow}
+                </div>
+            </calcite-list-item>
         `;
     }).join('');
 
@@ -496,6 +519,7 @@ function renderNoteDetailHTML(note) {
     const showTitle = cfg.title !== false;
     const showCategory = cfg.category !== false;
     const showContent = cfg.content !== false;
+    const showAuthorSignposts = !!(settings && settings.advanced && settings.advanced.sign_posts_with_author_name);
 
     const idNum = parseInt(String(n.id || ''), 10);
     const id = escapeHtml(String(idNum || ''));
@@ -513,11 +537,13 @@ function renderNoteDetailHTML(note) {
            </div>`
         : '';
     const subtitle = showMeta ? `Created: ${created} · ${noteType} · ${category}` : '';
+    const authorText = escapeHtml(String((n.author || '')).trim());
 
     return `
         <calcite-card>
             <div slot="title">${escapeHtml(String((n.title || '')).trim()) || `Note #${id}`}</div>
             ${subtitle ? `<div slot="subtitle" class="text-xs text-color-3">${subtitle}</div>` : ''}
+            ${showAuthorSignposts && authorText ? `<div class="text-xs text-color-3">${authorText}</div>` : ''}
             <div class="space-y-3">
                 ${todoAttachRow ? `<div class="flex gap-2">${todoAttachRow}</div>` : ''}
                 <div class="flex items-center justify-between gap-2">
@@ -537,6 +563,11 @@ function renderNoteDetailHTML(note) {
                         <calcite-input data-tt-note-field="category" data-tt-note-id="${idNum || 0}" value="${escapeHtml(String(n.category || 'general'))}"></calcite-input>
                     </calcite-label>
                 ` : ''}
+
+                <calcite-label>
+                    Author
+                    <calcite-input data-tt-note-field="author" data-tt-note-id="${idNum || 0}" value="${escapeHtml(String(n.author || ''))}"></calcite-input>
+                </calcite-label>
 
                 ${showContent ? `
                     <calcite-label>
@@ -618,6 +649,7 @@ function initializeNoteDetailView(note) {
             if (field === 'content') patch.content = value;
             if (field === 'category') patch.category = value;
             if (field === 'title') patch.title = value;
+            if (field === 'author') patch.author = String(value || '').trim() || null;
             if (!Object.keys(patch).length) return;
             schedule(noteId, patch, 450);
         };
@@ -631,6 +663,7 @@ function initializeNoteDetailView(note) {
 function renderMainNotesHTML(notes, options) {
     const settings = ttGetSettings();
     const cfg = (settings && settings.notes && settings.notes.list) ? settings.notes.list : {};
+    const showAuthorSignposts = !!(settings && settings.advanced && settings.advanced.sign_posts_with_author_name);
     const showType = cfg.note_type !== false;
     const showCategory = cfg.category !== false;
     const showAttach = cfg.attachment !== false;
@@ -652,6 +685,7 @@ function renderMainNotesHTML(notes, options) {
         const idNum = parseInt(String(n.id || ''), 10) || 0;
         const id = escapeHtml(String(idNum));
         const title = escapeHtml(String((n.title || '')).trim());
+        const author = escapeHtml(String((n.author || '')).trim());
         const todoIdRaw = n.todo_id != null ? String(n.todo_id) : '';
         const todoId = todoIdRaw ? escapeHtml(todoIdRaw) : '';
         const noteTypeRaw = String(n.note_type || (n.todo_id ? 'attached' : 'project'));
@@ -665,19 +699,23 @@ function renderMainNotesHTML(notes, options) {
         const meta = metaParts.join(' · ');
         const attachedTitle = (n.todo_id != null) ? escapeHtml(getTodoTitleForNote(n)) : '';
         const attachRow = (showAttach && n.todo_id != null)
-            ? `<div class="flex items-center gap-2 mt-2">
-                    <span class="text-sm text-color-2">Attached to ${attachedTitle}</span>
+            ? `<div class="space-y-1 mt-2">
+                    <div class="text-sm text-color-2">Attached to ${attachedTitle}</div>
                     <calcite-button appearance="outline" scale="s" icon-start="link"
                         onclick="event.stopPropagation(); router.navigate('/todo/${parseInt(String(n.todo_id), 10) || 0}')">
                         Open todo #${escapeHtml(String(n.todo_id))}
                     </calcite-button>
                </div>`
             : '';
+        const authorRow = (showAuthorSignposts && author)
+            ? `<div class="text-xs text-color-3">${author}</div>`
+            : '';
         return `
             <calcite-card class="tt-note-card cursor-pointer tt-hover-card" onclick="router.navigate('/notes/${idNum}')">
                 <div slot="title">${title || `Note #${id}`}</div>
                 <div slot="subtitle" class="text-xs text-color-3">${escapeHtml([meta, created].filter(Boolean).join(' · '))}</div>
-                ${showSnippet ? `<div class="text-sm text-color-2">${snippet || '—'}</div>` : ''}
+                ${showSnippet ? `<div class="markdown-render text-sm text-color-2">${snippet || '—'}</div>` : ''}
+                ${authorRow}
                 ${attachRow}
             </calcite-card>
         `;
@@ -691,6 +729,7 @@ function renderMainNotesHTML(notes, options) {
     } else if (view === 'list') {
         const rows = pageItems.map((n) => {
             const idNum = parseInt(String(n.id || ''), 10) || 0;
+            const author = escapeHtml(String((n.author || '')).trim());
             const todoIdRaw = n.todo_id != null ? String(n.todo_id) : '';
             const todoId = todoIdRaw ? escapeHtml(todoIdRaw) : '';
             const noteTypeRaw = String(n.note_type || (n.todo_id ? 'attached' : 'project'));
@@ -712,12 +751,16 @@ function renderMainNotesHTML(notes, options) {
                         </calcite-button>
                    </div>`
                 : '';
+            const authorRow = (showAuthorSignposts && author)
+                ? `<div class="text-xs text-color-3">${author}</div>`
+                : '';
             return `
                 <calcite-list-item value="${idNum}" label="${escapeHtml(meta)}" description="${created}">
                     <div slot="content-top" class="text-xs text-color-3">${escapeHtml(meta)}</div>
                     <div slot="content-bottom" class="space-y-1">
                         ${attachRow}
-                        ${showSnippet ? `<div class="text-sm text-color-2">${desc || '—'}</div>` : ''}
+                        ${showSnippet ? `<div class="markdown-render text-sm text-color-2">${desc || '—'}</div>` : ''}
+                        ${authorRow}
                     </div>
                 </calcite-list-item>
             `;
@@ -861,6 +904,7 @@ function addCreateNoteModal() {
         <form id="createNoteModalForm" class="space-y-4">
             <input type="hidden" name="todo_id" id="ttCreateNoteTodoIdInput" value="">
             <input type="hidden" name="category" id="ttCreateNoteCategoryInput" value="">
+            <input type="hidden" name="author" id="ttCreateNoteAuthorInput" value="">
 
             <calcite-label>
                 Type
@@ -893,6 +937,11 @@ function addCreateNoteModal() {
             </calcite-label>
 
             <calcite-label>
+                Author
+                <calcite-input name="author_display" id="ttCreateNoteAuthorDisplay" placeholder="(optional)"></calcite-input>
+            </calcite-label>
+
+            <calcite-label>
                 Content*
                 <tt-md-editor name="content" height="240px" placeholder="Content (Markdown)"></tt-md-editor>
             </calcite-label>
@@ -916,6 +965,8 @@ function addCreateNoteModal() {
     const todoIdInput = document.getElementById('ttCreateNoteTodoIdInput');
     const categoryBox = document.getElementById('ttCreateNoteCategoryBox');
     const categoryInput = document.getElementById('ttCreateNoteCategoryInput');
+    const authorInput = document.getElementById('ttCreateNoteAuthorInput');
+    const authorDisplay = document.getElementById('ttCreateNoteAuthorDisplay');
 
     function _setComboboxSingleValue(box, value) {
         if (!box) return;
@@ -954,6 +1005,18 @@ function addCreateNoteModal() {
         });
         // Initialize
         if (categoryInput) categoryInput.value = 'general';
+    }
+
+    // Keep hidden author input in sync (form submission compatibility)
+    if (authorDisplay && !authorDisplay._ttBound) {
+        authorDisplay._ttBound = true;
+        const syncAuthor = () => {
+            const v = String(authorDisplay.value || '').trim();
+            if (authorInput) authorInput.value = v;
+        };
+        authorDisplay.addEventListener('calciteInputChange', syncAuthor);
+        authorDisplay.addEventListener('input', syncAuthor);
+        authorDisplay.addEventListener('change', syncAuthor);
     }
 
     if (typeSeg && !typeSeg._ttBound) {
@@ -1005,6 +1068,15 @@ function addCreateNoteModal() {
     window.ttOpenCreateNoteModal = async function (prefill) {
         const p = prefill || {};
         const todoId = p.todoId ? String(p.todoId) : '';
+        // Prefill author based on settings (only when sign posts are enabled)
+        try {
+            const s = ttGetSettings();
+            const enabled = !!(s && s.advanced && s.advanced.sign_posts_with_author_name);
+            const defAuthor = (s && s.advanced && s.advanced.author_name) ? String(s.advanced.author_name) : 'admin';
+            const authorVal = enabled ? defAuthor : '';
+            if (authorDisplay) authorDisplay.value = authorVal;
+            if (authorInput) authorInput.value = authorVal;
+        } catch (e) {}
         // Default to project note unless a todoId was provided
         if (typeSeg) {
             try { typeSeg.value = todoId ? 'attached' : 'project'; } catch (e) {}
@@ -1031,6 +1103,8 @@ function addCreateNoteModal() {
         try {
             if (categoryInput) categoryInput.value = 'general';
             if (typeSeg) typeSeg.value = 'project';
+            if (authorInput) authorInput.value = '';
+            if (authorDisplay) authorDisplay.value = '';
         } catch (e) {}
         syncTypeUI();
     });
@@ -1052,6 +1126,8 @@ function addCreateNoteModal() {
         if (tid === '' || tid === null) formData.delete('todo_id');
         const cat = formData.get('category');
         if (cat === '' || cat === null) formData.delete('category');
+        const auth = formData.get('author');
+        if (auth === '' || auth === null) formData.delete('author');
         
         try {
             const response = await fetch('/api/notes/form', {

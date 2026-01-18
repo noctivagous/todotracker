@@ -111,6 +111,7 @@ def create_todo(db: Session, todo: TodoCreate) -> Todo:
         status=todo.status,
         parent_id=todo.parent_id,
         topic=todo.topic,
+        author=getattr(todo, "author", None),
         queue=requested_queue,
         task_size=getattr(todo, "task_size", None),
         priority_class=getattr(todo, "priority_class", None),
@@ -553,6 +554,7 @@ def create_note(db: Session, note: NoteCreate) -> Note:
     db_note = Note(
         title=getattr(note, "title", None),
         content=note.content,
+        author=getattr(note, "author", None),
         todo_id=todo_id,
         note_type=nt,
         category=cat,

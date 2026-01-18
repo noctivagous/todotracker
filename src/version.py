@@ -16,8 +16,8 @@ Schema Version Convention:
 - Never skip versions or use non-sequential numbering
 """
 
-__version__ = "1.4.0"
-SCHEMA_VERSION = 6  # Current database schema version
+__version__ = "1.5.0"
+SCHEMA_VERSION = 7  # Current database schema version
 
 # Schema version history and changelog
 SCHEMA_CHANGELOG = {
@@ -85,6 +85,16 @@ SCHEMA_CHANGELOG = {
             "Added todo_relations table for informational 'relates to' links between todos",
             "Added todo_attachments table for file attachments linked to todos",
             "Added notes.title (optional) and updated UI/API/MCP to surface it",
+        ]
+    },
+    7: {
+        "version": "1.5.0",
+        "date": "2026-01-18",
+        "description": "Author attribution on todos and notes",
+        "changes": [
+            "Added todos.author (optional)",
+            "Added notes.author (optional)",
+            "SPA + MCP updated to display/edit author and optionally show author signposts",
         ]
     },
 }

@@ -12,6 +12,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify for sanitizing rendered markdown -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"></script>
     
     <!-- jQuery (required for JsRender/JsViews) -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -63,12 +65,10 @@
                     </calcite-segmented-control>
                 </div>
 
-                <calcite-navigation-user slot="user">
-                    <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
-                        <span id="ttThemeLabel">🌙 Dark</span>
-                    </calcite-button>
-                    <span slot="user-menu-actions" class="text-sm text-color-2">MCP Server Ready</span>
-                </calcite-navigation-user>
+                <calcite-button id="ttThemeToggle" slot="content-end" appearance="transparent" scale="s" title="Toggle theme">
+                    <span id="ttThemeLabel">🌙 Dark</span>
+                </calcite-button>
+                <calcite-chip slot="content-end" scale="s" appearance="outline">MCP Server Ready</calcite-chip>
             </calcite-navigation>
         </header>
 
@@ -98,8 +98,17 @@
             if (!markdownText || markdownText.trim() === '') return;
             
             try {
-                const html = marked.parse(markdownText);
-                element.innerHTML = html;
+                const unsafeHtml = marked.parse(markdownText);
+                let safeHtml = null;
+                if (typeof DOMPurify !== 'undefined' && DOMPurify && typeof DOMPurify.sanitize === 'function') {
+                    safeHtml = DOMPurify.sanitize(unsafeHtml, { USE_PROFILES: { html: true } });
+                }
+                if (safeHtml == null) {
+                    element.textContent = markdownText;
+                    element.classList.add('markdown-content');
+                    return;
+                }
+                element.innerHTML = safeHtml;
                 element.classList.add('markdown-content');
             } catch (e) {
                 console.error('Markdown rendering error:', e);

@@ -12,6 +12,8 @@
     
     <!-- Marked for markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify for sanitizing rendered markdown -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.7/purify.min.js"></script>
 
     <!-- Toast UI Editor (WYSIWYG editor that can output Markdown) -->
     <link rel="stylesheet" href="https://uicdn.toast.com/editor/latest/toastui-editor.min.css">
@@ -104,13 +106,10 @@
                 <calcite-button id="ttHeaderSettingsBtn" slot="content-end" appearance="transparent" scale="s" icon-start="gear" title="Settings">
                     Settings
                 </calcite-button>
-
-                <calcite-navigation-user slot="user">
-                    <calcite-button id="ttThemeToggle" slot="user-menu-actions" appearance="transparent" scale="s" title="Toggle theme">
-                        <span id="ttThemeLabel">🌙 Dark</span>
-                    </calcite-button>
-                    <span slot="user-menu-actions" class="text-sm text-color-2">MCP Server Ready</span>
-                </calcite-navigation-user>
+                <calcite-button id="ttThemeToggle" slot="content-end" appearance="transparent" scale="s" title="Toggle theme">
+                    <span id="ttThemeLabel">🌙 Dark</span>
+                </calcite-button>
+                <calcite-chip slot="content-end" scale="s" appearance="outline">MCP Server Ready</calcite-chip>
             </calcite-navigation>
         </header>
 

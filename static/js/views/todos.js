@@ -458,11 +458,8 @@ function initializeTodosView() {
         });
     }
 
-    // Apply navigation-secondary filter text to the left list (Calcite list external filtering)
-    if (list) {
-        const filterText = (document.getElementById('ttNavFilterInput') && document.getElementById('ttNavFilterInput').value) || '';
-        try { list.filterText = filterText; } catch (e) {}
-    }
+    // NOTE: We already filter todos in JS before rendering; applying Calcite list.filterText
+    // can cause "double filtering" when snippets are rendered via slotted content (not description attr).
 
     // Main panel list selection
     const mainList = document.getElementById('ttMainTodosList');
@@ -542,6 +539,7 @@ function addCreateTodoModal() {
     modal.innerHTML = `
         <form id="createModalForm" class="space-y-4">
             <input type="hidden" name="parent_id" id="ttCreateTodoParentId" value="" />
+            <input type="hidden" name="author" id="ttCreateTodoAuthorInput" value="" />
             <calcite-label>
                 Title*
                 <calcite-input type="text" name="title" required></calcite-input>
@@ -572,6 +570,12 @@ function addCreateTodoModal() {
                 <span class="text-color-3 text-xs">(optional, comma-separated)</span>
                 <calcite-input type="text" name="tags" placeholder="e.g., ui, frontend, urgent"></calcite-input>
             </calcite-label>
+
+            <calcite-label>
+                Author
+                <span class="text-color-3 text-xs">(optional)</span>
+                <calcite-input type="text" id="ttCreateTodoAuthorDisplay" placeholder=""></calcite-input>
+            </calcite-label>
         </form>
 
         <calcite-button id="createModalCancel" slot="footer-end" width="auto" appearance="outline" kind="neutral">
@@ -591,6 +595,8 @@ function addCreateTodoModal() {
     // Handle form submission
     const form = document.getElementById('createModalForm');
     const cancelBtn = document.getElementById('createModalCancel');
+    const authorInput = document.getElementById('ttCreateTodoAuthorInput');
+    const authorDisplay = document.getElementById('ttCreateTodoAuthorDisplay');
     if (cancelBtn) {
         cancelBtn.addEventListener('click', () => {
             modal.open = false;
@@ -602,6 +608,8 @@ function addCreateTodoModal() {
         try {
             const parentInput = document.getElementById('ttCreateTodoParentId');
             if (parentInput) parentInput.value = '';
+            if (authorInput) authorInput.value = '';
+            if (authorDisplay) authorDisplay.value = '';
         } catch (e) {}
         try {
             modal.setAttribute('heading', 'New Todo');
@@ -609,9 +617,23 @@ function addCreateTodoModal() {
         } catch (e) {}
     });
 
+    // Keep hidden author input in sync
+    if (authorDisplay && !authorDisplay._ttBound) {
+        authorDisplay._ttBound = true;
+        const syncAuthor = () => {
+            const v = String(authorDisplay.value || '').trim();
+            if (authorInput) authorInput.value = v;
+        };
+        authorDisplay.addEventListener('calciteInputChange', syncAuthor);
+        authorDisplay.addEventListener('input', syncAuthor);
+        authorDisplay.addEventListener('change', syncAuthor);
+    }
+
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
+        const auth = formData.get('author');
+        if (auth === '' || auth === null) formData.delete('author');
         
         try {
             const response = await fetch('/api/todos/form', {
@@ -639,6 +661,16 @@ function addCreateTodoModal() {
         const parentId = (o && o.parentId != null) ? (parseInt(String(o.parentId), 10) || 0) : 0;
         const parentInput = document.getElementById('ttCreateTodoParentId');
         if (parentInput) parentInput.value = (parentId && parentId > 0) ? String(parentId) : '';
+
+        // Prefill author based on settings (only when sign posts are enabled)
+        try {
+            const s = ttGetSettings();
+            const enabled = !!(s && s.advanced && s.advanced.sign_posts_with_author_name);
+            const defAuthor = (s && s.advanced && s.advanced.author_name) ? String(s.advanced.author_name) : 'admin';
+            const authorVal = enabled ? defAuthor : '';
+            if (authorDisplay) authorDisplay.value = authorVal;
+            if (authorInput) authorInput.value = authorVal;
+        } catch (e) {}
 
         try {
             if (parentId && parentId > 0) {
@@ -755,6 +787,8 @@ function initializeTodoDetailView(todo) {
                 el.value = todo.priority_class || '';
             } else if (field === 'topic') {
                 el.value = todo.topic || '';
+            } else if (field === 'author') {
+                el.value = todo.author || '';
             } else if (field === 'title') {
                 el.value = todo.title || '';
             } else if (field === 'status' || field === 'category') {
@@ -846,6 +880,8 @@ function initializeTodoDetailView(todo) {
                 patch.priority_class = (value || '').trim().toUpperCase() || null;
             } else if (field === 'topic') {
                 patch.topic = (value || '').trim() || null;
+            } else if (field === 'author') {
+                patch.author = String(value || '').trim() || null;
             } else if (field === 'title') {
                 patch.title = value;
             } else if (field === 'status' || field === 'category') {
@@ -1123,11 +1159,12 @@ function ttRenderSubtaskListItemsHTML(children) {
         const status = escapeHtml(replaceUnderscores(String(t.status || '')));
         const subCount = ttCountSubtasks(t);
         items.push(`
-            <calcite-list-item value="${id}" label="${label}" description="${desc}">
+            <calcite-list-item value="${id}" label="${label}">
                 <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${status || ''}</calcite-chip>
                 ${subCount > 0 ? `<calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks (${subCount})</calcite-chip>` : ''}
                 <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="launch"
                     onclick="event.stopPropagation(); router.navigate('/todo/${id}')">Open</calcite-button>
+                <div slot="content-bottom" class="markdown-render text-xs text-color-3">${desc || ''}</div>
                 ${Array.isArray(t.children) && t.children.length ? ttRenderSubtaskListItemsHTML(t.children) : ''}
             </calcite-list-item>
         `);
@@ -1139,23 +1176,27 @@ function renderMainTodosListItemsHTML(todos, opts) {
     const o = opts || {};
     const showStatus = o.showStatus !== false;
     const showDescription = o.showDescription !== false;
+    const settings = ttGetSettings();
+    const showAuthorSignposts = !!(settings && settings.advanced && settings.advanced.sign_posts_with_author_name);
 
     const items = [];
     for (const t of (Array.isArray(todos) ? todos : [])) {
         const label = escapeHtml(t.title || '');
         const desc = showDescription ? escapeHtml(_truncate(t.description || '', 140)) : '';
+        const author = escapeHtml(String((t.author || '')).trim());
         const metaParts = [`#${t.id}`];
         if (showStatus) metaParts.push(replaceUnderscores(t.status));
         const meta = metaParts.join(' · ');
         const subCount = ttCountSubtasks(t);
 
         items.push(`
-            <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
+            <calcite-list-item value="${t.id}" label="${label}" metadata="${escapeHtml(meta)}">
                 ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                 ${subCount > 0 ? `<calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks (${subCount})</calcite-chip>` : ''}
                 <div slot="content" class="tt-main-list-content min-w-0">
                     <div class="tt-main-todo-title truncate">${label}</div>
-                    ${showDescription ? `<div class="text-xs text-color-3 truncate">${desc || ''}</div>` : ''}
+                    ${showDescription ? `<div class="markdown-render text-xs text-color-3">${desc || ''}</div>` : ''}
+                    ${showAuthorSignposts && author ? `<div class="text-xs text-color-3 truncate">${author}</div>` : ''}
                 </div>
                 ${Array.isArray(t.children) && t.children.length ? renderMainTodosListItemsHTML(t.children, o) : ''}
             </calcite-list-item>
@@ -1167,6 +1208,7 @@ function renderMainTodosListItemsHTML(todos, opts) {
 function renderTodosGridCardsHTML(flatTodos) {
     const settings = ttGetSettings();
     const cfg = (settings && settings.todos && settings.todos.list) ? settings.todos.list : {};
+    const showAuthorSignposts = !!(settings && settings.advanced && settings.advanced.sign_posts_with_author_name);
     const subtasksEnabled = !settings || !settings.features ? true : (settings.features.subtasks_enabled !== false);
     const showStatus = cfg.status !== false;
     const showCategory = cfg.category !== false;
@@ -1183,6 +1225,7 @@ function renderTodosGridCardsHTML(flatTodos) {
     return flat.map((t) => {
         const title = escapeHtml(t.title || '');
         const desc = showDescription ? escapeHtml(_truncate(t.description || '', 140)) : '';
+        const author = escapeHtml(String((t.author || '')).trim());
         const status = escapeHtml(t.status || '');
         const category = escapeHtml(t.category || '');
         const subCount = subtasksEnabled ? ttCountSubtasks(t) : 0;
@@ -1220,7 +1263,8 @@ function renderTodosGridCardsHTML(flatTodos) {
                         ${sizeChip}
                         ${topic}
                     </div>
-                    ${showDescription ? `<div class="text-sm text-color-2">${desc || 'No description'}</div>` : ''}
+                    ${showDescription ? `<div class="markdown-render text-sm text-color-2">${desc || 'No description'}</div>` : ''}
+                    ${showAuthorSignposts && author ? `<div class="text-xs text-color-3">${author}</div>` : ''}
                     ${tags ? `<div class="flex items-center flex-wrap gap-1.5">${tags}</div>` : ''}
                     ${subCount > 0 ? ttRenderSubtasksPreviewHTML(t, 6) : ''}
                 </div>
@@ -1290,11 +1334,11 @@ function renderMainTodosHTML(todosTree, options) {
                 if (showStatus) metaParts.push(replaceUnderscores(t.status));
                 const meta = metaParts.join(' · ');
                 return `
-                    <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
+                    <calcite-list-item value="${t.id}" label="${label}" metadata="${escapeHtml(meta)}">
                         ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                         <div slot="content" class="tt-main-list-content min-w-0">
                             <div class="tt-main-todo-title truncate">${label}</div>
-                            ${showDescription ? `<div class="text-xs text-color-3 truncate">${desc || ''}</div>` : ''}
+                            ${showDescription ? `<div class="markdown-render text-xs text-color-3">${desc || ''}</div>` : ''}
                         </div>
                     </calcite-list-item>
                 `;
@@ -1430,7 +1474,7 @@ function renderTodoBrowserListItemsHTML(todos) {
         if (showTags && Array.isArray(t.tags) && t.tags.length) metaParts.push(`Tags ${t.tags.length}`);
         const meta = metaParts.join(' · ');
         items.push(`
-            <calcite-list-item value="${t.id}" label="${label}" description="${desc}" metadata="${escapeHtml(meta)}">
+            <calcite-list-item value="${t.id}" label="${label}" metadata="${escapeHtml(meta)}">
                 ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="tt-browser-status-chip tt-browser-status-chip--side status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                 <div slot="content" class="tt-browser-item-content min-w-0">
                     ${showStatus ? `<calcite-chip scale="s" appearance="solid" class="tt-browser-status-chip tt-browser-status-chip--top status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
@@ -1438,7 +1482,7 @@ function renderTodoBrowserListItemsHTML(todos) {
                         <span class="tt-browser-item-title-text">${label}</span>
                         <span class="tt-browser-item-id text-color-3">#${id}</span>
                         </div>
-                    ${showDescription ? `<div class="tt-browser-item-desc text-xs text-color-3">${desc || ''}</div>` : ''}
+                    ${showDescription ? `<div class="tt-browser-item-desc markdown-render text-xs text-color-3">${desc || ''}</div>` : ''}
                 </div>
                 ${Array.isArray(t.children) && t.children.length ? renderTodoBrowserListItemsHTML(t.children) : ''}
             </calcite-list-item>
@@ -1468,6 +1512,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
     const showAttachments = cfg.attachments !== false;
     const showCompletionPct = cfg.completion_percentage !== false;
     const showAi = cfg.ai_instructions !== false;
+    const showAuthorSignposts = !!(settings && settings.advanced && settings.advanced.sign_posts_with_author_name);
 
     const tagsCsv = (t.tags || []).map((x) => x.name).join(', ');
     const depsMet = !!t.dependencies_met;
@@ -1571,6 +1616,8 @@ function renderTodoDetailPanelHTML(todoDetail) {
         return parts.join(' · ');
     })();
 
+    const authorText = escapeHtml(String((t.author || '')).trim());
+
     const topFields = [
         showStatus ? `
             <calcite-label>
@@ -1599,6 +1646,12 @@ function renderTodoDetailPanelHTML(todoDetail) {
                 <calcite-input data-tt-field="topic" data-tt-todo-id="${t.id}" value="${escapeHtml(t.topic || '')}"></calcite-input>
             </calcite-label>
         ` : '',
+        `
+            <calcite-label>
+                Author
+                <calcite-input data-tt-field="author" data-tt-todo-id="${t.id}" value="${escapeHtml(String(t.author || ''))}"></calcite-input>
+            </calcite-label>
+        `,
     ].filter(Boolean).join('');
 
     const infoFields = [
@@ -1786,6 +1839,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
                         </div>
                         <calcite-chip id="ttAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
                     </div>
+                    ${showAuthorSignposts && authorText ? `<div class="text-xs text-color-3">${authorText}</div>` : ''}
 
                     ${topFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topFields}</div>` : ''}
 

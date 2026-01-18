@@ -3,8 +3,20 @@ function renderMarkdown(element) {
     const markdownText = element.textContent || element.innerText;
     if (!markdownText || markdownText.trim() === '') return;
     try {
-        const html = marked.parse(markdownText);
-        element.innerHTML = html;
+        const unsafeHtml = marked.parse(markdownText);
+        // IMPORTANT: marked allows raw HTML by default. Always sanitize before injecting.
+        // We prefer DOMPurify if present; otherwise fall back to plain text (safe).
+        let safeHtml = null;
+        if (typeof DOMPurify !== 'undefined' && DOMPurify && typeof DOMPurify.sanitize === 'function') {
+            safeHtml = DOMPurify.sanitize(unsafeHtml, { USE_PROFILES: { html: true } });
+        }
+        if (safeHtml == null) {
+            // Safe fallback: do not inject unsanitized HTML.
+            element.textContent = markdownText;
+            element.classList.add('markdown-content');
+            return;
+        }
+        element.innerHTML = safeHtml;
         element.classList.add('markdown-content');
     } catch (e) {
         console.error('Markdown rendering error:', e);
@@ -223,6 +235,12 @@ const TT_SETTINGS_DEFAULTS = {
         // These are also persisted to project config so MCP tools can respect them.
         subtasks_enabled: true,
     },
+    advanced: {
+        // If enabled, show "sign posts" (author attribution) in list/cards.
+        sign_posts_with_author_name: false,
+        // Default author to prefill on create when sign posts are enabled.
+        author_name: "admin",
+    },
     layout: {
         // 'full' (viewport width) | 'max' (1100px centered)
         width_mode: 'full',
@@ -374,6 +392,7 @@ function ttSettingsSyncControls(rootEl) {
         try {
             if (el.tagName === 'CALCITE-SWITCH') el.checked = (v !== false);
             if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') el.value = String(v || 'full');
+            if (el.tagName === 'CALCITE-INPUT') el.value = (v == null) ? '' : String(v);
         } catch (e) {}
     });
 }
@@ -387,6 +406,7 @@ function ttSettingsApplyFromEl(el) {
     try {
         if (el.tagName === 'CALCITE-SWITCH') nextValue = !!el.checked;
         else if (el.tagName === 'CALCITE-SEGMENTED-CONTROL') nextValue = String(el.value || 'full');
+        else if (el.tagName === 'CALCITE-INPUT') nextValue = String(el.value || '');
         else return;
     } catch (e) {
         return;
@@ -451,6 +471,14 @@ function ttBindSettingsControls(rootEl) {
         seg._ttBoundSettings = true;
         seg.addEventListener('calciteSegmentedControlChange', () => ttSettingsApplyFromEl(seg));
         seg.addEventListener('change', () => ttSettingsApplyFromEl(seg));
+    });
+
+    root.querySelectorAll('calcite-input[data-tt-setting]').forEach((inp) => {
+        if (inp._ttBoundSettings) return;
+        inp._ttBoundSettings = true;
+        inp.addEventListener('calciteInputChange', () => ttSettingsApplyFromEl(inp));
+        inp.addEventListener('change', () => ttSettingsApplyFromEl(inp));
+        inp.addEventListener('input', () => ttSettingsApplyFromEl(inp));
     });
 
     const resetBtn = root.querySelector('#ttSettingsResetBtn');

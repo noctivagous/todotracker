@@ -431,6 +431,38 @@ def migrate_5_to_6(db):
     db.commit()
 
 
+def migrate_6_to_7(db):
+    """
+    Migration from schema v6 to v7.
+    Adds optional author attribution fields:
+      - todos.author: TEXT nullable
+      - notes.author: TEXT nullable
+    """
+    print("  → Adding author columns to todos/notes...")
+
+    # todos.author
+    try:
+        db.execute(text("ALTER TABLE todos ADD COLUMN author TEXT"))
+        print("    ✓ Added todos.author column")
+    except OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            print("    (todos.author column already exists, skipping)")
+        else:
+            raise
+
+    # notes.author
+    try:
+        db.execute(text("ALTER TABLE notes ADD COLUMN author TEXT"))
+        print("    ✓ Added notes.author column")
+    except OperationalError as e:
+        if "duplicate column" in str(e).lower():
+            print("    (notes.author column already exists, skipping)")
+        else:
+            raise
+
+    db.commit()
+
+
 # Migration map: from_version -> migration_function
 MIGRATIONS = {
     2: migrate_1_to_2,
@@ -438,6 +470,7 @@ MIGRATIONS = {
     4: migrate_3_to_4,
     5: migrate_4_to_5,
     6: migrate_5_to_6,
+    7: migrate_6_to_7,
 }
 
 

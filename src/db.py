@@ -68,6 +68,9 @@ class Todo(Base):
     # Topic and organization
     topic = Column(String(200), nullable=True, index=True)  # e.g., "window layout", "authentication"
 
+    # Optional attribution (may be blank/NULL)
+    author = Column(String(120), nullable=True)
+
     # Execution & priority metadata
     # queue: 0 means not in queue; lower numbers execute first
     queue = Column(Integer, nullable=False, default=0, index=True)
@@ -154,6 +157,8 @@ class Note(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(500), nullable=True)
     content = Column(Text, nullable=False)
+    # Optional attribution (may be blank/NULL)
+    author = Column(String(120), nullable=True)
     todo_id = Column(Integer, ForeignKey("todos.id"), nullable=True)
     # New in schema v5:
     # - note_type: explicit type (project vs attached) for filtering/UX

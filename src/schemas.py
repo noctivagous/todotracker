@@ -11,6 +11,14 @@ from .db import TodoCategory, TodoStatus, NoteType
 
 # Todo Schemas
 
+def _normalize_author(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    if not isinstance(v, str):
+        raise ValueError("author must be a string")
+    s = v.strip()
+    return s if s else None
+
 class TagBase(BaseModel):
     """Base schema for Tag."""
     name: str = Field(..., min_length=1, max_length=50)
@@ -38,6 +46,7 @@ class TodoBase(BaseModel):
     status: TodoStatus = TodoStatus.PENDING
     parent_id: Optional[int] = None
     topic: Optional[str] = Field(None, max_length=200)
+    author: Optional[str] = Field(None, max_length=120, description="Optional author attribution (may be blank)")
     tag_names: Optional[List[str]] = []  # Tag names to associate
 
     # Execution & priority metadata
@@ -116,6 +125,11 @@ class TodoBase(BaseModel):
             return v
         raise ValueError("ai_instructions must be a JSON object (dict) or JSON string")
 
+    @field_validator("author", mode="before")
+    @classmethod
+    def _normalize_author_field(cls, v):
+        return _normalize_author(v)
+
 
 class TodoCreate(TodoBase):
     """Schema for creating a new todo."""
@@ -130,6 +144,7 @@ class TodoUpdate(BaseModel):
     status: Optional[TodoStatus] = None
     parent_id: Optional[int] = None
     topic: Optional[str] = Field(None, max_length=200)
+    author: Optional[str] = Field(None, max_length=120, description="Optional author attribution (may be blank)")
     tag_names: Optional[List[str]] = None  # Tag names to update
 
     # Execution & priority metadata
@@ -174,6 +189,11 @@ class TodoUpdate(BaseModel):
     def _normalize_ai_instructions_update(cls, v):
         return TodoBase._normalize_ai_instructions(v)
 
+    @field_validator("author", mode="before")
+    @classmethod
+    def _normalize_author_update(cls, v):
+        return _normalize_author(v)
+
 
 class TodoInDB(TodoBase):
     """Schema for Todo in database."""
@@ -213,11 +233,17 @@ class NoteCreate(BaseModel):
     content: str = Field(..., min_length=1)
     todo_id: Optional[int] = None
     category: Optional[str] = Field(None, description="Optional note category (e.g., research)")
+    author: Optional[str] = Field(None, max_length=120, description="Optional author attribution (may be blank)")
 
     @field_validator("category", mode="before")
     @classmethod
     def _normalize_category(cls, v):
         return _normalize_note_category(v)
+
+    @field_validator("author", mode="before")
+    @classmethod
+    def _normalize_author_create(cls, v):
+        return _normalize_author(v)
 
 
 class NoteUpdate(BaseModel):
@@ -226,11 +252,17 @@ class NoteUpdate(BaseModel):
     content: Optional[str] = Field(None, min_length=1)
     todo_id: Optional[int] = None
     category: Optional[str] = None
+    author: Optional[str] = Field(None, max_length=120, description="Optional author attribution (may be blank)")
 
     @field_validator("category", mode="before")
     @classmethod
     def _normalize_category(cls, v):
         return _normalize_note_category(v)
+
+    @field_validator("author", mode="before")
+    @classmethod
+    def _normalize_author_update(cls, v):
+        return _normalize_author(v)
 
 
 class NoteInDB(BaseModel):
@@ -238,6 +270,7 @@ class NoteInDB(BaseModel):
     id: int
     title: Optional[str] = None
     content: str
+    author: Optional[str] = None
     todo_id: Optional[int] = None
     note_type: NoteType
     category: str

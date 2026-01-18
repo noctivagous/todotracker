@@ -663,3 +663,35 @@ calcite-table-row.tt-main-note-row:hover {
 #tt-panel-start[data-tt-status-chips-top="true"] .tt-browser-status-chip--top {
     display: inline-flex;
 }
+
+/* Description snippets: light gray background (#f5f5f5) */
+/* Neutralize block element margins so container padding provides uniform spacing */
+.markdown-render {
+    background-color: #f5f5f5;
+    padding: var(--calcite-spacing-xs);
+    border-radius: var(--calcite-corner-radius-sm);
+    overflow:hidden;
+}
+
+.markdown-render p,
+.markdown-render h1,
+.markdown-render h2,
+.markdown-render h3,
+.markdown-render h4,
+.markdown-render h5,
+.markdown-render h6,
+.markdown-render ul,
+.markdown-render ol,
+.markdown-render blockquote,
+.markdown-render pre {
+    margin: 0;
+    padding: 0;
+}
+
+.markdown-render > :first-child {
+    margin-top: 0;
+}
+
+.markdown-render > :last-child {
+    margin-bottom: 0;
+}
