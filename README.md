@@ -5,12 +5,13 @@ Description
 
 TodoTracker is an AI-powered todo management system with **Model Context Protocol (MCP)** integration for agentic code editors (AI assistants like Claude, Windsurf, Cursor IDE, Codex, etc. ) plus a web UI for manual management.
 
+Use the power of AI to enter todos in the AI chat of the agentic IDE
 
 
 Purpose
 
 When using AI to make code, the software development process changes.  The software developer spends more time on planning
-and todo lsits: making features, functionality, and issue descriptions large and small.  Integrating this with AI
+and todo lists: making features, functionality, and issue descriptions large and small.  Integrating this with AI
 chat allows the power of AI to bring in different considerations into the to-dos that were previously made manually, 
 which then allows the software developer to review them before instructing the AI to implement them.
 

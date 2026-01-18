@@ -440,6 +440,15 @@ async def api_create_note(note: NoteCreate, db: Session = Depends(get_db)):
     return crud.create_note(db, note)
 
 
+@app.put("/api/notes/{note_id}", response_model=NoteInDB)
+async def api_update_note(note_id: int, note_update: NoteUpdate, db: Session = Depends(get_db)):
+    """Update a note (SPA-friendly)."""
+    note = crud.update_note(db, note_id, note_update)
+    if not note:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return note
+
+
 @app.post("/api/notes/form")
 async def api_create_note_form(
     content: str = Form(...),

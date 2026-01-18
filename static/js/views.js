@@ -634,6 +634,9 @@ function getNotesRouteOptions() {
         filterText: (params.filter || '').trim(),
         noteType: (params.note_type || 'all').trim(),
         category: (params.category || '').trim(),
+        view: (params.view || 'grid'),
+        page: clampInt(params.page, 1, 1, 999999),
+        pageSize: clampInt(params.page_size, 24, 5, 200),
     };
 }
 
@@ -865,7 +868,7 @@ function initializeHeaderControls() {
             if (navSearch._ttSyncing) return;
             const query = (navSearch.value || '').trim();
             if (isNotesMode()) {
-                navigateNotesWithParamPatch({ q: query });
+                navigateNotesWithParamPatch({ q: query, page: 1 });
             } else {
                 navigateTodosWithParamPatch({ q: query, page: 1 });
             }
@@ -883,7 +886,7 @@ function initializeHeaderControls() {
             timer = setTimeout(() => {
                 const q = (navFilter.value || '').trim();
                 if (isNotesMode()) {
-                    navigateNotesWithParamPatch({ filter: q });
+                    navigateNotesWithParamPatch({ filter: q, page: 1 });
                 } else {
                     navigateTodosWithParamPatch({ filter: q, page: 1 });
                 }
@@ -2156,6 +2159,23 @@ async function apiUpdateTodo(todoId, patch) {
     return await res.json();
 }
 
+async function apiUpdateNote(noteId, patch) {
+    const res = await fetch(`/api/notes/${noteId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch || {})
+    });
+    if (!res.ok) {
+        let msg = 'Failed to update note';
+        try {
+            const j = await res.json();
+            msg = j.detail || j.message || msg;
+        } catch (e) {}
+        throw new Error(msg);
+    }
+    return await res.json();
+}
+
 async function apiAddDependency(todoId, dependsOnId) {
     const res = await fetch('/api/dependencies/json', {
         method: 'POST',
@@ -2220,6 +2240,8 @@ async function renderNotesView() {
         const filteredTypeCat = filterNotesByTypeAndCategory(notes, opts.noteType, opts.category);
         const filtered = filterNotesClientSide(filteredTypeCat, opts.searchQuery, opts.filterText);
         window.ttAllNotesCache = notes || [];
+        // For attached notes, we want to display "Attached to <todo title>" in the main view.
+        try { await ensureTodoTitleIndex(); } catch (e) {}
 
         // Notes uses master-detail too: list in panel-start, detail in main.
         const { startPanel, startShell, mainView } = getShellTargets();
@@ -2229,7 +2251,7 @@ async function renderNotesView() {
         collapseDetailPanel();
 
         const view = mainView || document.getElementById('app-view');
-        view.innerHTML = renderMainNotesPlaceholderHTML(filtered);
+        view.innerHTML = renderMainNotesHTML(filtered, opts);
         syncNotesSelection(null);
         hideLoading();
         
@@ -2328,6 +2350,52 @@ function initializeNotesView() {
         const filterText = (document.getElementById('ttNavFilterInput') && document.getElementById('ttNavFilterInput').value) || '';
         try { list.filterText = filterText; } catch (e) {}
     }
+
+    // Main panel list selection
+    const mainList = document.getElementById('ttMainNotesList');
+    if (mainList && !mainList._ttBound) {
+        mainList._ttBound = true;
+        mainList.addEventListener('calciteListItemSelect', (e) => {
+            const item = e.target;
+            if (!item) return;
+            const id = parseInt(item.value, 10);
+            if (!id) return;
+            router.navigate(`/notes/${id}`);
+        });
+    }
+
+    // Main panel table row click
+    document.querySelectorAll('.tt-main-note-row').forEach((row) => {
+        if (row._ttBound) return;
+        row._ttBound = true;
+        row.addEventListener('click', () => {
+            const id = parseInt(row.getAttribute('data-tt-note-id'), 10);
+            if (!id) return;
+            router.navigate(`/notes/${id}`);
+        });
+    });
+
+    // Main panel view mode segmented control
+    const viewSeg = document.getElementById('ttMainNotesViewModeSeg');
+    if (viewSeg && !viewSeg._ttBound) {
+        viewSeg._ttBound = true;
+        viewSeg.addEventListener('calciteSegmentedControlChange', () => {
+            const v = viewSeg.value || 'grid';
+            navigateNotesWithParamPatch({ view: v, page: 1 });
+        });
+    }
+
+    // Main panel pagination
+    const pagination = document.getElementById('ttMainNotesPagination');
+    if (pagination && !pagination._ttBound) {
+        pagination._ttBound = true;
+        pagination.addEventListener('calcitePaginationChange', () => {
+            const pageSize = parseInt(String(pagination.pageSize || 24), 10) || 24;
+            const startItem = parseInt(String(pagination.startItem || 1), 10) || 1;
+            const page = Math.max(1, Math.ceil(startItem / pageSize));
+            navigateNotesWithParamPatch({ page, page_size: pageSize });
+        });
+    }
 }
 
 function syncNotesSelection(selectedNoteId) {
@@ -2343,6 +2411,59 @@ function syncNotesSelection(selectedNoteId) {
 function _noteSnippet(content, n) {
     const t = String(content || '').trim().replace(/\s+/g, ' ');
     return t.length > n ? (t.slice(0, n - 1) + '…') : t;
+}
+
+async function ensureTodoTitleIndex() {
+    if (window.ttTodoTitleById && typeof window.ttTodoTitleById === 'object') return window.ttTodoTitleById;
+    window.ttTodoTitleById = window.ttTodoTitleById || {};
+
+    // Reuse existing cache if present
+    try {
+        const src = Array.isArray(window.ttAllTodosCache) ? window.ttAllTodosCache : null;
+        if (src && src.length) {
+            const map = {};
+            const walk = (arr) => {
+                for (const t of arr || []) {
+                    if (t && t.id != null) map[String(t.id)] = String(t.title || '');
+                    if (t.children && t.children.length) walk(t.children);
+                }
+            };
+            walk(src);
+            window.ttTodoTitleById = map;
+            return map;
+        }
+    } catch (e) {}
+
+    // Fetch todos once to build id->title mapping for attached notes.
+    try {
+        const res = await fetch('/api/todos');
+        if (!res.ok) return window.ttTodoTitleById;
+        const todos = await res.json();
+        const map = {};
+        const walk = (arr) => {
+            for (const t of arr || []) {
+                if (t && t.id != null) map[String(t.id)] = String(t.title || '');
+                if (t.children && t.children.length) walk(t.children);
+            }
+        };
+        walk(todos || []);
+        window.ttTodoTitleById = map;
+        return map;
+    } catch (e) {
+        return window.ttTodoTitleById;
+    }
+}
+
+function getTodoTitleForNote(note) {
+    try {
+        const todoId = note && note.todo_id != null ? String(note.todo_id) : '';
+        if (!todoId) return '';
+        const map = window.ttTodoTitleById || {};
+        const title = String(map[todoId] || '').trim();
+        return title || `Todo #${todoId}`;
+    } catch (e) {
+        return '';
+    }
 }
 
 function renderNotesBrowserPanelHTML(notes, opts, allNotes) {
@@ -2396,8 +2517,14 @@ function renderNoteDetailHTML(note) {
     const todoId = n.todo_id ? parseInt(String(n.todo_id), 10) : null;
     const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
     const category = escapeHtml(String(n.category || 'general'));
-    const todoLink = todoId
-        ? `<calcite-button appearance="outline" scale="s" icon-start="link" onclick="router.navigate('/todo/${todoId}')">Open Todo #${todoId}</calcite-button>`
+    const todoTitle = todoId ? escapeHtml(getTodoTitleForNote(n)) : '';
+    const todoAttachRow = todoId
+        ? `<div class="flex items-center gap-2">
+                <span class="text-sm text-color-2">Attached to ${todoTitle}</span>
+                <calcite-button appearance="outline" scale="s" icon-start="link" onclick="router.navigate('/todo/${todoId}')">
+                    Open todo #${todoId}
+                </calcite-button>
+           </div>`
         : '';
 
     return `
@@ -2405,13 +2532,237 @@ function renderNoteDetailHTML(note) {
             <div slot="title">Note #${id}</div>
             <div slot="subtitle" class="text-xs text-color-3">Created: ${created} · ${noteType} · ${category}</div>
             <div class="space-y-3">
-                ${todoLink ? `<div class="flex gap-2">${todoLink}</div>` : ''}
-                <div class="markdown-render">${escapeHtml(n.content || '')}</div>
+                ${todoAttachRow ? `<div class="flex gap-2">${todoAttachRow}</div>` : ''}
+                <div class="flex items-center justify-between gap-2">
+                    <calcite-chip id="ttNoteAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
+                </div>
+
+                <calcite-label>
+                    Category
+                    <calcite-input data-tt-note-field="category" data-tt-note-id="${idNum || 0}" value="${escapeHtml(String(n.category || 'general'))}"></calcite-input>
+                </calcite-label>
+
+                <calcite-label>
+                    Content (Markdown)
+                    <tt-md-editor data-tt-note-field="content" data-tt-note-id="${idNum || 0}" height="360px" placeholder="Write a note..."></tt-md-editor>
+                </calcite-label>
+
                 <div class="flex gap-2">
                     <calcite-button appearance="solid" kind="danger" scale="s" icon-start="trash" onclick="deleteNote(${idNum || 0})">Delete</calcite-button>
                 </div>
             </div>
         </calcite-card>
+    `;
+}
+
+function initializeNoteDetailView(note) {
+    const n = note || {};
+    const noteId = parseInt(String(n.id || ''), 10);
+    if (!noteId) return;
+
+    const autosaveChip = document.getElementById('ttNoteAutosaveChip');
+    const setChip = (txt) => { try { if (autosaveChip) autosaveChip.textContent = txt; } catch (e) {} };
+    setChip('Saved');
+
+    window.ttNoteAutosaveState = window.ttNoteAutosaveState || {};
+    const getState = (id) => {
+        if (!window.ttNoteAutosaveState[id]) window.ttNoteAutosaveState[id] = { timer: null, patch: {} };
+        return window.ttNoteAutosaveState[id];
+    };
+
+    const flush = async (id) => {
+        const state = getState(id);
+        const patch = state.patch || {};
+        state.patch = {};
+        state.timer = null;
+        if (!patch || Object.keys(patch).length === 0) return;
+        try {
+            setChip('Saving…');
+            const updated = await apiUpdateNote(id, patch);
+            // Keep cache up to date (best effort)
+            try {
+                const all = Array.isArray(window.ttAllNotesCache) ? window.ttAllNotesCache : [];
+                const idx = all.findIndex((x) => parseInt(String(x.id || ''), 10) === id);
+                if (idx >= 0) all[idx] = { ...all[idx], ...(updated || {}) };
+                window.ttAllNotesCache = all;
+            } catch (e) {}
+            setChip(`Saved ${new Date().toLocaleTimeString()}`);
+        } catch (e) {
+            console.error('Note update failed:', e);
+            setChip('Save failed');
+            alert('Failed to save note changes: ' + (e.message || e));
+        }
+    };
+
+    const schedule = (id, patch, debounceMs) => {
+        const state = getState(id);
+        state.patch = { ...(state.patch || {}), ...(patch || {}) };
+        if (state.timer) clearTimeout(state.timer);
+        setChip('Saving…');
+        state.timer = setTimeout(() => flush(id), Math.max(0, debounceMs || 0));
+    };
+
+    // Set initial editor content after render (avoid stuffing big markdown into HTML attributes).
+    const contentEl = document.querySelector(`tt-md-editor[data-tt-note-field="content"][data-tt-note-id="${noteId}"]`);
+    if (contentEl) {
+        try { contentEl.value = n.content || ''; } catch (e) {}
+    }
+
+    // Bind autosave
+    document.querySelectorAll(`[data-tt-note-field][data-tt-note-id="${noteId}"]`).forEach((el) => {
+        if (el._ttBoundNoteAutosave) return;
+        el._ttBoundNoteAutosave = true;
+        const field = el.getAttribute('data-tt-note-field');
+
+        const handler = () => {
+            let value = el.value;
+            const patch = {};
+            if (field === 'content') patch.content = value;
+            if (field === 'category') patch.category = value;
+            if (!Object.keys(patch).length) return;
+            schedule(noteId, patch, 450);
+        };
+
+        el.addEventListener('input', handler);
+        el.addEventListener('change', handler);
+        el.addEventListener('calciteInputChange', handler);
+    });
+}
+
+function renderMainNotesHTML(notes, options) {
+    const o = options || {};
+    const view = (o.view === 'list' || o.view === 'table') ? o.view : 'grid';
+    const itemsAll = Array.isArray(notes) ? notes : [];
+    const totalItems = itemsAll.length;
+    const pageSize = clampInt(o.pageSize, 24, 5, 200);
+    const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+    const page = Math.min(Math.max(1, clampInt(o.page, 1, 1, 999999)), totalPages);
+    const startIdx = (page - 1) * pageSize;
+    const pageItems = itemsAll.slice(startIdx, startIdx + pageSize);
+    const startItem = totalItems ? (startIdx + 1) : 1;
+
+    const noteCard = (n) => {
+        const idNum = parseInt(String(n.id || ''), 10) || 0;
+        const id = escapeHtml(String(idNum));
+        const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
+        const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
+        const category = escapeHtml(String(n.category || 'general'));
+        const created = escapeHtml(formatDate(n.created_at));
+        const snippet = escapeHtml(_noteSnippet(n.content, 160));
+        const meta = todoId ? `#${id} · ${noteType} · ${category} · Todo #${todoId}` : `#${id} · ${noteType} · ${category}`;
+        const attachedTitle = (n.todo_id != null) ? escapeHtml(getTodoTitleForNote(n)) : '';
+        const attachRow = (n.todo_id != null)
+            ? `<div class="flex items-center gap-2 mt-2">
+                    <span class="text-sm text-color-2">Attached to ${attachedTitle}</span>
+                    <calcite-button appearance="outline" scale="s" icon-start="link"
+                        onclick="event.stopPropagation(); router.navigate('/todo/${parseInt(String(n.todo_id), 10) || 0}')">
+                        Open todo #${escapeHtml(String(n.todo_id))}
+                    </calcite-button>
+               </div>`
+            : '';
+        return `
+            <calcite-card class="tt-note-card" onclick="router.navigate('/notes/${idNum}')">
+                <div slot="title">Note #${id}</div>
+                <div slot="subtitle" class="text-xs text-color-3">${meta} · ${created}</div>
+                <div class="text-sm text-color-2">${snippet || '—'}</div>
+                ${attachRow}
+            </calcite-card>
+        `;
+    };
+
+    let body = '';
+    if (!pageItems.length) {
+        body = `<calcite-card><div slot="title">Notes</div><div class="text-color-2">No notes match the current filters.</div></calcite-card>`;
+    } else if (view === 'grid') {
+        body = `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${pageItems.map(noteCard).join('')}</div>`;
+    } else if (view === 'list') {
+        const rows = pageItems.map((n) => {
+            const idNum = parseInt(String(n.id || ''), 10) || 0;
+            const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
+            const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
+            const category = escapeHtml(String(n.category || 'general'));
+            const created = escapeHtml(formatDate(n.created_at));
+            const meta = todoId ? `#${idNum} · ${noteType} · ${category} · Todo #${todoId}` : `#${idNum} · ${noteType} · ${category}`;
+            const desc = escapeHtml(_noteSnippet(n.content, 140));
+            const attachedTitle = (n.todo_id != null) ? escapeHtml(getTodoTitleForNote(n)) : '';
+            const attachRow = (n.todo_id != null)
+                ? `<div class="flex items-center gap-2">
+                        <span class="text-sm text-color-2">Attached to ${attachedTitle}</span>
+                        <calcite-button appearance="outline" scale="s" icon-start="link"
+                            onclick="event.stopPropagation(); router.navigate('/todo/${parseInt(String(n.todo_id), 10) || 0}')">
+                            Open todo #${escapeHtml(String(n.todo_id))}
+                        </calcite-button>
+                   </div>`
+                : '';
+            return `
+                <calcite-list-item value="${idNum}" label="${escapeHtml(meta)}" description="${created}">
+                    <div slot="content-top" class="text-xs text-color-3">${escapeHtml(meta)}</div>
+                    <div slot="content-bottom" class="space-y-1">
+                        ${attachRow}
+                        <div class="text-sm text-color-2">${desc || '—'}</div>
+                    </div>
+                </calcite-list-item>
+            `;
+        }).join('');
+        body = `<calcite-list id="ttMainNotesList" selection-mode="single" selection-appearance="highlight">${rows}</calcite-list>`;
+    } else {
+        const rows = pageItems.map((n) => {
+            const idNum = parseInt(String(n.id || ''), 10) || 0;
+            const todoId = n.todo_id ? escapeHtml(String(n.todo_id)) : '';
+            const noteType = escapeHtml(String(n.note_type || (n.todo_id ? 'attached' : 'project')));
+            const category = escapeHtml(String(n.category || 'general'));
+            const created = escapeHtml(formatDate(n.created_at));
+            const attachedTitle = (n.todo_id != null) ? escapeHtml(getTodoTitleForNote(n)) : '';
+            const attachCell = (n.todo_id != null)
+                ? `<div class="flex items-center gap-2">
+                        <span class="text-sm text-color-2">Attached to ${attachedTitle}</span>
+                        <calcite-button appearance="outline" scale="s" icon-start="link"
+                            onclick="event.stopPropagation(); router.navigate('/todo/${parseInt(String(n.todo_id), 10) || 0}')">
+                            Open todo #${escapeHtml(String(n.todo_id))}
+                        </calcite-button>
+                   </div>`
+                : '—';
+            return `
+                <calcite-table-row data-tt-note-id="${idNum}" class="tt-main-note-row">
+                    <calcite-table-cell alignment="end">#${idNum}</calcite-table-cell>
+                    <calcite-table-cell>${noteType}</calcite-table-cell>
+                    <calcite-table-cell>${category}</calcite-table-cell>
+                    <calcite-table-cell>${attachCell}</calcite-table-cell>
+                    <calcite-table-cell>${created}</calcite-table-cell>
+                </calcite-table-row>
+            `;
+        }).join('');
+        body = `
+            <calcite-table bordered striped caption="Notes">
+                <calcite-table-row slot="table-header">
+                    <calcite-table-header heading="ID" alignment="end"></calcite-table-header>
+                    <calcite-table-header heading="Type"></calcite-table-header>
+                    <calcite-table-header heading="Category"></calcite-table-header>
+                    <calcite-table-header heading="Attachment"></calcite-table-header>
+                    <calcite-table-header heading="Created"></calcite-table-header>
+                </calcite-table-row>
+                ${rows}
+            </calcite-table>
+        `;
+    }
+
+    return `
+        <div class="space-y-3">
+            <div class="flex items-center gap-3">
+                <calcite-segmented-control id="ttMainNotesViewModeSeg" scale="s" value="${escapeHtml(view)}">
+                    <calcite-segmented-control-item value="grid" ${view === 'grid' ? 'checked' : ''}>Grid</calcite-segmented-control-item>
+                    <calcite-segmented-control-item value="list" ${view === 'list' ? 'checked' : ''}>List</calcite-segmented-control-item>
+                    <calcite-segmented-control-item value="table" ${view === 'table' ? 'checked' : ''}>Table</calcite-segmented-control-item>
+                </calcite-segmented-control>
+                <div class="min-w-0">
+                    <div class="text-xs text-color-3">Showing ${totalItems ? startIdx + 1 : 0}-${Math.min(startIdx + pageItems.length, totalItems)} of ${totalItems}</div>
+                </div>
+            </div>
+
+            ${body}
+
+            <calcite-pagination id="ttMainNotesPagination" scale="m" total-items="${totalItems}" page-size="${pageSize}" start-item="${startItem}"></calcite-pagination>
+        </div>
     `;
 }
 
@@ -2452,6 +2803,7 @@ async function renderNoteDetailView(params) {
         syncNotesSelection(noteId);
         hideLoading();
         initializeNotesView();
+        initializeNoteDetailView(note);
     } catch (e) {
         console.error('Error loading note detail:', e);
         showError('Failed to load note. Please try again.');
@@ -2469,9 +2821,18 @@ function addCreateNoteModal() {
     const modal = document.createElement('calcite-dialog');
     modal.id = 'createNoteModal';
     modal.label = 'Create New Note';
-    
+
+    // Match Calcite dialog best practice (same as create todo dialog).
+    modal.setAttribute('heading', 'New Note');
+    modal.setAttribute('description', 'Create a new note');
+    modal.setAttribute('modal', '');
+    modal.setAttribute('placement', 'center');
+    modal.setAttribute('scale', 'm');
+    modal.setAttribute('width-scale', 's');
+    modal.setAttribute('slot', 'dialogs');
+
     modal.innerHTML = `
-        <form id="createNoteModalForm" slot="content" class="space-y-4">
+        <form id="createNoteModalForm" class="space-y-4">
             <input type="hidden" name="todo_id" id="ttCreateNoteTodoIdInput" value="">
             <input type="hidden" name="category" id="ttCreateNoteCategoryInput" value="">
 
@@ -2505,16 +2866,17 @@ function addCreateNoteModal() {
                 <tt-md-editor name="content" height="240px" placeholder="Content (Markdown)"></tt-md-editor>
             </calcite-label>
         </form>
-        
-        <calcite-button slot="primary" type="submit" form="createNoteModalForm" appearance="solid">
-            Create
-        </calcite-button>
-        <calcite-button slot="secondary" onclick="document.getElementById('createNoteModal').open = false" appearance="outline">
+
+        <calcite-button id="createNoteModalCancel" slot="footer-end" width="auto" appearance="outline" kind="neutral">
             Cancel
         </calcite-button>
+        <calcite-button slot="footer-end" width="auto" type="submit" form="createNoteModalForm" appearance="solid">
+            Create
+        </calcite-button>
     `;
-    
-    document.body.appendChild(modal);
+
+    const shell = document.querySelector('calcite-shell');
+    (shell || document.body).appendChild(modal);
     // Toast UI editor mounts itself inside <tt-md-editor> instances.
 
     const typeSeg = document.getElementById('ttCreateNoteTypeSeg');
@@ -2626,6 +2988,21 @@ function addCreateNoteModal() {
     
     // Handle form submission
     const form = document.getElementById('createNoteModalForm');
+    const cancelBtn = document.getElementById('createNoteModalCancel');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+            modal.open = false;
+        });
+    }
+    // Reset form whenever dialog closes.
+    modal.addEventListener('calciteDialogClose', () => {
+        try { form && form.reset(); } catch (e) {}
+        try {
+            if (categoryInput) categoryInput.value = 'general';
+            if (typeSeg) typeSeg.value = 'project';
+        } catch (e) {}
+        syncTypeUI();
+    });
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         syncTypeUI();

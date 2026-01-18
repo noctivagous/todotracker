@@ -175,6 +175,41 @@
       try {
         if (typeof this._editor.setMarkdown === "function") this._editor.setMarkdown(String(v || ""));
       } catch (e) {}
+      this._scrollToTop();
+    }
+
+    _scrollToTop() {
+      const host = this._hostEl;
+      if (!host) return;
+
+      const scrollTargets = () => {
+        try {
+          const candidates = [
+            host.querySelector(".toastui-editor-contents"),
+            host.querySelector(".toastui-editor-md-container"),
+            host.querySelector(".toastui-editor-ww-container"),
+            host.querySelector(".toastui-editor-defaultUI"),
+          ].filter(Boolean);
+          candidates.forEach((el) => {
+            try { el.scrollTop = 0; } catch (e) {}
+          });
+        } catch (e) {}
+      };
+
+      // Toast UI tends to adjust layout after setMarkdown; force scrollTop=0 a few times.
+      try {
+        requestAnimationFrame(() => {
+          scrollTargets();
+          requestAnimationFrame(() => {
+            scrollTargets();
+            setTimeout(scrollTargets, 50);
+          });
+        });
+      } catch (e) {
+        scrollTargets();
+        setTimeout(scrollTargets, 0);
+        setTimeout(scrollTargets, 50);
+      }
     }
 
     _scheduleSyncFromEditor() {

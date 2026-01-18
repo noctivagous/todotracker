@@ -65,8 +65,11 @@ If you are grok code, don't try to process images.
 
 ---
 
-If I say "Research [...]" then use the brave-search
-mcp to do the research.
+If I say "Research [...]", then use the brave-search
+mcp to do the research.  If you don't know how
+to solve a problem upfront and it is specific
+to the technology, library, or stack, just use brave-search to
+find out a solution.
 
 
 ---
