@@ -49,10 +49,25 @@ calcite-text-area {
 /* Todo title should be bold everywhere (display + input fields) */
 #titleInput,
 calcite-input.tt-title-input,
-calcite-input[data-role="titleInput"] {
-    /* Calcite input internals use --calcite-font-weight-regular */
-    --calcite-font-weight-regular: 700 !important;
+calcite-input[data-role="titleInput"],
+calcite-input-text[data-role="titleInput"] {
+    /*
+     * Calcite inputs are shadow-DOM components; you generally can't style the internal <input>
+     * directly unless a CSS variable exists for the thing you want to change.
+     *
+     * The internal input uses Calcite's `font-normal` utility, which resolves to
+     * `--calcite-font-weight-normal`. Overriding that token *on the component host*
+     * makes the internal field render bold without reaching into shadow DOM.
+     */
+    --calcite-font-weight-normal: var(--calcite-font-weight-bold) !important;
+
+    /* Keep prefix/suffix text aligned if present (they use --calcite-font-weight-regular). */
+    --calcite-font-weight-regular: var(--calcite-font-weight-bold) !important;
+
+    /* Text color hooks differ slightly between calcite-input and calcite-input-text. */
     --calcite-input-text-color: var(--calcite-color-text-1);
+    --calcite-input-text-text-color: var(--calcite-color-text-1);
+    --calcite-input-text-text-color-focus: var(--calcite-color-text-1);
 }
 
 .tt-title-display,
