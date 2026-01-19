@@ -1532,12 +1532,6 @@ function buildTodoDetailPanelViewModel(todoDetail) {
                 <calcite-input data-tt-field="topic" data-tt-todo-id="${t.id}"></calcite-input>
             </calcite-label>
         ` : '',
-        `
-            <calcite-label>
-                Author
-                <calcite-input data-tt-field="author" data-tt-todo-id="${t.id}"></calcite-input>
-            </calcite-label>
-        `,
     ].filter(Boolean).join('');
 
     const infoFields = [
@@ -1710,9 +1704,14 @@ function buildTodoDetailPanelViewModel(todoDetail) {
         `;
     })() : '';
 
-    const authorSignpostHtml = (showAuthorSignposts && authorText)
-        ? `<div class="text-xs text-color-3">${authorText}</div>`
-        : '';
+    // Author field is always shown as an input control, but we render it outside the top fields grid
+    // so it can be positioned independently in the template.
+    const authorFieldHtml = `
+        <calcite-label>
+            Author
+            <calcite-input data-tt-field="author" data-tt-todo-id="${t.id}"></calcite-input>
+        </calcite-label>
+    `;
 
     const topFieldsGridHtml = topFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topFields}</div>` : '';
     const infoFieldsGridHtml = infoFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${infoFields}</div>` : '';
@@ -1734,7 +1733,7 @@ function buildTodoDetailPanelViewModel(todoDetail) {
         todoId: t.id,
         depsChipHtml,
         titleMeta,
-        authorSignpostHtml,
+        authorFieldHtml,
         topFieldsGridHtml,
         descriptionBlockHtml,
         tagsBlockHtml,

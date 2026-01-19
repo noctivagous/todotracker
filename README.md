@@ -1,23 +1,31 @@
 # 📋 TodoTracker with MCP Server
 
+![TodoTracker Web UI](docs/assets/screenshot_todotracker_spa.png)
+
 
 Description
 
-TodoTracker is an AI-powered todo management system with  a web UI
-and **Model Context Protocol (MCP)** integration for agentic code editors (AI assistants like Claude, Windsurf, Cursor IDE, Codex, etc. ).
+TodoTracker is an AI-powered todo management system that provides 
+a web UI with a **Model Context Protocol (MCP)** server for
+use with agentic code editors (AI assistants like Claude, Windsurf, 
+Cursor IDE, Codex, etc. ).
 
-You can use the power of AI to enter todos in the AI chat pane
+Use the power of AI to enter todos in the AI chat pane
 of the agentic IDE and then view and edit them in the web UI.
+Update, research, and carry out to-do items with the AI in
+the chat for more thorough.
+
 
 
 Purpose
 
 When using AI to make code, the software developer spends more time on planning
-and todo lists: making features, functionality, and issue descriptions large and small.  Integrating this with AI chat allows the AI to bring in different considerations into the to-dos that were previously made manually, which then allows the software developer to review them before instructing the AI to implement them.
+and todo lists: making features, functionality, and issue descriptions large and small.  Integrating this with AI chat allows the AI to bring in different considerations into the to-dos that were previously done 
+manually, which then allows the software developer to review them before instructing the AI to implement them.
 
 When you generate code with AI, you are often working in areas of software
 development where you have a general understanding but need the AI to
-assist in the planning.
+assist in the specifics of planning.
 
 
 How It Works
@@ -449,6 +457,7 @@ AI: Project: /home/user/projects/my-app
 ## 🌐 Web UI Features
 
 Access at **http://localhost:8070** (after running `python /path/to/todotracker/todotracker_webserver.py`)
+
 
 ### GUI Layout (SPA)
 

@@ -42,6 +42,7 @@ project.db
 *.swo
 *~
 .DS_Store
+.cursorrules
 
 # Logs
 *.log
