@@ -25,7 +25,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
     
-    // Ensure templates are registered before starting router
+    // Load external JsRender templates (stored as separate HTML files under /static/templates/)
+    // then register helpers/templates before starting router.
+    if (typeof ttLoadExternalTemplates === 'function') {
+        await ttLoadExternalTemplates();
+    }
     if (typeof ensureTemplatesRegistered === 'function') {
         ensureTemplatesRegistered();
     }

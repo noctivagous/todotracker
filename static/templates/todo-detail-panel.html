@@ -1,0 +1,37 @@
+<div class="tt-todo-detail-root space-y-3">
+  <div class="flex items-center justify-between gap-2">
+    <calcite-button appearance="outline" scale="s" onclick="router.navigate('/')">← Back</calcite-button>
+    <span data-link="html{:depsChipHtml}">{{:depsChipHtml}}</span>
+  </div>
+
+  <calcite-card>
+    <div slot="title" class="space-y-2">
+      <div class="flex items-center justify-between gap-2">
+        <div class="text-xs text-color-3 truncate" data-link="text{:titleMeta}">{{>titleMeta}}</div>
+        <calcite-chip id="ttAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
+      </div>
+
+      <span data-link="html{:authorSignpostHtml}">{{:authorSignpostHtml}}</span>
+      <span data-link="html{:topFieldsGridHtml}">{{:topFieldsGridHtml}}</span>
+
+      <calcite-input class="tt-title-input" scale="l" data-tt-field="title" data-tt-todo-id="{{:todoId}}"></calcite-input>
+
+      <span data-link="html{:descriptionBlockHtml}">{{:descriptionBlockHtml}}</span>
+    </div>
+
+    <div class="space-y-3">
+      <span data-link="html{:tagsBlockHtml}">{{:tagsBlockHtml}}</span>
+      <span data-link="html{:infoFieldsGridHtml}">{{:infoFieldsGridHtml}}</span>
+      <span data-link="html{:advancedFieldsGridHtml}">{{:advancedFieldsGridHtml}}</span>
+
+      <span data-link="html{:relatesPanelHtml}">{{:relatesPanelHtml}}</span>
+      <span data-link="html{:attachmentsPanelHtml}">{{:attachmentsPanelHtml}}</span>
+      <span data-link="html{:subtasksPanelHtml}">{{:subtasksPanelHtml}}</span>
+      <span data-link="html{:progressBlockHtml}">{{:progressBlockHtml}}</span>
+      <span data-link="html{:depsPanelHtml}">{{:depsPanelHtml}}</span>
+      <span data-link="html{:notesPanelHtml}">{{:notesPanelHtml}}</span>
+    </div>
+  </calcite-card>
+</div>
+
+

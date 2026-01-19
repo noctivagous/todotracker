@@ -1,0 +1,34 @@
+<div class="flex justify-between items-center mb-6">
+  <h2 class="text-3xl font-bold">Notes</h2>
+  <calcite-button onclick="document.getElementById('createNoteModal').open = true" appearance="solid">
+    + New Note
+  </calcite-button>
+</div>
+
+<div class="space-y-4">
+  {{if notes && notes.length > 0}}
+    {{for notes}}
+      <calcite-card>
+        <div class="flex justify-between items-start">
+          <div class="flex-1 markdown-render">{{:content}}</div>
+          <calcite-button onclick="deleteNote({{:id}})" appearance="solid" kind="danger" scale="s">
+            Delete
+          </calcite-button>
+        </div>
+        <div slot="footer" class="text-sm text-muted-foreground">
+          {{:~formatDate(created_at)}}
+          {{if todo_id}} | <a href="/todos/{{:todo_id}}" class="underline" onclick="event.preventDefault(); router.navigate('/todos/{{:todo_id}}')">Linked to todo #{{:todo_id}}</a> {{/if}}
+        </div>
+      </calcite-card>
+    {{/for}}
+  {{else}}
+    <calcite-card>
+      <div class="text-center text-muted-foreground">
+        <p class="text-lg">No notes yet.</p>
+        <p class="text-sm mt-2">Create your first note to get started!</p>
+      </div>
+    </calcite-card>
+  {{/if}}
+</div>
+
+

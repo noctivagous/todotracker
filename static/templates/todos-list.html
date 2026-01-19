@@ -1,0 +1,72 @@
+<div class="flex justify-between items-center mb-6">
+  <h1 class="text-2xl font-bold">
+    {{if searchQuery}}Search Results: "{{:searchQuery}}"{{else}}Todo List{{/if}}
+  </h1>
+  <div class="flex items-center gap-3">
+    <calcite-input type="text"
+                   id="searchInput"
+                   placeholder="Search todos..."
+                   value="{{:searchQuery}}"
+                   scale="m"
+                   clearable>
+    </calcite-input>
+    <calcite-button onclick="document.getElementById('createModal').open = true" appearance="solid">
+      + New Todo
+    </calcite-button>
+  </div>
+</div>
+
+<div class="flex flex-wrap gap-2 mb-4">
+  {{if searchQuery}}
+    <calcite-button onclick="router.navigate('/')" appearance="outline" scale="s">
+      ← Back to All Todos
+    </calcite-button>
+  {{else}}
+    <calcite-button onclick="router.navigate('/?status={{:status}}&sort_by={{:sortBy}}&sort_dir={{:sortDir}}')"
+                    {{if !queued}}appearance="solid"{{else}}appearance="outline"{{/if}} scale="s">
+      All (current status filter)
+    </calcite-button>
+    <calcite-button onclick="router.navigate('/?status={{:status}}&queued=true&sort_by={{:sortBy}}&sort_dir={{:sortDir}}')"
+                    {{if queued}}appearance="solid"{{else}}appearance="outline"{{/if}} scale="s">
+      In queue ({{:stats.queued}})
+    </calcite-button>
+  {{/if}}
+</div>
+
+<!-- Statistics -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+  <calcite-card onclick="router.navigate('/?status=all&sort_by={{:sortBy}}&sort_dir={{:sortDir}}')" class="cursor-pointer">
+    <div class="tt-stat-label text-sm text-muted-foreground">Total</div>
+    <div class="tt-stat-value text-2xl font-bold">{{:stats.total}}</div>
+  </calcite-card>
+  <calcite-card onclick="router.navigate('/?status=pending&sort_by={{:sortBy}}&sort_dir={{:sortDir}}')" class="cursor-pointer">
+    <div class="tt-stat-label text-sm text-muted-foreground">Pending</div>
+    <div class="tt-stat-value text-2xl font-bold">{{:stats.pending}}</div>
+  </calcite-card>
+  <calcite-card onclick="router.navigate('/?status=in_progress&sort_by={{:sortBy}}&sort_dir={{:sortDir}}')" class="cursor-pointer">
+    <div class="tt-stat-label text-sm text-muted-foreground">In Progress</div>
+    <div class="tt-stat-value text-2xl font-bold">{{:stats.in_progress}}</div>
+  </calcite-card>
+  <calcite-card onclick="router.navigate('/?status=completed&sort_by={{:sortBy}}&sort_dir={{:sortDir}}')" class="cursor-pointer">
+    <div class="tt-stat-label text-sm text-muted-foreground">Completed</div>
+    <div class="tt-stat-value text-2xl font-bold">{{:stats.completed}}</div>
+  </calcite-card>
+</div>
+
+<!-- Todo Tree -->
+<calcite-card class="tt-todo-list-card">
+  <div class="tt-todo-list-content" id="todoList">
+    {{if todos && todos.length > 0}}
+      {{for todos}}
+        {{:~renderTodoItem(#data, 0)}}
+      {{/for}}
+    {{else}}
+      <div class="text-center py-12 text-muted-foreground">
+        <p class="text-lg">No todos found.</p>
+        <p class="text-sm mt-2">Create your first todo to get started!</p>
+      </div>
+    {{/if}}
+  </div>
+</calcite-card>
+
+

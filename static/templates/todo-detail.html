@@ -1,0 +1,54 @@
+<div class="mb-6">
+  <calcite-button onclick="router.navigate('/')" appearance="outline">
+    ← Back to todos
+  </calcite-button>
+</div>
+
+<calcite-card>
+  <div slot="title" class="flex justify-between items-start">
+    <div class="flex-1">
+      <h2 class="text-3xl font-bold mb-2">{{:title}}</h2>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <calcite-chip appearance="solid" scale="s" class="status-{{:status}}">
+          {{:~replaceUnderscores(status)}}
+        </calcite-chip>
+        <calcite-chip appearance="outline" scale="s" class="category-{{:category}}">
+          {{:category}}
+        </calcite-chip>
+        {{if topic}}
+          <calcite-chip appearance="outline" scale="s">📁 {{:topic}}</calcite-chip>
+        {{/if}}
+        {{for tags}}
+          <calcite-chip appearance="outline" scale="s">🏷️ {{:name || #data}}</calcite-chip>
+        {{/for}}
+      </div>
+    </div>
+  </div>
+</calcite-card>
+
+{{if description}}
+  <div class="mb-4">
+    <h3 class="text-sm font-semibold text-muted-foreground mb-2">Description</h3>
+    <div class="markdown-render">{{:description}}</div>
+  </div>
+{{/if}}
+
+{{if notes && notes.length > 0}}
+  <calcite-card class="mt-6">
+    <div slot="title">
+      <h3 class="text-xl font-bold">Notes ({{:notes.length}})</h3>
+    </div>
+    <div class="space-y-3">
+      {{for notes}}
+        <div class="tt-surface p-4">
+          <div class="markdown-render">{{:content}}</div>
+          <div class="text-xs text-muted-foreground mt-2">
+            {{:~formatDate(created_at)}}
+          </div>
+        </div>
+      {{/for}}
+    </div>
+  </calcite-card>
+{{/if}}
+
+
