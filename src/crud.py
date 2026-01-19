@@ -149,6 +149,12 @@ def update_todo(db: Session, todo_id: int, todo_update: TodoUpdate) -> Optional[
     prev_queue = int(getattr(db_todo, "queue", 0) or 0)
     update_data = todo_update.model_dump(exclude_unset=True)
 
+    # Check if status is being set to completed
+    status_being_completed = False
+    if "status" in update_data:
+        new_status = TodoStatus(update_data["status"]) if isinstance(update_data["status"], str) else update_data["status"]
+        status_being_completed = (new_status == TodoStatus.COMPLETED)
+
     # v6: Serialize ai_instructions dict to JSON text for DB storage.
     if "ai_instructions" in update_data:
         ai_instr = update_data.get("ai_instructions")
@@ -185,6 +191,18 @@ def update_todo(db: Session, todo_id: int, todo_update: TodoUpdate) -> Optional[
             db_todo.tags.append(tag)
     
     db.commit()
+    
+    # If parent todo is being marked as completed, automatically mark all subtasks as completed
+    if status_being_completed and db_todo.status == TodoStatus.COMPLETED:
+        # Get all children (subtasks) of this todo
+        children = db.query(Todo).filter(Todo.parent_id == todo_id).all()
+        for child in children:
+            if child.status != TodoStatus.COMPLETED:
+                child.status = TodoStatus.COMPLETED
+                # Clear queue for completed subtasks
+                child.queue = 0
+        if children:
+            db.commit()
 
     # If this update removed an item from the queue (including status changes),
     # normalize queue positions so they stay contiguous.

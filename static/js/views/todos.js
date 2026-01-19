@@ -102,7 +102,9 @@ function filterTodosByStatus(todos, status) {
         } else if (todo.children && todo.children.length > 0) {
             const filteredChildren = filterTodosByStatus(todo.children, status);
             if (filteredChildren.length > 0) {
-                filtered.push({ ...todo, children: filteredChildren });
+                // Promote matching descendants instead of keeping a mismatched ancestor.
+                // This prevents e.g. a completed parent from appearing in the "pending" view.
+                filtered.push(...filteredChildren);
             }
         }
     }

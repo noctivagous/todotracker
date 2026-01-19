@@ -505,7 +505,12 @@ update work_completed/work_remaining/implementation_issues fields to track your 
             3. implementation_issues: Document any problems, blockers, or concerns encountered
             
             These fields allow you (and other AI instances) to revisit tasks later with full context of what has been done, 
-            what remains, and what issues were encountered. Update these fields EVERY TIME you work on a task.""",
+            what remains, and what issues were encountered. Update these fields EVERY TIME you work on a task.
+            
+            CRITICAL - SUBTASKS: When completing a subtask, you MUST call update_todo on that subtask to mark it as completed.
+            When completing a parent todo (marking status='completed'), all subtasks will automatically be marked as completed.
+            However, when completing individual subtasks, you must explicitly update each one using update_todo with status='completed'.
+            Use get_todo or list_todos to find subtasks (they have parent_id set to the parent todo's ID).""",
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
