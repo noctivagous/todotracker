@@ -206,7 +206,9 @@ See:
 
 ## Version
 
-**TodoTracker v1.1.0** - Per-Project Database Support
+**TodoTracker v1.5.0** (Schema v7) - Current Version
+
+**Note:** This document describes the per-project database support feature (v1.1.0). For the latest features, see [MIGRATIONS.md](MIGRATIONS.md).
 
 ---
 

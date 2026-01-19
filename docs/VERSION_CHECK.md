@@ -12,8 +12,8 @@ python todotracker_webserver.py --version
 
 Output:
 ```
-TodoTracker v1.0.0
-Schema version: v2
+TodoTracker v1.5.0
+Schema version: v7
 ```
 
 ### Check Database Status
@@ -28,9 +28,9 @@ Output when up to date:
 ============================================================
 Database: ./project.db
 
-TodoTracker version: 1.0.0
-Schema version:      v2 (current)
-Database schema:     v2
+TodoTracker version: 1.5.0
+Schema version:      v7 (current)
+Database schema:     v7
 
 ✅ Database is up to date
 ```
@@ -41,9 +41,9 @@ Output when migration needed:
 ============================================================
 Database: ./project.db
 
-TodoTracker version: 1.0.0
-Schema version:      v2 (current)
-Database schema:     v1
+TodoTracker version: 1.5.0
+Schema version:      v7 (current)
+Database schema:     v6
 
 ⚠️  Migration required
 
@@ -62,12 +62,12 @@ Response:
 {
   "status": "ok",
   "todotracker": {
-    "version": "1.0.0",
-    "schema_version": 2
+    "version": "1.5.0",
+    "schema_version": 7
   },
   "database": {
     "path": "./project.db",
-    "schema_version": 2,
+    "schema_version": 7,
     "needs_migration": false,
     "needs_upgrade": false
   },
@@ -186,10 +186,10 @@ esac
 See [MIGRATIONS.md](MIGRATIONS.md) for complete version history and changelog.
 
 Current versions:
-- **TodoTracker:** v1.0.0
-- **Schema:** v2
+- **TodoTracker:** v1.5.0
+- **Schema:** v7
 
 ---
 
-**Last Updated:** 2026-01-15
+**Last Updated:** 2026-01-18
 

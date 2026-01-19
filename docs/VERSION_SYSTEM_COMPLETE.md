@@ -246,8 +246,29 @@ README.md               ← Start here (complete guide)
 
 ## 🔄 Version History
 
-### v1.0.0 (Schema v2) - 2026-01-15
+### v1.5.0 (Schema v7) - 2026-01-18
 **Current Version**
+
+**Latest Features:**
+- Author attribution for todos and notes
+- File attachments linked to todos
+- Todo relations (informational "relates to" links)
+- Completion percentage and AI instructions per todo
+- Enhanced note types and categories
+- Optional note titles
+
+**Full Feature List:**
+- Complete version management system
+- Database migration framework (v1 through v7)
+- Topics and tags feature
+- AI progress tracking (work_completed, work_remaining, implementation_issues)
+- Execution queue and priority metadata
+- Health check API
+- CLI migration tool
+- Comprehensive documentation
+
+### v1.0.0 (Schema v2) - 2026-01-15
+**Initial Version System Release**
 
 **Added:**
 - Complete version management system
@@ -359,11 +380,11 @@ All original requirements have been fulfilled:
 
 ## 🏆 Status: PRODUCTION READY
 
-**TodoTracker v1.0.0 with complete version management system is ready for deployment.**
+**TodoTracker v1.5.0 (Schema v7) with complete version management system is ready for deployment.**
 
 The system handles:
 - ✅ New installations
-- ✅ Upgrades from v1 to v2
+- ✅ Upgrades from v1 through v7
 - ✅ Multiple project databases
 - ✅ Version compatibility checking
 - ✅ Safe migrations with backups
@@ -375,9 +396,10 @@ The system handles:
 ---
 
 **Implementation Date:** 2026-01-15  
+**Last Updated:** 2026-01-18  
 **Status:** ✅ COMPLETE  
-**Version:** 1.0.0  
-**Schema:** v2  
+**Version:** 1.5.0  
+**Schema:** v7  
 **Tested:** ✅ All features working
 
 🎊 **TodoTracker Version Management System Implementation: SUCCESSFUL**

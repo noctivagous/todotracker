@@ -78,6 +78,47 @@ Added three optional fields to support better planning and execution:
 - **priority_class** (TEXT, nullable)
   - Optional A–E scale (importance)
 
+### v5 - Notes: Project vs Attached + Categories (TodoTracker v1.3.0)
+**Released:** 2026-01-17
+
+Added organization features for notes:
+
+- **note_type** column in notes table
+  - Explicit type: `project` (standalone) or `attached` (linked to todo)
+  - Indexed for fast filtering
+- **category** column in notes table
+  - Freeform category string (e.g., "research", "meeting", "bug-report")
+  - Defaults to "general"
+  - Indexed for filtering
+
+### v6 - Todo vNext Metadata + Attachments + Relations; Notes Optional Titles (TodoTracker v1.4.0)
+**Released:** 2026-01-18
+
+Added advanced todo features and file attachments:
+
+- **completion_percentage** (INTEGER, nullable, 0-100)
+  - Numeric progress tracking (validated in application)
+- **ai_instructions** (TEXT, default "{}")
+  - JSON text for per-todo AI behavior flags
+- **todo_relations** table
+  - Informational "relates to" links between todos (not dependencies)
+- **todo_attachments** table
+  - File attachment metadata linked to todos
+  - Stores file_path, file_name, file_size, uploaded_at
+- **notes.title** (TEXT, nullable)
+  - Optional title for notes
+
+### v7 - Author Attribution (TodoTracker v1.5.0)
+**Released:** 2026-01-18
+
+Added author attribution for todos and notes:
+
+- **todos.author** (TEXT, nullable)
+  - Optional author field for todo attribution
+- **notes.author** (TEXT, nullable)
+  - Optional author field for note attribution
+- SPA and MCP updated to display/edit author fields
+
 ## Using Migrations
 
 ### Automatic Migration (Recommended)
@@ -401,7 +442,7 @@ For questions or help, see the project repository or documentation.
 
 ---
 
-**Last Updated:** 2026-01-15  
-**TodoTracker Version:** 1.0.0  
-**Schema Version:** 2
+**Last Updated:** 2026-01-18  
+**TodoTracker Version:** 1.5.0  
+**Schema Version:** 7
 

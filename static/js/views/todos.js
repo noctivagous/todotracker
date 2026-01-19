@@ -609,29 +609,10 @@ async function renderTodoDetailView(params) {
         if (!response.ok) throw new Error('Todo not found');
         const todo = await response.json();
 
-        const { endPanel, mainView } = getShellTargets();
-        const narrow = isNarrowScreen();
-
-        if (narrow) {
-            // Mobile: render the inspector in the end panel (overlay).
-            if (endPanel) {
-                endPanel.innerHTML = renderTodoDetailPanelHTML(todo);
-            }
-            if (mainView) {
-                mainView.innerHTML = '';
-            }
-            openDetailPanel();
-        } else {
-            // Desktop: render the inspector in the main area to avoid a blank center column.
-            collapseDetailPanel();
-            if (mainView) {
-                mainView.innerHTML = renderTodoDetailPanelHTML(todo);
-            }
-        }
+        ttRenderOrUpdateTodoDetailPanel(todo, { isInitialRender: true });
         hideLoading();
 
         syncBrowserSelection(todoId);
-        initializeTodoDetailView(todo);
     } catch (error) {
         console.error('Error loading todo:', error);
         showError('Failed to load todo. Please try again.');
@@ -1396,7 +1377,7 @@ function renderTodoBrowserListItemsHTML(todos) {
     return items.join('');
 }
 
-function renderTodoDetailPanelHTML(todoDetail) {
+function buildTodoDetailPanelViewModel(todoDetail) {
     const t = todoDetail || {};
     const settings = ttGetSettings();
     const cfg = (settings && settings.todos && settings.todos.detail) ? settings.todos.detail : {};
@@ -1421,7 +1402,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
 
     const tagsCsv = (t.tags || []).map((x) => x.name).join(', ');
     const depsMet = !!t.dependencies_met;
-    const depsChip = depsMet
+    const depsChipHtml = depsMet
         ? `<calcite-chip appearance="solid" scale="s" color="green">Ready</calcite-chip>`
         : `<calcite-chip appearance="solid" scale="s" color="red">Blocked</calcite-chip>`;
 
@@ -1528,10 +1509,10 @@ function renderTodoDetailPanelHTML(todoDetail) {
             <calcite-label>
                 Status
                 <calcite-select data-tt-field="status" data-tt-todo-id="${t.id}">
-                    <calcite-option value="pending" ${t.status === 'pending' ? 'selected' : ''}>pending</calcite-option>
-                    <calcite-option value="in_progress" ${t.status === 'in_progress' ? 'selected' : ''}>in_progress</calcite-option>
-                    <calcite-option value="completed" ${t.status === 'completed' ? 'selected' : ''}>completed</calcite-option>
-                    <calcite-option value="cancelled" ${t.status === 'cancelled' ? 'selected' : ''}>cancelled</calcite-option>
+                    <calcite-option value="pending">pending</calcite-option>
+                    <calcite-option value="in_progress">in_progress</calcite-option>
+                    <calcite-option value="completed">completed</calcite-option>
+                    <calcite-option value="cancelled">cancelled</calcite-option>
                 </calcite-select>
             </calcite-label>
         ` : '',
@@ -1539,22 +1520,22 @@ function renderTodoDetailPanelHTML(todoDetail) {
             <calcite-label>
                 Category
                 <calcite-select data-tt-field="category" data-tt-todo-id="${t.id}">
-                    <calcite-option value="feature" ${t.category === 'feature' ? 'selected' : ''}>feature</calcite-option>
-                    <calcite-option value="issue" ${t.category === 'issue' ? 'selected' : ''}>issue</calcite-option>
-                    <calcite-option value="bug" ${t.category === 'bug' ? 'selected' : ''}>bug</calcite-option>
+                    <calcite-option value="feature">feature</calcite-option>
+                    <calcite-option value="issue">issue</calcite-option>
+                    <calcite-option value="bug">bug</calcite-option>
                 </calcite-select>
             </calcite-label>
         ` : '',
         showTopic ? `
             <calcite-label>
                 Topic
-                <calcite-input data-tt-field="topic" data-tt-todo-id="${t.id}" value="${escapeHtml(t.topic || '')}"></calcite-input>
+                <calcite-input data-tt-field="topic" data-tt-todo-id="${t.id}"></calcite-input>
             </calcite-label>
         ` : '',
         `
             <calcite-label>
                 Author
-                <calcite-input data-tt-field="author" data-tt-todo-id="${t.id}" value="${escapeHtml(String(t.author || ''))}"></calcite-input>
+                <calcite-input data-tt-field="author" data-tt-todo-id="${t.id}"></calcite-input>
             </calcite-label>
         `,
     ].filter(Boolean).join('');
@@ -1563,26 +1544,26 @@ function renderTodoDetailPanelHTML(todoDetail) {
         showQueue ? `
             <calcite-label>
                 Queue Position
-                <calcite-input type="number" min="0" data-tt-field="queue" data-tt-todo-id="${t.id}" value="${escapeHtml(String(t.queue || 0))}"></calcite-input>
+                <calcite-input type="number" min="0" data-tt-field="queue" data-tt-todo-id="${t.id}"></calcite-input>
             </calcite-label>
         ` : '',
         showPriority ? `
             <calcite-label>
                 Priority Class
                 <calcite-select data-tt-field="priority_class" data-tt-todo-id="${t.id}">
-                    <calcite-option value="" ${!t.priority_class ? 'selected' : ''}></calcite-option>
-                    <calcite-option value="A" ${t.priority_class === 'A' ? 'selected' : ''}>A</calcite-option>
-                    <calcite-option value="B" ${t.priority_class === 'B' ? 'selected' : ''}>B</calcite-option>
-                    <calcite-option value="C" ${t.priority_class === 'C' ? 'selected' : ''}>C</calcite-option>
-                    <calcite-option value="D" ${t.priority_class === 'D' ? 'selected' : ''}>D</calcite-option>
-                    <calcite-option value="E" ${t.priority_class === 'E' ? 'selected' : ''}>E</calcite-option>
+                    <calcite-option value=""></calcite-option>
+                    <calcite-option value="A">A</calcite-option>
+                    <calcite-option value="B">B</calcite-option>
+                    <calcite-option value="C">C</calcite-option>
+                    <calcite-option value="D">D</calcite-option>
+                    <calcite-option value="E">E</calcite-option>
                 </calcite-select>
             </calcite-label>
         ` : '',
         showTaskSize ? `
             <calcite-label>
                 Task Size (1-5)
-                <calcite-input type="number" min="1" max="5" data-tt-field="task_size" data-tt-todo-id="${t.id}" value="${escapeHtml(t.task_size == null ? '' : String(t.task_size))}"></calcite-input>
+                <calcite-input type="number" min="1" max="5" data-tt-field="task_size" data-tt-todo-id="${t.id}"></calcite-input>
             </calcite-label>
         ` : '',
     ].filter(Boolean).join('');
@@ -1591,7 +1572,7 @@ function renderTodoDetailPanelHTML(todoDetail) {
         showCompletionPct ? `
             <calcite-label>
                 Completion % (0-100)
-                <calcite-input type="number" min="0" max="100" data-tt-field="completion_percentage" data-tt-todo-id="${t.id}" value="${escapeHtml(completion)}"></calcite-input>
+                <calcite-input type="number" min="0" max="100" data-tt-field="completion_percentage" data-tt-todo-id="${t.id}"></calcite-input>
             </calcite-label>
         ` : '',
         showAi ? `
@@ -1729,56 +1710,162 @@ function renderTodoDetailPanelHTML(todoDetail) {
         `;
     })() : '';
 
-    return `
-        <div class="space-y-3">
-            <div class="flex items-center justify-between gap-2">
-                <calcite-button appearance="outline" scale="s" onclick="router.navigate('/')">← Back</calcite-button>
-                ${depsChip}
-            </div>
+    const authorSignpostHtml = (showAuthorSignposts && authorText)
+        ? `<div class="text-xs text-color-3">${authorText}</div>`
+        : '';
 
-            <calcite-card>
-                <div slot="title" class="space-y-2">
-                    <div class="flex items-center justify-between gap-2">
-                        <div class="text-xs text-color-3 truncate">
-                            ${titleMeta}
-                        </div>
-                        <calcite-chip id="ttAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
-                    </div>
-                    ${showAuthorSignposts && authorText ? `<div class="text-xs text-color-3">${authorText}</div>` : ''}
+    const topFieldsGridHtml = topFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topFields}</div>` : '';
+    const infoFieldsGridHtml = infoFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${infoFields}</div>` : '';
+    const advancedFieldsGridHtml = advancedFields ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${advancedFields}</div>` : '';
+    const descriptionBlockHtml = showDescription ? `
+        <calcite-label>
+            Description (markdown)
+            <tt-md-editor data-tt-field="description" data-tt-todo-id="${t.id}" height="320px" placeholder="Description (Markdown)"></tt-md-editor>
+        </calcite-label>
+    ` : '';
+    const tagsBlockHtml = showTags ? `
+        <calcite-label>
+            Tags (comma-separated)
+            <calcite-input class="tt-tags-input" scale="s" data-tt-field="tag_names" data-tt-todo-id="${t.id}"></calcite-input>
+        </calcite-label>
+    ` : '';
 
-                    ${topFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${topFields}</div>` : ''}
+    return {
+        todoId: t.id,
+        depsChipHtml,
+        titleMeta,
+        authorSignpostHtml,
+        topFieldsGridHtml,
+        descriptionBlockHtml,
+        tagsBlockHtml,
+        infoFieldsGridHtml,
+        advancedFieldsGridHtml,
+        relatesPanelHtml: relatesPanel || '',
+        attachmentsPanelHtml: attachmentsPanel || '',
+        subtasksPanelHtml: subtasksPanel || '',
+        progressBlockHtml: progressBlock || '',
+        depsPanelHtml: depsPanel || '',
+        notesPanelHtml: notesPanel || '',
+        // Keep a few fields around for debugging / future enhancements
+        tagsCsv
+    };
+}
 
-                    <calcite-input class="tt-title-input" scale="l" data-tt-field="title" data-tt-todo-id="${t.id}" value="${escapeHtml(t.title || '')}"></calcite-input>
+function renderTodoDetailPanelHTML(todoDetail) {
+    // Ensure templates are registered
+    if (!ensureTemplatesRegistered()) {
+        console.error('Failed to register templates');
+        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Templates not loaded</p></div>';
+    }
+    const template = $.templates.todoDetailPanel || $.templates["todo-detail-panel"];
+    if (!template) {
+        console.error('Template "todo-detail-panel" not found');
+        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template not found</p></div>';
+    }
+    try {
+        const vm = buildTodoDetailPanelViewModel(todoDetail);
+        return template.render(vm);
+    } catch (e) {
+        console.error('Error rendering todo detail panel template:', e);
+        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error rendering template</p></div>';
+    }
+}
 
-                    ${showDescription ? `
-                        <calcite-label>
-                            Description (markdown)
-                            <tt-md-editor data-tt-field="description" data-tt-todo-id="${t.id}" height="320px" placeholder="Description (Markdown)"></tt-md-editor>
-                        </calcite-label>
-                    ` : ''}
-                </div>
-                <div class="space-y-3">
-                    ${showTags ? `
-                        <calcite-label>
-                            Tags (comma-separated)
-                            <calcite-input class="tt-tags-input" scale="s" data-tt-field="tag_names" data-tt-todo-id="${t.id}" value="${escapeHtml(tagsCsv)}"></calcite-input>
-                        </calcite-label>
-                    ` : ''}
+function ttGetTodoDetailContainerTargets() {
+    const { endPanel, mainView } = getShellTargets();
+    const narrow = isNarrowScreen();
+    return {
+        narrow,
+        container: narrow ? endPanel : mainView,
+        endPanel,
+        mainView
+    };
+}
 
-                    ${infoFields ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${infoFields}</div>` : ''}
+function ttRenderOrUpdateTodoDetailPanel(todo, opts) {
+    const options = opts || {};
+    const { narrow, container, endPanel, mainView } = ttGetTodoDetailContainerTargets();
+    if (!container) return;
 
-                    ${advancedFields ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-3">${advancedFields}</div>` : ''}
+    // Ensure templates are registered (JsViews link uses the same registration)
+    if (!ensureTemplatesRegistered()) {
+        container.innerHTML = '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Templates not loaded</p></div>';
+        return;
+    }
 
-                    ${relatesPanel}
-                    ${attachmentsPanel}
-                    ${subtasksPanel}
-                    ${progressBlock}
-                    ${depsPanel}
-                    ${notesPanel}
-                </div>
-            </calcite-card>
-        </div>
-    `;
+    if (narrow) {
+        // Mobile: render the inspector in the end panel (overlay).
+        if (mainView) mainView.innerHTML = '';
+        openDetailPanel();
+    } else {
+        // Desktop: render the inspector in the main area to avoid a blank center column.
+        collapseDetailPanel();
+    }
+
+    const template = $.templates.todoDetailPanel || $.templates["todo-detail-panel"];
+    if (!template) {
+        container.innerHTML = '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template not found</p></div>';
+        return;
+    }
+
+    window.ttTodoDetailBinding = window.ttTodoDetailBinding || { container: null, todoId: null, model: null };
+    const binding = window.ttTodoDetailBinding;
+
+    const shouldRelink =
+        !!options.isInitialRender ||
+        !binding.model ||
+        binding.todoId !== todo.id ||
+        binding.container !== container;
+
+    if (shouldRelink) {
+        // Unlink previous bindings to prevent memory leaks when navigating between todos.
+        try {
+            if (binding.container && typeof $.unlink === 'function') {
+                $.unlink(binding.container);
+            }
+        } catch (e) {}
+
+        container.innerHTML = '';
+        const model = buildTodoDetailPanelViewModel(todo);
+
+        try {
+            // Link template to container for data-binding.
+            if (typeof template.link === 'function') {
+                template.link(container, model);
+            } else if ($.link && $.link["todo-detail-panel"]) {
+                $.link["todo-detail-panel"](container, model);
+            } else {
+                // Fallback: non-linked render
+                container.innerHTML = template.render(model);
+            }
+        } catch (e) {
+            console.error('Failed to link todo detail panel template:', e);
+            container.innerHTML = template.render(model);
+        }
+
+        binding.container = container;
+        binding.todoId = todo.id;
+        binding.model = model;
+
+        // Initial render: bind event handlers and populate editor/input values.
+        initializeTodoDetailView(todo);
+    } else {
+        // Incremental update: update model properties and let JsViews update only changed nodes.
+        try {
+            const next = buildTodoDetailPanelViewModel(todo);
+            if (typeof $.observable === 'function' && binding.model) {
+                $.observable(binding.model).setProperty(next);
+            } else {
+                // No observable support? fallback to a render (still avoids route-level rework)
+                container.innerHTML = template.render(next);
+                binding.model = next;
+            }
+        } catch (e) {
+            console.error('Failed to update todo detail panel model:', e);
+        }
+    }
+
+    syncBrowserSelection(todo.id);
 }
 
 async function apiUpdateTodo(todoId, patch) {
@@ -1894,17 +1981,6 @@ async function refreshTodoDetail(todoId) {
     const res = await fetch(`/api/todos/${todoId}/detail`);
     if (!res.ok) return;
     const todo = await res.json();
-    const { endPanel, mainView } = getShellTargets();
-    const narrow = isNarrowScreen();
-
-    if (narrow) {
-        if (endPanel) endPanel.innerHTML = renderTodoDetailPanelHTML(todo);
-        openDetailPanel();
-    } else {
-        collapseDetailPanel();
-        if (mainView) mainView.innerHTML = renderTodoDetailPanelHTML(todo);
-    }
-    syncBrowserSelection(todoId);
-    initializeTodoDetailView(todo);
+    ttRenderOrUpdateTodoDetailPanel(todo, { isInitialRender: false });
 }
 

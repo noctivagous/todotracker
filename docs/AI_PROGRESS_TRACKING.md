@@ -155,7 +155,8 @@ Content-Type: application/json
 
 ## Version History
 
-- **v1.1.0 (Schema v3)**: Added three progress tracking fields
+- **v1.5.0 (Schema v7)**: Current version - progress tracking fields still active
+- **v1.1.0 (Schema v3)**: Added three progress tracking fields (work_completed, work_remaining, implementation_issues)
 - **v1.0.0 (Schema v2)**: Had legacy progress_summary and remaining_work fields (deprecated)
 - **v0.1.0 (Schema v1)**: Initial release without structured progress tracking
 

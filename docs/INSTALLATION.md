@@ -489,5 +489,5 @@ After installation, verify everything works:
 
 **Made with ❤️ for developers who want AI assistance with their todos**
 
-**Current Version**: 1.1.0 (Schema v3)
+**Current Version**: 1.5.0 (Schema v7)
 
