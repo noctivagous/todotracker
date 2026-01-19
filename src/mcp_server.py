@@ -719,13 +719,13 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="create_note",
-            description="Create a note. Can be attached to a specific todo or standalone.",
+            description="Create a note with optional title. Can be attached to a specific todo or standalone.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
                     "title": {
                         "type": "string",
-                        "description": "Optional note title",
+                        "description": "Optional note title (max 500 characters). Recommended for better organization.",
                     },
                     "content": {
                         "type": "string",
@@ -765,7 +765,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="create_notes_batch",
-            description="Create multiple notes in one call. Each item can optionally be attached to a todo via todo_id.",
+            description="Create multiple notes in one call. Each note can have an optional title and can be attached to a todo via todo_id.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
                 "properties": {
@@ -774,7 +774,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
                         "items": {
                             "type": "object",
                             "properties": {
-                                "title": {"type": "string", "description": "Optional note title"},
+                                "title": {"type": "string", "description": "Optional note title (max 500 characters). Recommended for better organization."},
                                 "content": {"type": "string", "description": "The note content"},
                                 "todo_id": {"type": "integer", "description": "Optional: Todo ID to attach the note to"},
                                 "category": {"type": "string", "description": "Optional note category (e.g., research)"},

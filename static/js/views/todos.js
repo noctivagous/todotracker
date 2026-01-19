@@ -213,13 +213,16 @@ function calculateStats(todos) {
     };
 
     const all = flatten(todos);
+    // Filter out subtasks - only count root todos (those without parent_id)
+    const rootTodos = all.filter(t => !t.parent_id);
+    
     return {
-        total: all.length,
-        pending: all.filter(t => t.status === 'pending').length,
-        in_progress: all.filter(t => t.status === 'in_progress').length,
-        completed: all.filter(t => t.status === 'completed').length,
-        cancelled: all.filter(t => t.status === 'cancelled').length,
-        queued: all.filter(t => (t.queue || 0) > 0).length
+        total: rootTodos.length,
+        pending: rootTodos.filter(t => t.status === 'pending').length,
+        in_progress: rootTodos.filter(t => t.status === 'in_progress').length,
+        completed: rootTodos.filter(t => t.status === 'completed').length,
+        cancelled: rootTodos.filter(t => t.status === 'cancelled').length,
+        queued: rootTodos.filter(t => (t.queue || 0) > 0).length
     };
 }
 

@@ -367,9 +367,9 @@ const TT_SETTINGS_DEFAULTS = {
     },
     layout: {
         // 'full' (viewport width) | 'max' (centered + max width)
-        width_mode: 'full',
+        width_mode: 'max',
         // Used when width_mode === 'max'
-        max_width_px: 1100,
+        max_width_px: 1200,
     },
     todos: {
         list: {

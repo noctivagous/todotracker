@@ -7,25 +7,13 @@ Description
 
 TodoTracker is an AI-powered todo management system that provides 
 a web UI with a **Model Context Protocol (MCP)** server for
-use with agentic code editors (AI assistants like Claude, Windsurf, 
-Cursor IDE, Codex, etc. ).
+use with agentic code editors (e.g. Claude, Windsurf, 
+Cursor IDE, Codex, etc.).
 
 Use the power of AI to enter todos in the AI chat pane
 of the agentic IDE and then view and edit them in the web UI.
 Update, research, and carry out to-do items with the AI in
-the chat for more thorough.
-
-
-
-Purpose
-
-When using AI to make code, the software developer spends more time on planning
-and todo lists: making features, functionality, and issue descriptions large and small.  Integrating this with AI chat allows the AI to bring in different considerations into the to-dos that were previously done 
-manually, which then allows the software developer to review them before instructing the AI to implement them.
-
-When you generate code with AI, you are often working in areas of software
-development where you have a general understanding but need the AI to
-assist in the specifics of planning.
+the chat.
 
 
 How It Works
@@ -33,117 +21,6 @@ How It Works
 The installation creates the .todo directory where each project gets its own isolated todo database with a project.db (SQLlite).  The MCP server is passed the path to this
 db and uses it to make and update todos according to your commands.
 
-
-
-Benefits
-
-You can take todos you typed out previously in a plain text file, paste them into the chat, and instruct the AI to put them in the database and it will do that.  Then you can use the web UI to add and edit anything before you can ask the AI to carry out any tasks in the database. If you put notes in the task, the AI will see it and use it during work.
-
-You can have AI analyze requirements for any todos and add notes to them
-after doing research.  ("Research [todo item] and add notes it about how to do it").
-
-You can have it make todos by itself with any kind of command: "Go through the project
-and look for ... and make todos."  Then afterwards, you can inspect the todos it made
-in the web ui and edit them.
-
-Short todos you tell the AI to add to the database will be automatically expanded by it with improved descriptions, with more accurate and specific terms than you would want to labor to com up with for just a single todo item, resulting in a readable todo directory as if you had an expert team member working with you.
-
-You can tell your AI to carry out entire categories of todos and it will retrieve them,
-execute them, then mark them as completed.  If something isn't completed fully, the AI
-is provided fields to update what is finished and what is not.
-
-You can use AI to update the todo list for you in whatever way you need.  It will automatically
-fill in the provided "work completed", "work remaining", and "implementation issues" after
-doing work, and this allows you to keep track of a partially completed or larger task.  
-
-For AI research that shouldn't turn immediately into a todo item, you can have it do research
-add the results to the "notes" section, such as a generated report on how to execute a feature or the status
-of the code base.  This allows you to come back later.
-
-Reference multiple todo items in an instruction and the AI can update them.
-
-You can have AI look through the project and post project notes.
-
-
-
-## 🌟 Key Features
-
-- **Per-Project Databases**: Each project has its own `.todos/project.db` - isolated and organized
-- **Adaptive Port Management**: No more "Address already in use" errors - automatic port allocation (8070+)
-- **Multi-Project Dashboard**: Central dashboard on port 8069 to monitor all running TodoTracker instances
-- **AI Integration**: MCP server lets AI assistants manage todos intelligently  
-- **Progress Tracking**: Three dedicated fields for AI to log work completed, remaining, and issues
-- **Execution Queue (Active Work Only)**: The `queue` field only applies to todos in `pending` or `in_progress`. If a todo becomes `completed`/`cancelled`, its `queue` is automatically cleared (set to `0`) and the queue control is disabled on the detail page.
-- **Hierarchical Todos**: Unlimited subtasks and concerns
-- **Modern Web UI**: Beautiful, responsive interface with automatic port selection
-- **Smart Organization**: Categories (feature/functionality, issue, bug), status tracking, topics, and tags.
-      Feature/Functionality - covers major features and minor functionality.
-      Issue - Covers bugs, overall comments on the project.
-      Bugs - For small glitches.
-- **Dependencies**: Define and track task dependencies
-- **Notes**: Attach context and updates to any todo
-
-## 🔗 Understanding Dependencies
-
-**What Are Todo Dependencies?**
-
-Dependencies let you specify that one todo must be completed before another can start.
-
-**Example:**
-
-- **Todo A**: "Design the database schema"
-- **Todo B**: "Implement user authentication" 
-- **Todo C**: "Add login page"
-
-You can mark:
-- Todo B **depends on** Todo A (can't implement auth until the schema is designed)
-- Todo C **depends on** Todo B (can't build the login page until auth is implemented)
-
-**How It Works:**
-
-1. **Create a dependency**: "Todo B depends on Todo A"
-   - Todo A is the prerequisite (must be done first)
-   - Todo B is blocked until Todo A is completed
-
-2. **Check dependencies**: Before starting Todo B, the system checks if Todo A is done
-   - If Todo A is completed → Todo B can be worked on
-   - If Todo A is not completed → Todo B is blocked
-
-**Practical Use:**
-
-- **Project planning**: Enforce task order
-- **Visibility**: See which tasks are ready vs. blocked
-- **AI assistance**: Help prioritize work
-- **Automation**: Check readiness before starting tasks
-
-## 📖 Documentation
-
-- **[INSTALLATION.md](docs/INSTALLATION.md)** - Detailed installation guide for all environments
-- **[QUICKSTART.md](docs/QUICKSTART.md)** - Get running in 3 minutes
-- **[ADAPTIVE_PORTS.md](docs/ADAPTIVE_PORTS.md)** - Multi-project port management & dashboard
-- **[AI_PROGRESS_TRACKING.md](docs/AI_PROGRESS_TRACKING.md)** - How AI tracks work on tasks
-
-## 🏗️ Architecture
-
-```
-┌─────────────────┐         ┌──────────────────┐
-│   Web Browser   │────────▶│   Web Server     │
-│   (Human UI)    │         │   (FastAPI)      │
-└─────────────────┘         └──────────────────┘
-                                     │
-                                     ▼
-                            ┌──────────────────┐
-┌─────────────────┐         │   SQLite DB      │
-│  Agentic IDE    │         │   (WAL mode)     │
-│  (AI Agent)     │         └──────────────────┘
-└─────────────────┘                  ▲
-         │                           │
-         ▼                           │
-┌─────────────────┐                  │
-│   MCP Server    │──────────────────┘
-│   (stdio)       │
-└─────────────────┘
-```
 
 
 ## 📦 Installation
@@ -352,6 +229,132 @@ cd ~/projects/payment-gateway-api
 cd ~/projects/fitness-tracker-app
 ./todos_webserver.sh  # Shows fitness-tracker-app todos on port 8072
 ```
+
+
+
+Purpose
+
+When using AI to make code, the software developer spends more time on planning
+and todo lists: making features, functionality, and issue descriptions large and small.  Integrating this with AI chat allows the AI to bring in different considerations into the to-dos that were previously done 
+manually, which then allows the software developer to review them before instructing the AI to implement them.
+
+When you generate code with AI, you are often working in areas of software
+development where you have a general understanding but need the AI to
+assist in the specifics of planning. 
+
+Benefits
+
+You can take todos you typed out previously in a plain text file, paste them into the chat, and instruct the AI to put them in the database and it will do that.  Then you can use the web UI to add and edit anything before you can ask the AI to carry out any tasks in the database. If you put notes in the task, the AI will see it and use it during work.
+
+You can have AI analyze requirements for any todos and add notes to them
+after doing research.  ("Research [todo item] and add notes it about how to do it").
+
+You can have it make todos by itself with any kind of command: "Go through the project
+and look for ... and make todos."  Then afterwards, you can inspect the todos it made
+in the web ui and edit them.
+
+Short todos you tell the AI to add to the database will be automatically expanded by it with improved descriptions, with more accurate and specific terms than you would want to labor to com up with for just a single todo item, resulting in a readable todo directory as if you had an expert team member working with you.
+
+You can tell your AI to carry out entire categories of todos and it will retrieve them,
+execute them, then mark them as completed.  If something isn't completed fully, the AI
+is provided fields to update what is finished and what is not.
+
+You can use AI to update the todo list for you in whatever way you need.  It will automatically
+fill in the provided "work completed", "work remaining", and "implementation issues" after
+doing work, and this allows you to keep track of a partially completed or larger task.  
+
+For AI research that shouldn't turn immediately into a todo item, you can have it do research
+add the results to the "notes" section, such as a generated report on how to execute a feature or the status
+of the code base.  This allows you to come back later.
+
+Reference multiple todo items in an instruction and the AI can update them.
+
+You can have AI look through the project and post project notes.
+
+
+
+## 🌟 Key Features
+
+- **Per-Project Databases**: Each project has its own `.todos/project.db` - isolated and organized
+- **AI Integration**: MCP server lets AI assistants manage todos intelligently  
+- **Multi-Project Dashboard**: Central dashboard on port 8069 to monitor all running TodoTracker instances
+
+
+## 🌟 Todo Features
+
+
+- **Execution Queue (Active Work Only)**: The `queue` field only applies to todos in `pending` or `in_progress`. If a todo becomes `completed`/`cancelled`, its `queue` is automatically cleared (set to `0`) and the queue control is disabled on the detail page.
+- **Hierarchical Todos**: Unlimited subtasks and concerns
+- **Modern Web UI**: Beautiful, responsive interface with automatic port selection
+- **Smart Organization**: Categories (feature/functionality, issue, bug), status tracking, topics, and tags.
+      Feature/Functionality - covers major features and minor functionality.
+      Issue - Covers bugs, overall comments on the project.
+      Bugs - For small glitches.
+- **Dependencies**: Define and track task dependencies
+- **Notes**: Attach context and updates to any todo
+
+## 🔗 Understanding Dependencies
+
+**What Are Todo Dependencies?**
+
+Dependencies let you specify that one todo must be completed before another can start.
+
+**Example:**
+
+- **Todo A**: "Design the database schema"
+- **Todo B**: "Implement user authentication" 
+- **Todo C**: "Add login page"
+
+You can mark:
+- Todo B **depends on** Todo A (can't implement auth until the schema is designed)
+- Todo C **depends on** Todo B (can't build the login page until auth is implemented)
+
+**How It Works:**
+
+1. **Create a dependency**: "Todo B depends on Todo A"
+   - Todo A is the prerequisite (must be done first)
+   - Todo B is blocked until Todo A is completed
+
+2. **Check dependencies**: Before starting Todo B, the system checks if Todo A is done
+   - If Todo A is completed → Todo B can be worked on
+   - If Todo A is not completed → Todo B is blocked
+
+**Practical Use:**
+
+- **Project planning**: Enforce task order
+- **Visibility**: See which tasks are ready vs. blocked
+- **AI assistance**: Help prioritize work
+- **Automation**: Check readiness before starting tasks
+
+## 📖 Documentation
+
+- **[INSTALLATION.md](docs/INSTALLATION.md)** - Detailed installation guide for all environments
+- **[QUICKSTART.md](docs/QUICKSTART.md)** - Get running in 3 minutes
+- **[ADAPTIVE_PORTS.md](docs/ADAPTIVE_PORTS.md)** - Multi-project port management & dashboard
+- **[AI_PROGRESS_TRACKING.md](docs/AI_PROGRESS_TRACKING.md)** - How AI tracks work on tasks
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐         ┌──────────────────┐
+│   Web Browser   │────────▶│   Web Server     │
+│   (Human UI)    │         │   (FastAPI)      │
+└─────────────────┘         └──────────────────┘
+                                     │
+                                     ▼
+                            ┌──────────────────┐
+┌─────────────────┐         │   SQLite DB      │
+│  Agentic IDE    │         │   (WAL mode)     │
+│  (AI Agent)     │         └──────────────────┘
+└─────────────────┘                  ▲
+         │                           │
+         ▼                           │
+┌─────────────────┐                  │
+│   MCP Server    │──────────────────┘
+│   (stdio)       │
+└─────────────────┘
+```
+
 
 ## 🚀 Adaptive Port Management
 
@@ -742,21 +745,17 @@ cd ~/projects/backend   # AI uses backend todos
 7. **Check dependencies** before starting work
 8. **Review in web UI** for visual overview
 
-## 🤝 Contributing
-
-Contributions welcome! Check out [docs/futurefeatures.txt](docs/futurefeatures.txt) for ideas.
-
 ## 📄 License
 
 MIT License
 
 ## 🙏 Acknowledgments
 
-- **Anthropic** - Model Context Protocol
+- **MCP SDK** - Model Context Protocol
 - **FastAPI** - Web framework
-- **Tailwind CSS** - UI styling
+- **Esri Calcite** - UI design system
 - **SQLAlchemy** - Database ORM
-- **HTMX** - Interactive UI
+- **JsRender/JsViews** - JavaScript templating
 
 ## 📚 Resources
 
@@ -765,7 +764,5 @@ MIT License
 - [FastAPI Documentation](https://fastapi.tiangolo.com)
 
 ---
-
-**Made with ❤️ for developers who want AI assistance with their todos**
 
 **Current Version**: 1.5.0 (Schema v7)
