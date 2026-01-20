@@ -209,6 +209,7 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="list_todos",
+            title="List All Todos",
             description="Get hierarchical list of all todos. Returns the complete todo tree with nested children.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -228,6 +229,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_todo",
+            title="Get Todo Details",
             description="""Get detailed information about a specific todo by ID, including all children and notes.
             
 Note: If you're starting work on this todo, use update_todo to set status='in_progress' and update 
@@ -255,6 +257,7 @@ work_completed/work_remaining/implementation_issues fields to track your progres
         ),
         Tool(
             name="get_todos_batch",
+            title="Get Multiple Todos",
             description="""Get detailed information about multiple todos by ID in one call.
             
 Note: If you're starting work on any returned todo, use update_todo to set status='in_progress' and 
@@ -284,6 +287,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="create_todo",
+            title="Create Todo",
             description=(
                 "Create a new todo (top-level) or subtask (child todo). "
                 "To create a subtask, set parent_id to the parent todo ID. "
@@ -372,6 +376,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="create_todos_batch",
+            title="Create Multiple Todos",
             description=(
                 "Create multiple todos/subtasks in one call. Each item uses the same fields as create_todo. "
                 "Best practice: when you are breaking down a larger task, create subtasks by setting parent_id "
@@ -420,6 +425,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="add_concern",
+            title="Add Concern",
             description="Add a concern under an existing todo. Concerns are prefixed with '[Concern]' and categorized as issues.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -442,6 +448,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="update_concern",
+            title="Update Concern",
             description="Update a concern's title or description. The '[Concern]' prefix will be maintained automatically.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -469,6 +476,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="delete_concern",
+            title="Delete Concern",
             description="Delete a concern. This is the same as deleting a todo but more explicit for concerns.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -483,6 +491,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="delete_todo",
+            title="Delete Todo",
             description="Delete a todo and all its children (cascades). Use with caution.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -496,7 +505,25 @@ update work_completed/work_remaining/implementation_issues fields to track your 
             }),
         ),
         Tool(
+            name="delete_todos_batch",
+            title="Delete Multiple Todos",
+            description="Delete multiple todos and all their children (cascades) in one call. Use with caution.",
+            inputSchema=_with_project_context_schema({
+                "type": "object",
+                "properties": {
+                    "todo_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "minItems": 1,
+                        "description": "The todo IDs to delete",
+                    },
+                },
+                "required": ["todo_ids"],
+            }),
+        ),
+        Tool(
             name="update_todo",
+            title="Update Todo",
             description="""Update a todo's status, progress, topic, tags, or other fields. 
             
             CRITICAL - PROGRESS TRACKING: When working on ANY task, you MUST update the three progress tracking fields:
@@ -600,6 +627,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="update_todos_batch",
+            title="Update Multiple Todos",
             description="Update multiple todos in one call. Each item matches update_todo fields, plus required todo_id.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -637,6 +665,7 @@ update work_completed/work_remaining/implementation_issues fields to track your 
         ),
         Tool(
             name="execute_queue_next",
+            title="Execute Next Queued Todos",
             description="""Get (and optionally mark in progress) the next N todos in queue order (queue > 0, ascending).
             
 IMPORTANT: When starting work on a returned todo, call update_todo to update progress tracking fields 
@@ -660,6 +689,7 @@ IMPORTANT: When starting work on a returned todo, call update_todo to update pro
         ),
         Tool(
             name="get_queued_todos",
+            title="Get Queued Todos",
             description="""Get all todos that are in the queue (queue > 0), sorted by queue value (ascending). Optionally filter by task_size range (min_size, max_size) and limit results.
             
 Note: When starting work on any returned todo, call update_todo to update progress tracking fields 
@@ -689,6 +719,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="get_queue_top",
+            title="Get Top Queued Todos",
             description="""Convenience wrapper for getting the next X items in queue order. Takes count parameter (default: 10). Optionally filter by task_size range (min_size, max_size). Returns todos in execution order.
             
 Note: When starting work on any returned todo, call update_todo to update progress tracking fields 
@@ -719,6 +750,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="create_note",
+            title="Create Note",
             description="Create a note with optional title. Can be attached to a specific todo or standalone.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -749,6 +781,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="get_notes_batch",
+            title="Get Multiple Notes",
             description="Get multiple notes by ID in one call.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -765,6 +798,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="create_notes_batch",
+            title="Create Multiple Notes",
             description="Create multiple notes in one call. Each note can have an optional title and can be attached to a todo via todo_id.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -790,6 +824,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="update_note",
+            title="Update Note",
             description="Update a note's content (and/or associated todo_id).",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -824,6 +859,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="delete_note",
+            title="Delete Note",
             description="Delete a note by ID.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -838,6 +874,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="search_todos",
+            title="Search Todos",
             description="Search and filter todos by query text, category, status, topic, or tags. Use topic to find todos in a specific area (e.g., 'window layout'). Use tags to filter by characteristics (e.g., ['ui', 'urgent']).",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -894,6 +931,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="list_topics",
+            title="List Topics",
             description="Get a list of all unique topics used across all todos. Useful for discovering existing topics before creating new ones.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -902,6 +940,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="list_tags",
+            title="List Tags",
             description="Get a list of all available tags with their descriptions. Includes stock tags and any custom tags created.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -910,6 +949,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="setup_project",
+            title="Setup Project",
             description="Set up TodoTracker for the current project. Creates .todos directory and database if not already present. This should be called automatically if the database is not found.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -923,6 +963,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="add_dependency",
+            title="Add Dependency",
             description="Add a dependency relationship: todo_id depends on depends_on_id being completed first.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -941,6 +982,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="add_dependencies_batch",
+            title="Add Multiple Dependencies",
             description="Create multiple dependency relationships in one call (array of {todo_id, depends_on_id}).",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -963,6 +1005,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="check_dependencies",
+            title="Check Dependencies",
             description="Check if all dependencies for a todo are met (all dependency todos completed).",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -977,6 +1020,7 @@ Note: When starting work on any returned todo, call update_todo to update progre
         ),
         Tool(
             name="launch_web_server",
+            title="Launch Web Server",
             description="Launch the TodoTracker web server for the current project. Uses the project's saved configuration to find and run the web server.",
             inputSchema=_with_project_context_schema({
                 "type": "object",
@@ -1247,6 +1291,42 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 text=json.dumps({
                     "message": f"{item_type.capitalize()} deleted successfully",
                     "todo_id": todo_id
+                }, indent=2)
+            )]
+
+        elif name == "delete_todos_batch":
+            todo_ids = arguments.get("todo_ids") or []
+            deleted: list[int] = []
+            errors: list[dict] = []
+            
+            for idx, raw_id in enumerate(todo_ids):
+                try:
+                    todo_id = int(raw_id)
+                    success = crud.delete_todo(db, todo_id)
+                    if success:
+                        deleted.append(todo_id)
+                    else:
+                        errors.append({
+                            "index": idx,
+                            "todo_id": todo_id,
+                            "error": "Todo not found",
+                        })
+                except Exception as e:
+                    errors.append({
+                        "index": idx,
+                        "todo_id": raw_id,
+                        "error": str(e),
+                    })
+            
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "message": "Bulk delete complete",
+                    "requested_count": len(todo_ids),
+                    "deleted_count": len(deleted),
+                    "error_count": len(errors),
+                    "deleted_todo_ids": deleted,
+                    "errors": errors,
                 }, indent=2)
             )]
         

@@ -413,11 +413,93 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
 }
 
 @media (max-width: 768px) {
-    #tt-panel-start-shell {
-        --calcite-shell-panel-width: 100vw;
+    /* On mobile portrait, stack left panel above main content */
+    calcite-shell {
+        --calcite-shell-content-width: 100%;
     }
+    
+    /* Make left panel full width and stack above main on mobile */
+    /* Use display-mode override or force full width */
+    #tt-panel-start-shell {
+        --calcite-shell-panel-width: 100% !important;
+        --calcite-shell-panel-max-width: 100% !important;
+        --calcite-shell-panel-min-width: 100% !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        /* Force it to be a block-level element that stacks */
+        position: relative !important;
+        display: block !important;
+        height: auto !important;
+        max-height: 40vh; /* Limit height so main content is visible */
+        overflow-y: auto;
+        border-bottom: 1px solid var(--calcite-color-border-1);
+        /* Remove any flex properties that might keep it inline */
+        flex: none !important;
+        align-self: stretch !important;
+    }
+    
+    /* Force the shell's internal main container to stack vertically */
+    /* Since we can't directly target shadow DOM, we use CSS that affects the shell-panel positioning */
+    calcite-shell::part(main),
+    calcite-shell .main {
+        flex-direction: column !important;
+    }
+    
+    /* Note: Shell's internal layout is modified via JavaScript in app.js to stack vertically on mobile */
+    
+    /* Hide right panel completely on mobile - it's not needed */
     #tt-panel-end-shell {
-        --calcite-shell-panel-width: 100vw;
+        display: none !important;
+    }
+    
+    /* Main content should take full width and be below the panel */
+    calcite-shell main,
+    #app-content {
+        width: 100% !important;
+        max-width: 100% !important;
+        order: 1;
+        flex: 1;
+    }
+    
+    /* Prevent horizontal overflow */
+    body {
+        overflow-x: hidden;
+    }
+    
+    .tt-content-container {
+        width: 100%;
+        max-width: 100%;
+        padding-inline: var(--calcite-spacing-sm);
+        padding-block: var(--calcite-spacing-md);
+    }
+    
+    /* Ensure grid/list views don't overflow on mobile */
+    .tt-todo-grid,
+    .tt-todo-list {
+        width: 100%;
+        overflow-x: hidden;
+    }
+    
+    /* Make cards in grid view stack properly on mobile */
+    .tt-todo-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* When minimized on mobile, hide the panel completely */
+    #tt-panel-start-shell[data-tt-minimized="true"] {
+        display: none !important;
+        max-height: 0 !important;
+    }
+    
+    /* Ensure panel content is visible when not minimized */
+    #tt-panel-start-shell:not([data-tt-minimized="true"]) {
+        display: flex !important;
+    }
+    
+    /* Make sure panel content area is visible */
+    #tt-panel-start-shell:not([data-tt-minimized="true"]) #tt-panel-start {
+        display: block !important;
+        visibility: visible !important;
     }
 }
 
@@ -426,6 +508,27 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
     --calcite-shell-panel-width: 15pt;
     --calcite-shell-panel-min-width: 15pt;
     --calcite-shell-panel-max-width: 15pt;
+}
+
+/* On mobile, when minimized, hide the left panel completely and let main content take full width */
+@media (max-width: 768px) {
+    #tt-panel-start-shell[data-tt-minimized="true"] {
+        display: none !important;
+    }
+    
+    /* When left panel is minimized on mobile, main content should take full width */
+    calcite-shell:has(#tt-panel-start-shell[data-tt-minimized="true"]) main,
+    calcite-shell:has(#tt-panel-start-shell[data-tt-minimized="true"]) #app-content {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    
+    /* Alternative approach if :has() isn't supported - use attribute selector on shell */
+    calcite-shell[data-tt-left-panel-minimized="true"] main,
+    calcite-shell[data-tt-left-panel-minimized="true"] #app-content {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
 }
 
 #tt-panel-start-shell[data-tt-minimized="true"] #tt-panel-start {

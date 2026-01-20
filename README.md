@@ -95,6 +95,8 @@ When you open a project, TodoTracker automatically creates `.todos/project.db`!
 
 ### 2. Launch the Web UI
 
+After you, you can tell the AI, "Start the todotracker web server".
+
 ```bash
 # From your project directory
 python /path/to/todotracker/todotracker_webserver.py
@@ -748,6 +750,7 @@ cd ~/projects/backend   # AI uses backend todos
 ## 📄 License
 
 MIT License
+
 
 ## 🙏 Acknowledgments
 

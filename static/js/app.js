@@ -40,6 +40,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Load project name
     loadProjectName();
     
+    // Auto-collapse left panel on mobile devices
+    initializeMobilePanelBehavior();
+    
     // Set up router (clean, pathname-based routes)
     router.on('/todos', renderTodosView);
     router.on('/todos/:id', (params) => renderTodoDetailView(params));
@@ -142,5 +145,80 @@ async function loadProjectName() {
     } catch (e) {
         chip.textContent = 'Unknown Project';
     }
+}
+
+/**
+ * Initialize mobile panel behavior - ensure left panel is visible and stacked above main on mobile
+ */
+function initializeMobilePanelBehavior() {
+    const startShell = document.getElementById('tt-panel-start-shell');
+    if (!startShell) return;
+    
+    // Function to modify shell's shadow DOM for mobile stacking
+    const updateShellLayout = (isMobile) => {
+        const shell = document.querySelector('calcite-shell');
+        if (!shell || !shell.shadowRoot) return;
+        
+        const main = shell.shadowRoot.querySelector('.main');
+        if (main) {
+            if (isMobile) {
+                // Stack vertically on mobile
+                main.style.flexDirection = 'column';
+                main.style.display = 'flex';
+            } else {
+                // Restore horizontal layout on desktop
+                main.style.flexDirection = 'row';
+            }
+        }
+    };
+    
+    // Check if we're on mobile
+    const checkMobile = () => {
+        const isMobile = window.innerWidth <= 768;
+        
+        // Update shell layout for mobile stacking
+        updateShellLayout(isMobile);
+        
+        if (isMobile) {
+            // On mobile, ensure panel is visible (not minimized) so it can stack above main
+            const isMinimized = startShell.getAttribute('data-tt-minimized') === 'true';
+            if (isMinimized) {
+                // Un-minimize on mobile so panel can be visible above main content
+                startShell.setAttribute('data-tt-minimized', 'false');
+                startShell.style.removeProperty('--calcite-shell-panel-width');
+                startShell.style.removeProperty('--calcite-shell-panel-min-width');
+                startShell.style.removeProperty('--calcite-shell-panel-max-width');
+                
+                // Remove minimized attribute from shell
+                const shell = startShell.closest('calcite-shell');
+                if (shell) {
+                    shell.removeAttribute('data-tt-left-panel-minimized');
+                }
+            }
+        } else {
+            // On desktop, restore normal behavior (can be minimized)
+            // Don't force any state change on desktop
+        }
+    };
+    
+    // Wait for shell to be ready (shadow DOM might not be available immediately)
+    const waitForShell = () => {
+        const shell = document.querySelector('calcite-shell');
+        if (shell && shell.shadowRoot) {
+            checkMobile();
+        } else {
+            setTimeout(waitForShell, 100);
+        }
+    };
+    
+    // Check on load
+    waitForShell();
+    
+    // Check on resize
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(checkMobile, 150);
+    });
 }
 
