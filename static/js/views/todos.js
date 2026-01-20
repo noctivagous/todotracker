@@ -1089,7 +1089,6 @@ function renderMainTodosListItemsHTML(todos, opts) {
                     ${showDescription ? `<div class="markdown-render text-xs text-color-3">${desc || ''}</div>` : ''}
                     ${showAuthorSignposts && author ? `<div class="text-xs text-color-3 truncate">${author}</div>` : ''}
                 </div>
-                ${Array.isArray(t.children) && t.children.length ? renderMainTodosListItemsHTML(t.children, o) : ''}
             </calcite-list-item>
         `);
     }
@@ -1109,6 +1108,7 @@ function renderTodosGridCardsHTML(flatTodos) {
     const showTopic = cfg.topic !== false;
     const showTags = cfg.tags !== false;
     const showDescription = cfg.description !== false;
+    const showSubtasks = cfg.subtasks !== false;
 
     const flat = Array.isArray(flatTodos) ? flatTodos : [];
     if (!flat.length) return '';
@@ -1157,9 +1157,9 @@ function renderTodosGridCardsHTML(flatTodos) {
                     ${showDescription ? `<div class="markdown-render text-sm text-color-2">${desc || 'No description'}</div>` : ''}
                     ${showAuthorSignposts && author ? `<div class="text-xs text-color-3">${author}</div>` : ''}
                     ${tags ? `<div class="flex items-center flex-wrap gap-1.5">${tags}</div>` : ''}
-                    ${subCount > 0 ? ttRenderSubtasksPreviewHTML(t, 6) : ''}
+                    ${showSubtasks && subCount > 0 ? ttRenderSubtasksPreviewHTML(t, 6) : ''}
                 </div>
-                ${subCount > 0 ? `<calcite-badge class="tt-subtasks-badge" scale="s" color="blue">Subtasks (${subCount})</calcite-badge>` : ''}
+                ${showSubtasks && subCount > 0 ? `<calcite-badge class="tt-subtasks-badge" scale="s" color="blue">Subtasks (${subCount})</calcite-badge>` : ''}
             </calcite-card>
         `;
     }).join('');
@@ -1196,9 +1196,9 @@ function renderMainTodosHTML(todosTree, options) {
 
     // IMPORTANT: main listing should only show root todos as top-level items.
     // Subtasks are rendered inline/nested under their parent.
-    const rootTodos = subtasksEnabled
-        ? (Array.isArray(todosTree) ? todosTree : [])
-        : flattenTodos(todosTree || []);
+    const rootTodos = Array.isArray(todosTree)
+        ? todosTree.filter(t => !t.parent_id)
+        : [];
     const totalItems = rootTodos.length;
     const pageSize = clampInt(o.pageSize, 24, 5, 200);
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -1215,7 +1215,7 @@ function renderMainTodosHTML(todosTree, options) {
     } else if (view === 'list') {
         if (subtasksEnabled) {
             const items = renderMainTodosListItemsHTML(pageItems, { showStatus, showDescription });
-            body = `<calcite-list id="ttMainTodosList" display-mode="nested" selection-mode="single" selection-appearance="highlight">${items}</calcite-list>`;
+            body = `<calcite-list id="ttMainTodosList" selection-mode="single" selection-appearance="highlight">${items}</calcite-list>`;
         } else {
             const items = pageItems.map((t) => {
                 const label = escapeHtml(t.title || '');
@@ -1324,14 +1324,17 @@ function renderMainTodosHTML(todosTree, options) {
 }
 
 function renderTodoBrowserPanelHTML(todos, stats) {
+    // Only show root todos in browser panel (no subtasks)
+    const rootTodos = Array.isArray(todos) ? todos.filter(t => !t.parent_id) : [];
+
     return `
         <div class="space-y-3 tt-browser-panel">
             <div class="flex items-center gap-2">
                 <calcite-button id="ttLeftPanelToggleBtn" appearance="transparent" scale="s" kind="neutral" title="Minimize/expand left panel" icon-start="chevrons-left"></calcite-button>
             </div>
 
-            <calcite-list id="ttTodoBrowserList" display-mode="nested" selection-mode="single" selection-appearance="highlight">
-                ${renderTodoBrowserListItemsHTML(todos || [])}
+            <calcite-list id="ttTodoBrowserList" selection-mode="single" selection-appearance="highlight">
+                ${renderTodoBrowserListItemsHTML(rootTodos)}
             </calcite-list>
         </div>
     `;
@@ -1363,9 +1366,11 @@ function renderTodoBrowserListItemsHTML(todos) {
         if (showTopic && t.topic) metaParts.push(`Topic ${t.topic}`);
         if (showTags && Array.isArray(t.tags) && t.tags.length) metaParts.push(`Tags ${t.tags.length}`);
         const meta = metaParts.join(' · ');
+        const subCount = ttCountSubtasks(t);
         items.push(`
             <calcite-list-item value="${t.id}" label="${label}" metadata="${escapeHtml(meta)}">
                 ${showStatus ? `<calcite-chip slot="content-start" scale="s" appearance="solid" class="tt-browser-status-chip tt-browser-status-chip--side status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
+                ${subCount > 0 ? `<calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks (${subCount})</calcite-chip>` : ''}
                 <div slot="content" class="tt-browser-item-content min-w-0">
                     ${showStatus ? `<calcite-chip scale="s" appearance="solid" class="tt-browser-status-chip tt-browser-status-chip--top status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                     <div class="tt-browser-item-title font-bold">
@@ -1374,7 +1379,6 @@ function renderTodoBrowserListItemsHTML(todos) {
                         </div>
                     ${showDescription ? `<div class="tt-browser-item-desc markdown-render text-xs text-color-3">${desc || ''}</div>` : ''}
                 </div>
-                ${Array.isArray(t.children) && t.children.length ? renderTodoBrowserListItemsHTML(t.children) : ''}
             </calcite-list-item>
         `);
     }
