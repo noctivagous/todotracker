@@ -85,6 +85,27 @@ calcite-input-text[data-role="titleInput"] {
     position: relative;
 }
 
+.tt-card-group {
+    width: 100%;
+    /* Slightly roomier than the Calcite default (md) for our dense cards. */
+    --calcite-card-group-space: var(--calcite-spacing-lg);
+}
+
+/* Card Group uses a wrapping flex container; define card sizing so grid view forms columns. */
+calcite-card.tt-todo-grid-card,
+calcite-card.tt-note-card {
+    flex: 1 1 22rem;
+    max-width: 28rem;
+}
+
+@media (max-width: 768px) {
+    calcite-card.tt-todo-grid-card,
+    calcite-card.tt-note-card {
+        flex-basis: 100%;
+        max-width: 100%;
+    }
+}
+
 .tt-subtasks-badge {
     position: absolute;
     inset-inline-end: var(--calcite-spacing-md);
@@ -509,16 +530,13 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
     }
     
     /* Ensure grid/list views don't overflow on mobile */
-    .tt-todo-grid,
-    .tt-todo-list {
+    calcite-card-group,
+    #ttMainTodosList,
+    #ttMainNotesList {
         width: 100%;
         overflow-x: hidden;
     }
-    
-    /* Make cards in grid view stack properly on mobile */
-    .tt-todo-grid {
-        grid-template-columns: 1fr !important;
-    }
+    /* Card stacking on mobile is handled via flex-basis rules above. */
     
     /* When minimized on mobile, hide the panel completely */
     #tt-panel-start-shell[data-tt-minimized="true"] {

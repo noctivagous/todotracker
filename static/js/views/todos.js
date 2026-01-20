@@ -1174,7 +1174,9 @@ function renderTodosGridHTML(todos) {
             </calcite-notice>
         `;
     }
-    return `<calcite-card-group>${renderTodosGridCardsHTML(flat)}</calcite-card-group>`;
+    // Calcite Card Group provides spacing + keyboard navigation; card widths are controlled via CSS.
+    // label is required for accessibility.
+    return `<calcite-card-group class="tt-card-group tt-todos-card-group" label="Todos">${renderTodosGridCardsHTML(flat)}</calcite-card-group>`;
 }
 
 function renderMainTodosHTML(todosTree, options) {
@@ -1211,7 +1213,7 @@ function renderMainTodosHTML(todosTree, options) {
     if (!pageItems.length) {
         body = `<calcite-notice icon="information" open><div slot="message">No todos match the current filters.</div></calcite-notice>`;
     } else if (view === 'grid') {
-        body = `<calcite-card-group>${renderTodosGridCardsHTML(pageItems)}</calcite-card-group>`;
+        body = `<calcite-card-group class="tt-card-group tt-todos-card-group" label="Todos">${renderTodosGridCardsHTML(pageItems)}</calcite-card-group>`;
     } else if (view === 'list') {
         if (subtasksEnabled) {
             const items = renderMainTodosListItemsHTML(pageItems, { showStatus, showDescription });
