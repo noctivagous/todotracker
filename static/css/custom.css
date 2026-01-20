@@ -238,6 +238,41 @@ calcite-shell main {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Todo Detail Page: Consistent Section Spacing                              */
+/* -------------------------------------------------------------------------- */
+
+/* Standardize spacing between major sections in todo detail */
+.tt-todo-detail-root > * + * {
+  margin-top: var(--calcite-spacing-lg) !important;
+}
+
+/* Ensure panels have consistent spacing */
+.tt-todo-detail-root calcite-panel,
+.tt-todo-detail-root calcite-card:not(:first-child) {
+  margin-top: var(--calcite-spacing-lg) !important;
+}
+
+/* Progress fields section should have consistent spacing */
+.tt-todo-detail-root .grid.grid-cols-1.md\\:grid-cols-3 {
+  margin-top: var(--calcite-spacing-lg) !important;
+}
+
+/* Description section spacing */
+.tt-todo-detail-root > div:has(.markdown-render) {
+  margin-bottom: var(--calcite-spacing-lg) !important;
+}
+
+/* Increase spacing between title input and description */
+.tt-todo-detail-root calcite-card [slot="title"] span:has(calcite-label) {
+  margin-top: var(--calcite-spacing-md) !important;
+}
+
+/* Alternative: target the description label specifically */
+.tt-todo-detail-root calcite-card [slot="title"] calcite-label:has(tt-md-editor[data-tt-field="description"]) {
+  margin-top: var(--calcite-spacing-md) !important;
+}
+
+/* -------------------------------------------------------------------------- */
 /* SPA-specific polish                                                        */
 /* -------------------------------------------------------------------------- */
 
@@ -554,6 +589,13 @@ calcite-segmented-control-item.tt-seg-queue[checked] {
     background: var(--calcite-color-foreground-1);
     border: 1px solid var(--calcite-color-border-1);
     border-radius: var(--calcite-corner-radius-md);
+}
+
+/* Code/kbd styling for dashboard */
+code.tt-surface {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.75rem;
+    display: inline-block;
 }
 
 .status-pending { --calcite-chip-background-color: var(--calcite-color-foreground-2); }

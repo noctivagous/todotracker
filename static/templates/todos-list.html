@@ -61,10 +61,12 @@
         {{:~renderTodoItem(#data, 0)}}
       {{/for}}
     {{else}}
-      <div class="text-center py-12 text-muted-foreground">
-        <p class="text-lg">No todos found.</p>
-        <p class="text-sm mt-2">Create your first todo to get started!</p>
-      </div>
+      <calcite-notice icon="information" open>
+        <div slot="message">
+          <div class="text-lg mb-2">No todos found.</div>
+          <div class="text-sm">Create your first todo to get started!</div>
+        </div>
+      </calcite-notice>
     {{/if}}
   </div>
 </calcite-card>

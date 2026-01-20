@@ -21,15 +21,15 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <calcite-label>
           ✅ Work Completed
-          <tt-md-editor data-tt-field="work_completed" data-tt-todo-id="{{:todoId}}" height="220px" placeholder="Work completed (Markdown)"></tt-md-editor>
+          <tt-md-editor data-tt-field="work_completed" data-tt-todo-id="{{:todoId}}" height="300px" placeholder="Work completed (Markdown)"></tt-md-editor>
         </calcite-label>
         <calcite-label>
           📋 Work Remaining
-          <tt-md-editor data-tt-field="work_remaining" data-tt-todo-id="{{:todoId}}" height="220px" placeholder="Work remaining (Markdown)"></tt-md-editor>
+          <tt-md-editor data-tt-field="work_remaining" data-tt-todo-id="{{:todoId}}" height="300px" placeholder="Work remaining (Markdown)"></tt-md-editor>
         </calcite-label>
         <calcite-label>
           ⚠️ Implementation Issues
-          <tt-md-editor data-tt-field="implementation_issues" data-tt-todo-id="{{:todoId}}" height="220px" placeholder="Implementation issues (Markdown)"></tt-md-editor>
+          <tt-md-editor data-tt-field="implementation_issues" data-tt-todo-id="{{:todoId}}" height="300px" placeholder="Implementation issues (Markdown)"></tt-md-editor>
         </calcite-label>
       </div>
       {{/if}}
@@ -43,8 +43,8 @@
 
       {{if showRelatesTo}}
       <calcite-panel>
-        <div slot="header">Relates to</div>
-        <div class="space-y-3">
+        <div slot="header-content">Relates to</div>
+        <calcite-block-section>
           <div class="space-y-2">
             {{if relatesTo.length}}
               {{for relatesTo}}
@@ -60,7 +60,9 @@
               </div>
               {{/for}}
             {{else}}
-              <div class="text-xs text-color-3">None</div>
+              <calcite-notice icon="information" open>
+                <div slot="message">No related todos.</div>
+              </calcite-notice>
             {{/if}}
           </div>
           <div class="flex items-end gap-2">
@@ -75,13 +77,13 @@
             </calcite-label>
             <calcite-button id="ttAddRelBtn" appearance="solid">Add</calcite-button>
           </div>
-        </div>
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       {{if showAttachments}}
       <calcite-panel>
-        <div slot="header">Attachments</div>
-        <div class="space-y-3">
+        <div slot="header-content">Attachments</div>
+        <calcite-block-section>
           <calcite-label>
             Upload file
             <input id="ttAttachFileInput" type="file" />
@@ -100,20 +102,22 @@
               </calcite-list-item>
               {{/for}}
             {{else}}
-              <calcite-list-item label="No attachments"></calcite-list-item>
+              <calcite-notice icon="information" open>
+                <div slot="message">No attachments.</div>
+              </calcite-notice>
             {{/if}}
           </calcite-list>
-        </div>
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       {{if showSubtasks}}
       <calcite-panel class="tt-subtasks-panel">
-        <div slot="header">Subtasks ({{:subtasksCount}})</div>
+        <div slot="header-content">Subtasks ({{:subtasksCount}})</div>
         <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
           onclick="addCreateTodoModal(); (window.ttOpenCreateTodoModal ? window.ttOpenCreateTodoModal({ parentId: {{:todoId}} }) : (document.getElementById('createModal') && (document.getElementById('createModal').open = true)))">
           Add subtask
         </calcite-button>
-        <div class="space-y-2">
+        <calcite-block-section>
           {{if subtasks.length}}
             <calcite-list display-mode="nested" selection-mode="none">
               {{for subtasks}}
@@ -161,15 +165,17 @@
               {{/for}}
             </calcite-list>
           {{else}}
-            <div class="text-xs text-color-3">No subtasks yet.</div>
+            <calcite-notice icon="information" open>
+              <div slot="message">No subtasks yet.</div>
+            </calcite-notice>
           {{/if}}
-        </div>
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       {{if showDependencies}}
       <calcite-panel>
-        <div slot="header">Dependencies</div>
-        <div class="space-y-3">
+        <div slot="header-content">Dependencies</div>
+        <calcite-block-section>
           <div>
             <div class="text-sm font-semibold mb-2">Prerequisites ({{:dependencies.length}})</div>
             <div class="space-y-2">
@@ -187,7 +193,9 @@
                 </div>
                 {{/for}}
               {{else}}
-                <div class="text-xs text-color-3">None</div>
+                <calcite-notice icon="information" open>
+                  <div slot="message">No prerequisites.</div>
+                </calcite-notice>
               {{/if}}
             </div>
           </div>
@@ -217,21 +225,23 @@
                 </div>
                 {{/for}}
               {{else}}
-                <div class="text-xs text-color-3">None</div>
+                <calcite-notice icon="information" open>
+                  <div slot="message">No dependents.</div>
+                </calcite-notice>
               {{/if}}
             </div>
           </div>
-        </div>
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       {{if showNotes}}
       <calcite-panel>
-        <div slot="header">Notes ({{:notes.length}})</div>
+        <div slot="header-content">Notes ({{:notes.length}})</div>
         <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
           onclick="addCreateNoteModal(); (window.ttOpenCreateNoteModal ? window.ttOpenCreateNoteModal({ todoId: {{:todoId}} }) : (document.getElementById('createNoteModal') && (document.getElementById('createNoteModal').open = true)))">
           Add note
         </calcite-button>
-        <div class="space-y-2">
+        <calcite-block-section>
           {{if notes.length}}
             {{for notes}}
             <div class="tt-surface p-3 space-y-1">
@@ -243,9 +253,11 @@
             </div>
             {{/for}}
           {{else}}
-            <div class="text-xs text-color-3">No notes yet.</div>
+            <calcite-notice icon="information" open>
+              <div slot="message">No notes yet.</div>
+            </calcite-notice>
           {{/if}}
-        </div>
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       <span data-link="html{:authorFieldHtml}">{{:authorFieldHtml}}</span>

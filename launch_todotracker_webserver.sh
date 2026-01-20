@@ -41,6 +41,11 @@ command_exists() {
 echo "🚀 Launching TodoTracker Web Server..."
 echo "📁 Project: $TODOTRACKER_PROJECT_NAME"
 echo "📂 Database: $TODOTRACKER_DB_PATH"
+
+# Check for --no-browser or -n flag
+if [[ "$*" == *"--no-browser"* ]] || [[ "$*" == *"-n"* ]]; then
+    echo "💡 Browser auto-open disabled (--no-browser flag used)"
+fi
 echo ""
 
 # Try uv first (preferred)

@@ -256,14 +256,14 @@ async function renderNotesHTML(notes) {
     // Ensure templates are registered
     if (!ensureTemplatesRegistered()) {
         console.error('Failed to register templates');
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Templates not loaded</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Templates not loaded</div></calcite-notice>';
     }
     
     // Access named template correctly using property syntax
     const template = $.templates.notesList || $.templates["notes-list"];
     if (!template) {
         console.error('Template "notes-list" not found');
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template not found</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Template not found</div></calcite-notice>';
     }
     
     const data = {
@@ -274,7 +274,7 @@ async function renderNotesHTML(notes) {
         return template.render(data);
     } catch (error) {
         console.error('Template rendering error:', error);
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error rendering template: ' + escapeHtml(error.message) + '</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error rendering template: ' + escapeHtml(error.message) + '</div></calcite-notice>';
     }
 }
 
@@ -754,7 +754,7 @@ function renderMainNotesHTML(notes, options) {
 
     let body = '';
     if (!pageItems.length) {
-        body = `<calcite-card><div slot="title">Notes</div><div class="text-color-2">No notes match the current filters.</div></calcite-card>`;
+        body = `<calcite-notice icon="information" open><div slot="message">No notes match the current filters.</div></calcite-notice>`;
     } else if (view === 'grid') {
         body = `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${pageItems.map(noteCard).join('')}</div>`;
     } else if (view === 'list') {

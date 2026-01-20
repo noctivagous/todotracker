@@ -233,7 +233,7 @@ async function renderTodosHTML(todos, stats, options) {
     // Ensure templates are registered
     if (!ensureTemplatesRegistered()) {
         console.error('Failed to register templates');
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Templates not loaded</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Templates not loaded</div></calcite-notice>';
     }
     
     // Access named template correctly: $.templates.todosList (not $.templates("todos-list"))
@@ -241,7 +241,7 @@ async function renderTodosHTML(todos, stats, options) {
     const template = $.templates.todosList || $.templates["todos-list"];
     if (!template) {
         console.error('Template "todos-list" not found. Available templates:', Object.keys($.templates));
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template not found</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Template not found</div></calcite-notice>';
     }
     
     const data = {
@@ -257,14 +257,14 @@ async function renderTodosHTML(todos, stats, options) {
     try {
         if (typeof template.render !== 'function') {
             console.error('Template.render is not a function. Template:', template);
-            return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template.render is not a function</p></div>';
+            return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Template.render is not a function</div></calcite-notice>';
         }
         
         const result = template.render(data);
         
         if (!result || typeof result !== 'string') {
             console.error('Template render returned invalid result:', typeof result, result);
-            return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template render returned invalid result</p></div>';
+            return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Template render returned invalid result</div></calcite-notice>';
         }
         if (result.length < 50) {
             console.error('Template render result too short, likely an error. Full result:', result);
@@ -274,7 +274,7 @@ async function renderTodosHTML(todos, stats, options) {
     } catch (error) {
         console.error('Template rendering error:', error);
         console.error('Error stack:', error.stack);
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error rendering template: ' + escapeHtml(error.message) + '</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error rendering template: ' + escapeHtml(error.message) + '</div></calcite-notice>';
     }
 }
 
@@ -285,14 +285,14 @@ function renderTodoItem(todo, level = 0) {
     // Ensure templates are registered
     if (!ensureTemplatesRegistered()) {
         console.error('Failed to register templates');
-        return '<div class="text-color-danger">Error: Templates not loaded</div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Templates not loaded</div></calcite-notice>';
     }
     
     // Access named template correctly using property syntax
     const template = $.templates.todoItem || $.templates["todo-item"];
     if (!template) {
         console.error('Template "todo-item" not found');
-        return '<div class="text-color-danger">Error: Template not found</div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Template not found</div></calcite-notice>';
     }
     
     const data = {
@@ -304,7 +304,7 @@ function renderTodoItem(todo, level = 0) {
         return template.render(data);
     } catch (error) {
         console.error('Template rendering error:', error);
-        return '<div class="text-color-danger">Error rendering template: ' + escapeHtml(error.message) + '</div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error rendering template: ' + escapeHtml(error.message) + '</div></calcite-notice>';
     }
 }
 
@@ -632,14 +632,14 @@ async function renderTodoDetailHTML(todo, notes) {
     // Ensure templates are registered
     if (!ensureTemplatesRegistered()) {
         console.error('Failed to register templates');
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Templates not loaded</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Templates not loaded</div></calcite-notice>';
     }
     
     // Access named template correctly using property syntax
     const template = $.templates.todoDetail || $.templates["todo-detail"];
     if (!template) {
         console.error('Template "todo-detail" not found');
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template not found</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Template not found</div></calcite-notice>';
     }
     
     const data = {
@@ -651,7 +651,7 @@ async function renderTodoDetailHTML(todo, notes) {
         return template.render(data);
     } catch (error) {
         console.error('Template rendering error:', error);
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error rendering template: ' + escapeHtml(error.message) + '</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error rendering template: ' + escapeHtml(error.message) + '</div></calcite-notice>';
     }
 }
 
@@ -1169,10 +1169,9 @@ function renderTodosGridHTML(todos) {
     const flat = flattenTodos(todos || []);
     if (!flat.length) {
         return `
-            <calcite-card>
-                <div slot="title">Todos</div>
-                <div class="text-color-2">No todos match the current filters.</div>
-            </calcite-card>
+            <calcite-notice icon="information" open>
+                <div slot="message">No todos match the current filters.</div>
+            </calcite-notice>
         `;
     }
     return `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${renderTodosGridCardsHTML(flat)}</div>`;
@@ -1210,7 +1209,7 @@ function renderMainTodosHTML(todosTree, options) {
 
     let body = '';
     if (!pageItems.length) {
-        body = `<calcite-card><div slot="title">Todos</div><div class="text-color-2">No todos match the current filters.</div></calcite-card>`;
+        body = `<calcite-notice icon="information" open><div slot="message">No todos match the current filters.</div></calcite-notice>`;
     } else if (view === 'grid') {
         body = `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${renderTodosGridCardsHTML(pageItems)}</div>`;
     } else if (view === 'list') {
@@ -1371,7 +1370,7 @@ function renderTodoBrowserListItemsHTML(todos) {
                     ${showStatus ? `<calcite-chip scale="s" appearance="solid" class="tt-browser-status-chip tt-browser-status-chip--top status-${escapeHtml(t.status)}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                     <div class="tt-browser-item-title font-bold">
                         <span class="tt-browser-item-title-text">${label}</span>
-                        <span class="tt-browser-item-id text-color-3">#${id}</span>
+                        <calcite-chip appearance="outline" scale="s">#${id}</calcite-chip>
                         </div>
                     ${showDescription ? `<div class="tt-browser-item-desc markdown-render text-xs text-color-3">${desc || ''}</div>` : ''}
                 </div>
@@ -1643,7 +1642,7 @@ function buildTodoDetailPanelViewModel(todoDetail) {
     const descriptionBlockHtml = showDescription ? `
         <calcite-label>
             Description (markdown)
-            <tt-md-editor data-tt-field="description" data-tt-todo-id="${t.id}" height="320px" placeholder="Description (Markdown)"></tt-md-editor>
+            <tt-md-editor data-tt-field="description" data-tt-todo-id="${t.id}" height="500px" placeholder="Description (Markdown)"></tt-md-editor>
         </calcite-label>
     ` : '';
     const tagsBlockHtml = showTags ? `
@@ -1694,19 +1693,19 @@ function renderTodoDetailPanelHTML(todoDetail) {
     // Ensure templates are registered
     if (!ensureTemplatesRegistered()) {
         console.error('Failed to register templates');
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Templates not loaded</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Templates not loaded</div></calcite-notice>';
     }
     const template = $.templates.todoDetailPanel || $.templates["todo-detail-panel"];
     if (!template) {
         console.error('Template "todo-detail-panel" not found');
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template not found</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Template not found</div></calcite-notice>';
     }
     try {
         const vm = buildTodoDetailPanelViewModel(todoDetail);
         return template.render(vm);
     } catch (e) {
         console.error('Error rendering todo detail panel template:', e);
-        return '<div class="text-center py-12"><p class="text-lg text-color-danger">Error rendering template</p></div>';
+        return '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error rendering template</div></calcite-notice>';
     }
 }
 
@@ -1728,7 +1727,7 @@ function ttRenderOrUpdateTodoDetailPanel(todo, opts) {
 
     // Ensure templates are registered (JsViews link uses the same registration)
     if (!ensureTemplatesRegistered()) {
-        container.innerHTML = '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Templates not loaded</p></div>';
+        container.innerHTML = '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Templates not loaded</div></calcite-notice>';
         return;
     }
 
@@ -1743,7 +1742,7 @@ function ttRenderOrUpdateTodoDetailPanel(todo, opts) {
 
     const template = $.templates.todoDetailPanel || $.templates["todo-detail-panel"];
     if (!template) {
-        container.innerHTML = '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Template not found</p></div>';
+        container.innerHTML = '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Template not found</div></calcite-notice>';
         return;
     }
 

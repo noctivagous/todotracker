@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error('jQuery or JsRender failed to load');
         const view = document.getElementById('app-view');
         if (view) {
-            view.innerHTML = '<div class="text-center py-12"><p class="text-lg text-color-danger">Error: Required JavaScript libraries failed to load. Please refresh the page.</p></div>';
+            view.innerHTML = '<calcite-notice icon="exclamation-mark-triangle" kind="danger" open><div slot="message">Error: Required JavaScript libraries failed to load. Please refresh the page.</div></calcite-notice>';
         }
         hideLoading();
         return;

@@ -3,7 +3,7 @@
     <div class="flex-1">
       <div class="flex items-center flex-wrap gap-1.5 mb-2">
         <span class="tt-todo-title-display text-lg font-semibold">{{:title}}</span>
-        <span class="text-xs text-color-3">#{{:id}}</span>
+        <calcite-chip appearance="outline" scale="s">#{{:id}}</calcite-chip>
         <calcite-chip appearance="solid" scale="s" class="status-{{:status}}">
           {{:~replaceUnderscores(status)}}
         </calcite-chip>

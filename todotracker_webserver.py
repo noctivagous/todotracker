@@ -19,6 +19,7 @@ from pathlib import Path
 import time
 import signal
 import atexit
+import argparse
 
 # Environment detection and setup
 def setup_uv_environment():
@@ -52,6 +53,15 @@ if "--version" in sys.argv or "-v" in sys.argv:
     except ImportError:
         print("Version information not available")
     sys.exit(0)
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="TodoTracker Web Server")
+parser.add_argument('-n', '--no-browser', action='store_true',
+                   help='Do not open browser automatically')
+args, unknown = parser.parse_known_args()
+
+# Put the parsed args back into sys.argv for compatibility
+sys.argv = [sys.argv[0]] + unknown
 
 
 def check_dependencies():
@@ -98,7 +108,7 @@ def init_database():
         return False
 
 
-def run_web_server():
+def run_web_server(no_browser=False):
     """Run the FastAPI web server with adaptive port management."""
     from src.port_manager import (
         find_available_port, 
@@ -172,14 +182,17 @@ def run_web_server():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # Open browser after a short delay
-    def open_browser():
-        time.sleep(2)
-        webbrowser.open(f"http://localhost:{port}")
-    
-    import threading
-    browser_thread = threading.Thread(target=open_browser, daemon=True)
-    browser_thread.start()
+    # Open browser after a short delay (unless disabled)
+    if not no_browser:
+        def open_browser():
+            time.sleep(2)
+            webbrowser.open(f"http://localhost:{port}")
+
+        import threading
+        browser_thread = threading.Thread(target=open_browser, daemon=True)
+        browser_thread.start()
+    else:
+        print("💡 Browser auto-open disabled (--no-browser flag used)")
     
     # Run the web server
     try:
@@ -275,7 +288,7 @@ def main():
     time.sleep(3)
     
     try:
-        run_web_server()
+        run_web_server(no_browser=args.no_browser)
     except Exception as e:
         print(f"\n❌ Error: {e}")
         sys.exit(1)
