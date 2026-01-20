@@ -5,25 +5,21 @@
 </div>
 
 <calcite-card>
-  <div slot="title" class="flex justify-between items-start">
-    <div class="flex-1">
-      <h2 class="text-3xl font-bold mb-2">{{:title}}</h2>
-      <div class="flex flex-wrap gap-2 mb-4">
-        <calcite-chip appearance="solid" scale="s" class="status-{{:status}}">
-          {{:~replaceUnderscores(status)}}
-        </calcite-chip>
-        <calcite-chip appearance="outline" scale="s" class="category-{{:category}}">
-          {{:category}}
-        </calcite-chip>
-        {{if topic}}
-          <calcite-chip appearance="outline" scale="s">📁 {{:topic}}</calcite-chip>
-        {{/if}}
-        {{for tags}}
-          <calcite-chip appearance="outline" scale="s">🏷️ {{:name || #data}}</calcite-chip>
-        {{/for}}
-      </div>
-    </div>
-  </div>
+  <h2 slot="heading">{{:title}}</h2>
+  <calcite-chip-group scale="s" selection-mode="none">
+    <calcite-chip appearance="solid" scale="s" class="status-{{:status}}">
+      {{:~replaceUnderscores(status)}}
+    </calcite-chip>
+    <calcite-chip appearance="outline" scale="s" class="category-{{:category}}">
+      {{:category}}
+    </calcite-chip>
+    {{if topic}}
+      <calcite-chip appearance="outline" scale="s">📁 {{:topic}}</calcite-chip>
+    {{/if}}
+    {{for tags}}
+      <calcite-chip appearance="outline" scale="s">🏷️ {{:name || #data}}</calcite-chip>
+    {{/for}}
+  </calcite-chip-group>
 </calcite-card>
 
 {{if description}}
@@ -35,9 +31,7 @@
 
 {{if notes && notes.length > 0}}
   <calcite-card class="mt-6">
-    <div slot="title">
-      <h3 class="text-xl font-bold">Notes ({{:notes.length}})</h3>
-    </div>
+    <h3 slot="heading">Notes ({{:notes.length}})</h3>
     <div class="space-y-3">
       {{for notes}}
         <div class="tt-surface p-4">

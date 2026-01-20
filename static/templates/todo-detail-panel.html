@@ -5,7 +5,7 @@
   </div>
 
   <calcite-card>
-    <div slot="title" class="space-y-2">
+    <div slot="heading" class="space-y-2">
       <div class="flex items-center justify-between gap-2">
         <div class="text-xs text-color-3 truncate" data-link="text{:titleMeta}">{{>titleMeta}}</div>
         <calcite-chip id="ttAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
@@ -42,8 +42,7 @@
       <span data-link="html{:advancedFieldsGridHtml}">{{:advancedFieldsGridHtml}}</span>
 
       {{if showRelatesTo}}
-      <calcite-panel>
-        <div slot="header-content">Relates to</div>
+      <calcite-panel heading="Relates to">
         <calcite-block>
           <calcite-block-section>
             <div class="space-y-2">
@@ -83,8 +82,7 @@
       </calcite-panel>
       {{/if}}
       {{if showAttachments}}
-      <calcite-panel>
-        <div slot="header-content">Attachments</div>
+      <calcite-panel heading="Attachments">
         <calcite-block>
           <calcite-block-section>
             <calcite-label>
@@ -115,8 +113,7 @@
       </calcite-panel>
       {{/if}}
       {{if showSubtasks}}
-      <calcite-panel class="tt-subtasks-panel">
-        <div slot="header-content">Subtasks ({{:subtasksCount}})</div>
+      <calcite-panel class="tt-subtasks-panel" heading="Subtasks ({{:subtasksCount}})">
         <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
           onclick="addCreateTodoModal(); (window.ttOpenCreateTodoModal ? window.ttOpenCreateTodoModal({ parentId: {{:todoId}} }) : (document.getElementById('createModal') && (document.getElementById('createModal').open = true)))">
           Add subtask
@@ -179,8 +176,7 @@
       </calcite-panel>
       {{/if}}
       {{if showDependencies}}
-      <calcite-panel>
-        <div slot="header-content">Dependencies</div>
+      <calcite-panel heading="Dependencies">
         <calcite-block>
           <calcite-block-section heading="Prerequisites ({{:dependencies.length}})">
             <div class="space-y-2">
@@ -239,8 +235,7 @@
       </calcite-panel>
       {{/if}}
       {{if showNotes}}
-      <calcite-panel>
-        <div slot="header-content">Notes ({{:notes.length}})</div>
+      <calcite-panel heading="Notes ({{:notes.length}})">
         <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
           onclick="addCreateNoteModal(); (window.ttOpenCreateNoteModal ? window.ttOpenCreateNoteModal({ todoId: {{:todoId}} }) : (document.getElementById('createNoteModal') && (document.getElementById('createNoteModal').open = true)))">
           Add note

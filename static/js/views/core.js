@@ -198,7 +198,9 @@ function setHeaderMode(mode) {
         navFilter.placeholder = m === 'notes' ? 'Filter notes (live)...' : (m === 'settings' ? 'Filter (disabled in Settings)...' : 'Filter (live)...');
     }
     if (headerNewBtn) {
-        headerNewBtn.innerHTML = 'New';
+        // Match the currently selected section (Todos vs Notes).
+        // Use textContent (not innerHTML) since this is plain text.
+        headerNewBtn.textContent = m === 'notes' ? 'New Note' : (m === 'todos' ? 'New Todo' : 'New');
         headerNewBtn.setAttribute('icon-start', 'plus');
         headerNewBtn.title = m === 'notes' ? 'Create note' : 'Create todo';
     }
