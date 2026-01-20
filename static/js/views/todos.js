@@ -1146,17 +1146,17 @@ function renderTodosGridCardsHTML(flatTodos) {
                 <div slot="title" class="tt-main-todo-title truncate">${title}</div>
                 <div slot="subtitle" class="text-xs text-color-3">${escapeHtml(meta)}</div>
                 <div class="space-y-2">
-                    <calcite-chip-group>
+                    <div class="flex items-center flex-wrap gap-1.5">
                         ${showStatus ? `<calcite-chip appearance="solid" scale="s" class="status-${status}">${escapeHtml(replaceUnderscores(t.status))}</calcite-chip>` : ''}
                         ${showCategory ? `<calcite-chip appearance="outline" scale="s" class="category-${category}">${category}</calcite-chip>` : ''}
                         ${queueChip}
                         ${priorityChip}
                         ${sizeChip}
                         ${topic}
-                    </calcite-chip-group>
+                    </div>
                     ${showDescription ? `<div class="markdown-render text-sm text-color-2">${desc || 'No description'}</div>` : ''}
                     ${showAuthorSignposts && author ? `<div class="text-xs text-color-3">${author}</div>` : ''}
-                    ${tags ? `<calcite-chip-group>${tags}</calcite-chip-group>` : ''}
+                    ${tags ? `<div class="flex items-center flex-wrap gap-1.5">${tags}</div>` : ''}
                     ${subCount > 0 ? ttRenderSubtasksPreviewHTML(t, 6) : ''}
                 </div>
                 ${subCount > 0 ? `<calcite-badge class="tt-subtasks-badge" scale="s" color="blue">Subtasks (${subCount})</calcite-badge>` : ''}
@@ -1174,9 +1174,7 @@ function renderTodosGridHTML(todos) {
             </calcite-notice>
         `;
     }
-    // Calcite Card Group provides spacing + keyboard navigation; card widths are controlled via CSS.
-    // label is required for accessibility.
-    return `<calcite-card-group class="tt-card-group tt-todos-card-group" label="Todos">${renderTodosGridCardsHTML(flat)}</calcite-card-group>`;
+    return `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${renderTodosGridCardsHTML(flat)}</div>`;
 }
 
 function renderMainTodosHTML(todosTree, options) {
@@ -1213,7 +1211,7 @@ function renderMainTodosHTML(todosTree, options) {
     if (!pageItems.length) {
         body = `<calcite-notice icon="information" open><div slot="message">No todos match the current filters.</div></calcite-notice>`;
     } else if (view === 'grid') {
-        body = `<calcite-card-group class="tt-card-group tt-todos-card-group" label="Todos">${renderTodosGridCardsHTML(pageItems)}</calcite-card-group>`;
+        body = `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${renderTodosGridCardsHTML(pageItems)}</div>`;
     } else if (view === 'list') {
         if (subtasksEnabled) {
             const items = renderMainTodosListItemsHTML(pageItems, { showStatus, showDescription });

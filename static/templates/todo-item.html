@@ -1,32 +1,30 @@
 <calcite-card class="tt-todo-item todo-item {{:status}}" style="margin-left: {{:indent}}px; margin-bottom: 12px;">
   <div slot="title" class="flex items-start justify-between gap-2">
     <div class="flex-1">
-      <div class="flex items-center mb-2">
-        <span class="tt-todo-title-display text-lg font-semibold mr-2">{{:title}}</span>
-        <calcite-chip-group>
-          <calcite-chip appearance="outline" scale="s">#{{:id}}</calcite-chip>
-          <calcite-chip appearance="solid" scale="s" class="status-{{:status}}">
-            {{:~replaceUnderscores(status)}}
-          </calcite-chip>
-          <calcite-chip appearance="outline" scale="s" class="category-{{:category}}">
-            {{:category}}
-          </calcite-chip>
-          {{if queue && queue > 0}}
-            <calcite-chip appearance="solid" color="blue" scale="s">⏯️ Queue {{:queue}}</calcite-chip>
-          {{/if}}
-          {{if priority_class}}
-            <calcite-chip appearance="solid" color="orange" scale="s">🔺 Priority {{:priority_class}}</calcite-chip>
-          {{/if}}
-          {{if task_size}}
-            <calcite-chip appearance="outline" scale="s">📏 Size {{:task_size}}/5</calcite-chip>
-          {{/if}}
-          {{if topic}}
-            <calcite-chip appearance="outline" scale="s">📁 {{:topic}}</calcite-chip>
-          {{/if}}
-          {{for tags}}
-            <calcite-chip appearance="outline" scale="s">🏷️ {{:name || #data}}</calcite-chip>
-          {{/for}}
-        </calcite-chip-group>
+      <div class="flex items-center flex-wrap gap-1.5 mb-2">
+        <span class="tt-todo-title-display text-lg font-semibold">{{:title}}</span>
+        <calcite-chip appearance="outline" scale="s">#{{:id}}</calcite-chip>
+        <calcite-chip appearance="solid" scale="s" class="status-{{:status}}">
+          {{:~replaceUnderscores(status)}}
+        </calcite-chip>
+        <calcite-chip appearance="outline" scale="s" class="category-{{:category}}">
+          {{:category}}
+        </calcite-chip>
+        {{if queue && queue > 0}}
+          <calcite-chip appearance="solid" color="blue" scale="s">⏯️ Queue {{:queue}}</calcite-chip>
+        {{/if}}
+        {{if priority_class}}
+          <calcite-chip appearance="solid" color="orange" scale="s">🔺 Priority {{:priority_class}}</calcite-chip>
+        {{/if}}
+        {{if task_size}}
+          <calcite-chip appearance="outline" scale="s">📏 Size {{:task_size}}/5</calcite-chip>
+        {{/if}}
+        {{if topic}}
+          <calcite-chip appearance="outline" scale="s">📁 {{:topic}}</calcite-chip>
+        {{/if}}
+        {{for tags}}
+          <calcite-chip appearance="outline" scale="s">🏷️ {{:name || #data}}</calcite-chip>
+        {{/for}}
       </div>
     </div>
     <div class="flex gap-1.5">

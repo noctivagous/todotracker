@@ -34,7 +34,7 @@
 </div>
 
 <!-- Statistics -->
-<calcite-card-group class="mb-8">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
   <calcite-card onclick="router.navigate('/?status=all&sort_by={{:sortBy}}&sort_dir={{:sortDir}}')" class="cursor-pointer">
     <div class="tt-stat-label text-sm text-muted-foreground">Total</div>
     <div class="tt-stat-value text-2xl font-bold">{{:stats.total}}</div>
@@ -51,7 +51,7 @@
     <div class="tt-stat-label text-sm text-muted-foreground">Completed</div>
     <div class="tt-stat-value text-2xl font-bold">{{:stats.completed}}</div>
   </calcite-card>
-</calcite-card-group>
+</div>
 
 <!-- Todo Tree -->
 <calcite-card class="tt-todo-list-card">

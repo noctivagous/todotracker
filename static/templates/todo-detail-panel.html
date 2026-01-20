@@ -5,7 +5,7 @@
   </div>
 
   <calcite-card>
-    <div slot="heading" class="space-y-2">
+    <div slot="title" class="space-y-2">
       <div class="flex items-center justify-between gap-2">
         <div class="text-xs text-color-3 truncate" data-link="text{:titleMeta}">{{>titleMeta}}</div>
         <calcite-chip id="ttAutosaveChip" appearance="outline" scale="s">Saved</calcite-chip>
@@ -42,143 +42,142 @@
       <span data-link="html{:advancedFieldsGridHtml}">{{:advancedFieldsGridHtml}}</span>
 
       {{if showRelatesTo}}
-      <calcite-panel heading="Relates to">
-        <calcite-block>
-          <calcite-block-section>
-            <div class="space-y-2">
-              {{if relatesTo.length}}
-                {{for relatesTo}}
-                <div class="flex items-center justify-between gap-2">
-                  <div class="min-w-0">
-                    <div class="text-sm font-medium truncate">#{{:id}} - {{:title}}</div>
-                    <div class="text-xs text-color-3">{{:displayStatus}} · {{:displayCategory}}</div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <calcite-button appearance="outline" scale="s" onclick="router.navigate('/todo/{{:id}}')">Open</calcite-button>
-                    <calcite-button appearance="outline" kind="danger" scale="s" data-tt-rel-remove="{{:id}}">Remove</calcite-button>
-                  </div>
+      <calcite-panel>
+        <div slot="header-content">Relates to</div>
+        <calcite-block-section>
+          <div class="space-y-2">
+            {{if relatesTo.length}}
+              {{for relatesTo}}
+              <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="text-sm font-medium truncate">#{{:id}} - {{:title}}</div>
+                  <div class="text-xs text-color-3">{{:displayStatus}} · {{:displayCategory}}</div>
                 </div>
+                <div class="flex items-center gap-2">
+                  <calcite-button appearance="outline" scale="s" onclick="router.navigate('/todo/{{:id}}')">Open</calcite-button>
+                  <calcite-button appearance="outline" kind="danger" scale="s" data-tt-rel-remove="{{:id}}">Remove</calcite-button>
+                </div>
+              </div>
+              {{/for}}
+            {{else}}
+              <calcite-notice icon="information" open>
+                <div slot="message">No related todos.</div>
+              </calcite-notice>
+            {{/if}}
+          </div>
+          <div class="flex items-end gap-2">
+            <calcite-label class="flex-1">
+              Add related todo
+              <calcite-select id="ttAddRelSelect">
+                <calcite-option value=""></calcite-option>
+                {{for relationOptions}}
+                <calcite-option value="{{:id}}">{{:label}}</calcite-option>
                 {{/for}}
-              {{else}}
-                <calcite-notice icon="information" open>
-                  <div slot="message">No related todos.</div>
-                </calcite-notice>
-              {{/if}}
-            </div>
-            <div class="flex items-end gap-2">
-              <calcite-label class="flex-1">
-                Add related todo
-                <calcite-select id="ttAddRelSelect">
-                  <calcite-option value=""></calcite-option>
-                  {{for relationOptions}}
-                  <calcite-option value="{{:id}}">{{:label}}</calcite-option>
-                  {{/for}}
-                </calcite-select>
-              </calcite-label>
-              <calcite-button id="ttAddRelBtn" appearance="solid">Add</calcite-button>
-            </div>
-          </calcite-block-section>
-        </calcite-block>
+              </calcite-select>
+            </calcite-label>
+            <calcite-button id="ttAddRelBtn" appearance="solid">Add</calcite-button>
+          </div>
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       {{if showAttachments}}
-      <calcite-panel heading="Attachments">
-        <calcite-block>
-          <calcite-block-section>
-            <calcite-label>
-              Upload file
-              <input id="ttAttachFileInput" type="file" />
-            </calcite-label>
-            <div class="flex items-center gap-2">
-              <calcite-button id="ttAttachUploadBtn" appearance="solid" icon-start="upload">Upload</calcite-button>
-            </div>
-            <calcite-list id="ttAttachmentsList" selection-mode="none">
-              {{if attachments.length}}
-                {{for attachments}}
-                <calcite-list-item value="{{:id}}" label="{{:fileName}}" description="{{:meta}}">
-                  <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="download"
-                    onclick="event.stopPropagation(); window.open('/api/attachments/{{:id}}/download', '_blank')">Download</calcite-button>
-                  <calcite-button slot="actions-end" appearance="transparent" kind="danger" scale="s" icon-start="trash"
-                    data-tt-att-delete="{{:id}}">Delete</calcite-button>
-                </calcite-list-item>
-                {{/for}}
-              {{else}}
-                <calcite-notice icon="information" open>
-                  <div slot="message">No attachments.</div>
-                </calcite-notice>
-              {{/if}}
-            </calcite-list>
-          </calcite-block-section>
-        </calcite-block>
+      <calcite-panel>
+        <div slot="header-content">Attachments</div>
+        <calcite-block-section>
+          <calcite-label>
+            Upload file
+            <input id="ttAttachFileInput" type="file" />
+          </calcite-label>
+          <div class="flex items-center gap-2">
+            <calcite-button id="ttAttachUploadBtn" appearance="solid" icon-start="upload">Upload</calcite-button>
+          </div>
+          <calcite-list id="ttAttachmentsList" selection-mode="none">
+            {{if attachments.length}}
+              {{for attachments}}
+              <calcite-list-item value="{{:id}}" label="{{:fileName}}" description="{{:meta}}">
+                <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="download"
+                  onclick="event.stopPropagation(); window.open('/api/attachments/{{:id}}/download', '_blank')">Download</calcite-button>
+                <calcite-button slot="actions-end" appearance="transparent" kind="danger" scale="s" icon-start="trash"
+                  data-tt-att-delete="{{:id}}">Delete</calcite-button>
+              </calcite-list-item>
+              {{/for}}
+            {{else}}
+              <calcite-notice icon="information" open>
+                <div slot="message">No attachments.</div>
+              </calcite-notice>
+            {{/if}}
+          </calcite-list>
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       {{if showSubtasks}}
-      <calcite-panel class="tt-subtasks-panel" heading="Subtasks ({{:subtasksCount}})">
+      <calcite-panel class="tt-subtasks-panel">
+        <div slot="header-content">Subtasks ({{:subtasksCount}})</div>
         <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
           onclick="addCreateTodoModal(); (window.ttOpenCreateTodoModal ? window.ttOpenCreateTodoModal({ parentId: {{:todoId}} }) : (document.getElementById('createModal') && (document.getElementById('createModal').open = true)))">
           Add subtask
         </calcite-button>
-        <calcite-block>
-          <calcite-block-section>
-            {{if subtasks.length}}
-              <calcite-list display-mode="nested" selection-mode="none">
-                {{for subtasks}}
-                <calcite-list-item value="{{:id}}" label="#{{:id}} - {{:title}}">
-                  <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-{{:status}}">{{:displayStatus}}</calcite-chip>
-                  {{if subtasksCount}}
-                  <calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks ({{:subtasksCount}})</calcite-chip>
-                  {{/if}}
-                  <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="launch"
-                    onclick="event.stopPropagation(); router.navigate('/todo/{{:id}}')">Open</calcite-button>
-                  {{if description}}
-                  <div slot="content-bottom" class="markdown-render text-xs text-color-3">{{:description}}</div>
-                  {{/if}}
-                  {{if children.length}}
-                    {{for children}}
-                    <calcite-list-item value="{{:id}}" label="#{{:id}} - {{:title}}">
-                      <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-{{:status}}">{{:displayStatus}}</calcite-chip>
-                      {{if subtasksCount > 0}}
-                      <calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks ({{:subtasksCount}})</calcite-chip>
-                      {{/if}}
-                      <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="launch"
-                        onclick="event.stopPropagation(); router.navigate('/todo/{{:id}}')">Open</calcite-button>
-                      {{if description}}
-                      <div slot="content-bottom" class="markdown-render text-xs text-color-3">{{:description}}</div>
-                      {{/if}}
-                      {{if children.length}}
-                        {{for children}}
-                        <calcite-list-item value="{{:id}}" label="#{{:id}} - {{:title}}">
-                          <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-{{:status}}">{{:displayStatus}}</calcite-chip>
-                          {{if subtasksCount > 0}}
-                          <calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks ({{:subtasksCount}})</calcite-chip>
-                          {{/if}}
-                          <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="launch"
-                            onclick="event.stopPropagation(); router.navigate('/todo/{{:id}}')">Open</calcite-button>
-                          {{if description}}
-                          <div slot="content-bottom" class="markdown-render text-xs text-color-3">{{:description}}</div>
-                          {{/if}}
-                        </calcite-list-item>
-                        {{/for}}
-                      {{/if}}
-                    </calcite-list-item>
-                    {{/for}}
-                  {{/if}}
-                </calcite-list-item>
-                {{/for}}
-              </calcite-list>
-            {{else}}
-              <calcite-notice icon="information" open>
-                <div slot="message">No subtasks yet.</div>
-              </calcite-notice>
-            {{/if}}
-          </calcite-block-section>
-        </calcite-block>
+        <calcite-block-section>
+          {{if subtasks.length}}
+            <calcite-list display-mode="nested" selection-mode="none">
+              {{for subtasks}}
+              <calcite-list-item value="{{:id}}" label="#{{:id}} - {{:title}}">
+                <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-{{:status}}">{{:displayStatus}}</calcite-chip>
+                {{if subtasksCount}}
+                <calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks ({{:subtasksCount}})</calcite-chip>
+                {{/if}}
+                <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="launch"
+                  onclick="event.stopPropagation(); router.navigate('/todo/{{:id}}')">Open</calcite-button>
+                {{if description}}
+                <div slot="content-bottom" class="markdown-render text-xs text-color-3">{{:description}}</div>
+                {{/if}}
+                {{if children.length}}
+                  {{for children}}
+                  <calcite-list-item value="{{:id}}" label="#{{:id}} - {{:title}}">
+                    <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-{{:status}}">{{:displayStatus}}</calcite-chip>
+                    {{if subtasksCount > 0}}
+                    <calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks ({{:subtasksCount}})</calcite-chip>
+                    {{/if}}
+                    <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="launch"
+                      onclick="event.stopPropagation(); router.navigate('/todo/{{:id}}')">Open</calcite-button>
+                    {{if description}}
+                    <div slot="content-bottom" class="markdown-render text-xs text-color-3">{{:description}}</div>
+                    {{/if}}
+                    {{if children.length}}
+                      {{for children}}
+                      <calcite-list-item value="{{:id}}" label="#{{:id}} - {{:title}}">
+                        <calcite-chip slot="content-start" scale="s" appearance="solid" class="status-{{:status}}">{{:displayStatus}}</calcite-chip>
+                        {{if subtasksCount > 0}}
+                        <calcite-chip slot="actions-end" scale="s" appearance="outline" class="tt-subtasks-chip">Subtasks ({{:subtasksCount}})</calcite-chip>
+                        {{/if}}
+                        <calcite-button slot="actions-end" appearance="transparent" scale="s" icon-start="launch"
+                          onclick="event.stopPropagation(); router.navigate('/todo/{{:id}}')">Open</calcite-button>
+                        {{if description}}
+                        <div slot="content-bottom" class="markdown-render text-xs text-color-3">{{:description}}</div>
+                        {{/if}}
+                      </calcite-list-item>
+                      {{/for}}
+                    {{/if}}
+                  </calcite-list-item>
+                  {{/for}}
+                {{/if}}
+              </calcite-list-item>
+              {{/for}}
+            </calcite-list>
+          {{else}}
+            <calcite-notice icon="information" open>
+              <div slot="message">No subtasks yet.</div>
+            </calcite-notice>
+          {{/if}}
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       {{if showDependencies}}
-      <calcite-panel heading="Dependencies">
-        <calcite-block>
-          <calcite-block-section heading="Prerequisites ({{:dependencies.length}})">
+      <calcite-panel>
+        <div slot="header-content">Dependencies</div>
+        <calcite-block-section>
+          <div>
+            <div class="text-sm font-semibold mb-2">Prerequisites ({{:dependencies.length}})</div>
             <div class="space-y-2">
               {{if dependencies.length}}
                 {{for dependencies}}
@@ -199,20 +198,21 @@
                 </calcite-notice>
               {{/if}}
             </div>
-            <div class="flex items-end gap-2">
-              <calcite-label class="flex-1">
-                Add prerequisite
-                <calcite-select id="ttAddDepSelect">
-                  <calcite-option value=""></calcite-option>
-                  {{for dependencyOptions}}
-                  <calcite-option value="{{:id}}">{{:label}}</calcite-option>
-                  {{/for}}
-                </calcite-select>
-              </calcite-label>
-              <calcite-button id="ttAddDepBtn" appearance="solid">Add</calcite-button>
-            </div>
-          </calcite-block-section>
-          <calcite-block-section heading="Dependents ({{:dependents.length}})">
+          </div>
+          <div class="flex items-end gap-2">
+            <calcite-label class="flex-1">
+              Add prerequisite
+              <calcite-select id="ttAddDepSelect">
+                <calcite-option value=""></calcite-option>
+                {{for dependencyOptions}}
+                <calcite-option value="{{:id}}">{{:label}}</calcite-option>
+                {{/for}}
+              </calcite-select>
+            </calcite-label>
+            <calcite-button id="ttAddDepBtn" appearance="solid">Add</calcite-button>
+          </div>
+          <div>
+            <div class="text-sm font-semibold mb-2">Dependents ({{:dependents.length}})</div>
             <div class="space-y-2">
               {{if dependents.length}}
                 {{for dependents}}
@@ -230,35 +230,34 @@
                 </calcite-notice>
               {{/if}}
             </div>
-          </calcite-block-section>
-        </calcite-block>
+          </div>
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       {{if showNotes}}
-      <calcite-panel heading="Notes ({{:notes.length}})">
+      <calcite-panel>
+        <div slot="header-content">Notes ({{:notes.length}})</div>
         <calcite-button slot="header-actions-end" appearance="solid" scale="s" icon-start="plus"
           onclick="addCreateNoteModal(); (window.ttOpenCreateNoteModal ? window.ttOpenCreateNoteModal({ todoId: {{:todoId}} }) : (document.getElementById('createNoteModal') && (document.getElementById('createNoteModal').open = true)))">
           Add note
         </calcite-button>
-        <calcite-block>
-          <calcite-block-section>
-            {{if notes.length}}
-              {{for notes}}
-              <div class="tt-surface p-3 space-y-1">
-                <div class="text-xs text-color-3">{{:meta}}</div>
-                {{if title}}
-                <div class="font-semibold text-color-1">{{:title}}</div>
-                {{/if}}
-                <div class="markdown-render">{{:content}}</div>
-              </div>
-              {{/for}}
-            {{else}}
-              <calcite-notice icon="information" open>
-                <div slot="message">No notes yet.</div>
-              </calcite-notice>
-            {{/if}}
-          </calcite-block-section>
-        </calcite-block>
+        <calcite-block-section>
+          {{if notes.length}}
+            {{for notes}}
+            <div class="tt-surface p-3 space-y-1">
+              <div class="text-xs text-color-3">{{:meta}}</div>
+              {{if title}}
+              <div class="font-semibold text-color-1">{{:title}}</div>
+              {{/if}}
+              <div class="markdown-render">{{:content}}</div>
+            </div>
+            {{/for}}
+          {{else}}
+            <calcite-notice icon="information" open>
+              <div slot="message">No notes yet.</div>
+            </calcite-notice>
+          {{/if}}
+        </calcite-block-section>
       </calcite-panel>
       {{/if}}
       <span data-link="html{:authorFieldHtml}">{{:authorFieldHtml}}</span>

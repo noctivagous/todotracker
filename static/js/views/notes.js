@@ -756,9 +756,7 @@ function renderMainNotesHTML(notes, options) {
     if (!pageItems.length) {
         body = `<calcite-notice icon="information" open><div slot="message">No notes match the current filters.</div></calcite-notice>`;
     } else if (view === 'grid') {
-        // Calcite Card Group provides spacing + keyboard navigation; card widths are controlled via CSS.
-        // label is required for accessibility.
-        body = `<calcite-card-group class="tt-card-group tt-notes-card-group" label="Notes">${pageItems.map(noteCard).join('')}</calcite-card-group>`;
+        body = `<div class="grid grid-cols-1 md:grid-cols-3 gap-3">${pageItems.map(noteCard).join('')}</div>`;
     } else if (view === 'list') {
         const rows = pageItems.map((n) => {
             const idNum = parseInt(String(n.id || ''), 10) || 0;
