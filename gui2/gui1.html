@@ -1,0 +1,3441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Piano with DAW</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #1a1a1a;
+      background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column !important;
+      justify-content: flex-start !important;
+      align-items: center !important;
+      overflow-x: hidden !important;
+      padding: 20px !important;
+      gap: 20px !important;
+    }
+
+    .piano-container {
+      background: #2a2a2a;
+      border-radius: 4px;
+      border: 1px solid #3a3a3a;
+      padding: 0;
+      padding-bottom: 30px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+      margin: 0 auto !important;
+      width: 100% !important;
+      max-width: 1000px !important;
+      position: relative;
+    }
+
+    .piano-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: linear-gradient(to bottom, #333 0%, #2a2a2a 100%);
+      border-bottom: 1px solid #3a3a3a;
+      border-radius: 4px 4px 0 0;
+      z-index: 1;
+    }
+
+    h1 {
+      position: relative;
+      z-index: 2;
+      margin: 0 !important;
+      padding: 10px 20px !important;
+      text-align: left !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      color: #e0e0e0 !important;
+      background: transparent !important;
+      border-bottom: none !important;
+      text-shadow: none !important;
+      letter-spacing: 0.3px !important;
+      height: 40px;
+      display: flex;
+      align-items: center;
+    }
+
+    .piano {
+      display: flex;
+      justify-content: center;
+      position: relative;
+      background: #1a1a1a;
+      padding: 20px;
+      margin-top: 0;
+      padding-top: 20px;
+      border-radius: 4px;
+      border: 1px solid #3a3a3a;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+      min-height: 340px;
+    }
+
+    .white-key {
+      width: 60px;
+      height: 300px;
+      background: linear-gradient(to bottom, #fff 0%, #f5f5f5 100%);
+      border: 1px solid #4a4a4a;
+      border-radius: 0 0 2px 2px;
+      cursor: pointer;
+      position: relative;
+      margin: 0 2px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+      transition: all 0.1s ease;
+      z-index: 1;
+    }
+
+    .white-key:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .white-key:active,
+    .white-key.pressed {
+      background: linear-gradient(to bottom, #ddd 0%, #ccc 100%);
+      transform: translateY(2px);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .black-key {
+      width: 40px;
+      height: 180px;
+      background: linear-gradient(to bottom, #000 0%, #333 100%);
+      border: 1px solid #000;
+      border-radius: 0 0 2px 2px;
+      cursor: pointer;
+      position: absolute;
+      z-index: 2;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+      transition: all 0.1s ease;
+    }
+
+    .black-key:hover {
+      background: linear-gradient(to bottom, #1a1a1a 0%, #2a2a2a 100%);
+    }
+
+    .black-key:active,
+    .black-key.pressed {
+      background: linear-gradient(to bottom, #0a0a0a 0%, #1a1a1a 100%);
+      transform: translateY(1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    }
+
+    .key-label {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      font-weight: bold;
+      color: #666;
+      pointer-events: none;
+      display: none;
+    }
+
+    .key-label.show {
+      display: block;
+    }
+
+    .black-key .key-label {
+      color: #fff;
+    }
+
+    .controls {
+      margin-top: 0 !important;
+      padding-top: 15px !important;
+      padding-left: 20px;
+      padding-right: 20px;
+      border-top: 1px solid #3a3a3a;
+      text-align: left;
+    }
+
+    .controls label {
+      display: flex !important;
+      align-items: center !important;
+      gap: 10px !important;
+      color: #b0b0b0 !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      padding: 8px 12px !important;
+      background: #1a1a1a !important;
+      border: 1px solid #3a3a3a !important;
+      border-radius: 3px !important;
+      transition: all 0.1s ease !important;
+    }
+
+    .controls label:hover {
+      background: #222 !important;
+      border-color: #4a4a4a !important;
+    }
+
+    .controls input[type="checkbox"] {
+      width: 18px !important;
+      height: 18px !important;
+      cursor: pointer !important;
+      margin: 0 !important;
+    }
+
+    /* DAW Specific Styles */
+    #daw-tabs-v3 {
+      width: 100% !important;
+      max-width: 1000px !important;
+      margin-top: 20px !important;
+    }
+
+    #daw-tabs-v3::before {
+      content: 'Section: DAW Interface';
+      display: block;
+      padding: 8px 12px;
+      background: linear-gradient(to bottom, #2a2a2a 0%, #222 100%);
+      color: #888;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border: 1px solid #3a3a3a;
+      border-bottom: none;
+      border-radius: 4px 4px 0 0;
+    }
+
+    #daw-tabs-v3 .mcp-le-viewer {
+      border-top: none !important;
+    }
+
+    .mcp-le-viewer-trigger {
+      background: transparent !important;
+      color: #b0b0b0 !important;
+      border: 1px solid transparent !important;
+      border-bottom: none !important;
+      border-radius: 4px 4px 0 0 !important;
+      padding: 8px 16px !important;
+      cursor: pointer !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      position: relative;
+      z-index: 2;
+      transition: all 0.15s ease !important;
+    }
+
+    .mcp-le-viewer-trigger:hover:not(.mcp-le-selected) {
+      background: #2a2a2a !important;
+      color: #e0e0e0 !important;
+    }
+
+    .mcp-le-viewer-trigger.mcp-le-selected {
+      background: #1a1a1a !important;
+      color: #e0e0e0 !important;
+      border-color: #3a3a3a !important;
+      border-bottom-color: #1a1a1a !important;
+      font-weight: 600 !important;
+      z-index: 3;
+    }
+
+    .mcp-le-viewer-triggers {
+      background: linear-gradient(to bottom, #2a2a2a 0%, #222 100%) !important;
+      border: 1px solid #3a3a3a !important;
+      border-bottom: 1px solid #3a3a3a !important;
+      border-radius: 4px 4px 0 0 !important;
+      padding: 4px 8px 0 8px !important;
+      display: flex;
+      gap: 2px;
+      flex-wrap: wrap;
+      position: relative;
+    }
+
+    .mcp-le-viewer-triggers::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #1a1a1a;
+      z-index: 1;
+    }
+
+    .mcp-le-viewer-panel {
+      padding: 0;
+      border: 1px solid #3a3a3a;
+      border-top: 1px solid #3a3a3a !important;
+      border-radius: 0 0 6px 6px;
+    }
+
+    .mcp-le-viewer-panel[hidden] {
+      display: none;
+    }
+
+    .daw-button {
+      background: linear-gradient(to bottom, #444 0%, #333 100%);
+      color: #fff;
+      border: 1px solid #111;
+      border-radius: 3px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+
+    .daw-button:active {
+      background: #222;
+      transform: translateY(1px);
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    .daw-button-red {
+      background: linear-gradient(to bottom, #900 0%, #700 100%);
+      border-color: #500;
+    }
+
+    /* GUI Controls Styles */
+    #gui-controls-container {
+      margin-top: 20px;
+    }
+
+    #gui-controls-container h2 {
+      color: #e0e0e0;
+      margin-bottom: 20px;
+      text-align: center;
+      font-size: 1.5em;
+      font-weight: 600;
+    }
+
+    .gui-group-box {
+      background: #2a2a2a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-group-header {
+      background: linear-gradient(to bottom, #333 0%, #2a2a2a 100%);
+      color: #e0e0e0;
+      padding: 12px 16px;
+      font-weight: 600;
+      font-size: 1.1em;
+      border-bottom: 1px solid #3a3a3a;
+      border-radius: 4px 4px 0 0;
+    }
+
+    .gui-group-content {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+
+    .gui-control-row {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+
+    .gui-label {
+      color: #b0b0b0;
+      font-size: 0.95em;
+      min-width: 120px;
+      font-weight: 500;
+    }
+
+    /* Text Input */
+    .gui-text-input {
+      background: #1a1a1a;
+      border: 1px solid #4a4a4a;
+      border-radius: 3px;
+      padding: 6px 10px;
+      color: #e0e0e0;
+      font-size: 13px;
+      flex: 1;
+      min-width: 200px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-text-input:focus {
+      outline: none;
+      border-color: #5a5a5a;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(74, 144, 226, 0.2);
+    }
+
+    .gui-text-input::placeholder {
+      color: #666;
+    }
+
+    /* Textarea */
+    .gui-textarea {
+      background: #1a1a1a;
+      border: 1px solid #4a4a4a;
+      border-radius: 3px;
+      padding: 8px 10px;
+      color: #e0e0e0;
+      font-size: 13px;
+      font-family: Arial, sans-serif;
+      flex: 1;
+      min-width: 200px;
+      min-height: 80px;
+      resize: vertical;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-textarea:focus {
+      outline: none;
+      border-color: #5a5a5a;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(74, 144, 226, 0.2);
+    }
+
+    /* Slider */
+    .gui-slider-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .gui-slider {
+      flex: 1;
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .gui-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-slider-value {
+      color: #e0e0e0;
+      font-size: 13px;
+      min-width: 35px;
+      text-align: right;
+    }
+
+    /* Checkbox */
+    .gui-checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .gui-checkbox {
+      display: none;
+    }
+
+    .gui-checkbox-custom {
+      width: 18px;
+      height: 18px;
+      background: #1a1a1a;
+      border: 1px solid #4a4a4a;
+      border-radius: 3px;
+      position: relative;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+      transition: all 0.1s ease;
+    }
+
+    .gui-checkbox:checked + .gui-checkbox-custom {
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      border-color: #2a5a8a;
+    }
+
+    .gui-checkbox:checked + .gui-checkbox-custom::after {
+      content: '✓';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    /* Radio */
+    .gui-radio-group {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .gui-radio-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .gui-radio {
+      display: none;
+    }
+
+    .gui-radio-custom {
+      width: 18px;
+      height: 18px;
+      background: #1a1a1a;
+      border: 2px solid #4a4a4a;
+      border-radius: 50%;
+      position: relative;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+      transition: all 0.1s ease;
+    }
+
+    .gui-radio:checked + .gui-radio-custom {
+      border-color: #4a90e2;
+    }
+
+    .gui-radio:checked + .gui-radio-custom::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 8px;
+      height: 8px;
+      background: #4a90e2;
+      border-radius: 50%;
+    }
+
+    /* Select/Dropdown */
+    .gui-select {
+      background: linear-gradient(to bottom, #2a2a2a 0%, #1a1a1a 100%);
+      border: 1px solid #4a4a4a;
+      border-radius: 3px;
+      padding: 6px 30px 6px 10px;
+      color: #e0e0e0;
+      font-size: 13px;
+      cursor: pointer;
+      flex: 1;
+      min-width: 200px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e0e0e0' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+    }
+
+    .gui-select:focus {
+      outline: none;
+      border-color: #5a5a5a;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(74, 144, 226, 0.2);
+    }
+
+    .gui-select option {
+      background: #2a2a2a;
+      color: #e0e0e0;
+    }
+
+    /* Dropdown with Segmented Control Styling */
+    .gui-select-segmented {
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 6px 30px 6px 10px;
+      color: #b0b0b0;
+      font-size: 13px;
+      cursor: pointer;
+      flex: 1;
+      min-width: 200px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23b0b0b0' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      transition: all 0.15s ease;
+    }
+
+    .gui-select-segmented:hover {
+      color: #e0e0e0;
+      background: #222;
+    }
+
+    .gui-select-segmented:focus {
+      outline: none;
+      border-color: #4a4a4a;
+      color: #e0e0e0;
+      background: #222;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(74, 144, 226, 0.2);
+    }
+
+    .gui-select-segmented option {
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+
+    /* Toggle Switch */
+    .gui-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .gui-toggle-input {
+      display: none;
+    }
+
+    .gui-toggle-slider {
+      width: 44px;
+      height: 24px;
+      background: #1a1a1a;
+      border: 1px solid #4a4a4a;
+      border-radius: 12px;
+      position: relative;
+      transition: all 0.2s ease;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: linear-gradient(to bottom, #666 0%, #555 100%);
+      border: 1px solid #333;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-toggle-input:checked + .gui-toggle-slider {
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      border-color: #2a5a8a;
+    }
+
+    .gui-toggle-input:checked + .gui-toggle-slider::before {
+      transform: translateX(20px);
+      background: linear-gradient(to bottom, #fff 0%, #e0e0e0 100%);
+    }
+
+    .gui-toggle-label {
+      color: #e0e0e0;
+      font-size: 13px;
+    }
+
+    /* Square-edged Toggle Switch */
+    .gui-toggle-square {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .gui-toggle-square-input {
+      display: none;
+    }
+
+    .gui-toggle-square-slider {
+      width: 44px;
+      height: 24px;
+      background: #1a1a1a;
+      border: 1px solid #4a4a4a;
+      border-radius: 0;
+      position: relative;
+      transition: all 0.2s ease;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-toggle-square-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: linear-gradient(to bottom, #666 0%, #555 100%);
+      border: 1px solid #333;
+      border-radius: 0;
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-toggle-square-input:checked + .gui-toggle-square-slider {
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      border-color: #2a5a8a;
+    }
+
+    .gui-toggle-square-input:checked + .gui-toggle-square-slider::before {
+      transform: translateX(20px);
+      background: linear-gradient(to bottom, #fff 0%, #e0e0e0 100%);
+    }
+
+    .gui-toggle-square-label {
+      color: #e0e0e0;
+      font-size: 13px;
+    }
+
+    /* Segmented Control */
+    .gui-segmented-control {
+      display: inline-flex;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 2px;
+      gap: 0;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-segmented-control-item {
+      background: transparent;
+      color: #b0b0b0;
+      border: none;
+      border-radius: 2px;
+      padding: 6px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .gui-segmented-control-item:hover:not(.gui-segmented-control-item-selected) {
+      color: #e0e0e0;
+      background: #222;
+    }
+
+    .gui-segmented-control-item:active:not(.gui-segmented-control-item-selected) {
+      background: #2a2a2a;
+    }
+
+    .gui-segmented-control-item-selected {
+      background: linear-gradient(to bottom, #444 0%, #333 100%);
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      font-weight: 600;
+    }
+
+    .gui-segmented-control-item-selected:hover {
+      background: linear-gradient(to bottom, #4a4a4a 0%, #3a3a3a 100%);
+    }
+
+    .gui-segmented-control-item-selected:active {
+      background: #2a2a2a;
+      transform: translateY(1px);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Buttons */
+    .gui-button {
+      background: linear-gradient(to bottom, #444 0%, #333 100%);
+      color: #fff;
+      border: 1px solid #111;
+      border-radius: 3px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      transition: all 0.1s ease;
+    }
+
+    .gui-button:hover {
+      background: linear-gradient(to bottom, #4a4a4a 0%, #3a3a3a 100%);
+    }
+
+    .gui-button:active {
+      background: #222;
+      transform: translateY(1px);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+    }
+
+    .gui-button-primary {
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      border-color: #2a5a8a;
+    }
+
+    .gui-button-primary:hover {
+      background: linear-gradient(to bottom, #5aa0f2 0%, #458acd 100%);
+    }
+
+    .gui-button-secondary {
+      background: linear-gradient(to bottom, #666 0%, #555 100%);
+      border-color: #333;
+    }
+
+    .gui-button-danger {
+      background: linear-gradient(to bottom, #900 0%, #700 100%);
+      border-color: #500;
+    }
+
+    .gui-button-danger:hover {
+      background: linear-gradient(to bottom, #a00 0%, #800 100%);
+    }
+
+    .gui-button-small {
+      padding: 5px 12px;
+      font-size: 11px;
+    }
+
+    .gui-button-large {
+      padding: 12px 24px;
+      font-size: 15px;
+    }
+
+    .gui-button-rounded {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+      border-radius: 6px;
+      padding: 4px 16px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-rounded:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-rounded:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Make button variants consistent with top 6 dark shading */
+    .gui-button-rounded:not(.gui-button-light) {
+      background: linear-gradient(to bottom, #444 0%, #333 100%) !important;
+      color: #fff !important;
+      border: 1px solid #111 !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .gui-button-rounded:not(.gui-button-light):hover {
+      background: linear-gradient(to bottom, #4a4a4a 0%, #3a3a3a 100%) !important;
+    }
+
+    .gui-button-rounded:not(.gui-button-light):active {
+      background: #222 !important;
+      transform: translateY(1px) !important;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+    }
+
+    .gui-button-regular-square:not(.gui-button-light) {
+      background: linear-gradient(to bottom, #444 0%, #333 100%) !important;
+      color: #fff !important;
+      border: 1px solid #111 !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .gui-button-regular-square:not(.gui-button-light):hover {
+      background: linear-gradient(to bottom, #4a4a4a 0%, #3a3a3a 100%) !important;
+    }
+
+    .gui-button-regular-square:not(.gui-button-light):active {
+      background: #222 !important;
+      transform: translateY(1px) !important;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+    }
+
+    .gui-button-rounded-disclosure {
+      background: linear-gradient(to bottom, #444 0%, #333 100%) !important;
+      color: #fff !important;
+      border: 1px solid #111 !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .gui-button-rounded-disclosure::after {
+      color: #fff !important;
+    }
+
+    .gui-button-rounded-disclosure:hover {
+      background: linear-gradient(to bottom, #4a4a4a 0%, #3a3a3a 100%) !important;
+    }
+
+    .gui-button-rounded-disclosure:active {
+      background: #222 !important;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+    }
+
+    .gui-button-help {
+      background: linear-gradient(to bottom, #444 0%, #333 100%) !important;
+      color: #fff !important;
+      border: 1px solid #111 !important;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+    }
+
+    .gui-button-help::after {
+      color: #fff !important;
+    }
+
+    .gui-button-help:hover {
+      background: linear-gradient(to bottom, #4a4a4a 0%, #3a3a3a 100%) !important;
+    }
+
+    .gui-button-help:active {
+      background: #222 !important;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+    }
+
+    .gui-button-regular-square {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 2px solid #999;
+      border-radius: 0;
+      padding: 4px 12px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-regular-square:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-regular-square:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-thick-square {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 3px solid #999;
+      border-radius: 0;
+      padding: 4px 12px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-thick-square:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-thick-square:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-thicker-square {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 4px solid #999;
+      border-radius: 0;
+      padding: 4px 12px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-thicker-square:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-thicker-square:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-small-square {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+      border-radius: 0;
+      padding: 2px 6px;
+      font-size: 11px;
+      min-width: 24px;
+      height: 24px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 1px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-small-square:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-small-square:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-circular {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-circular:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-circular:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-recessed {
+      background: linear-gradient(to bottom, #d0d0d0 0%, #c0c0c0 100%);
+      color: #000;
+      border: 1px solid #888;
+      border-radius: 4px;
+      padding: 4px 12px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .gui-button-recessed:hover {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+    }
+
+    .gui-button-recessed:active {
+      background: linear-gradient(to bottom, #b0b0b0 0%, #a0a0a0 100%);
+      box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-round-rect {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+      border-radius: 8px;
+      padding: 4px 16px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-round-rect:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-round-rect:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-textured-rounded {
+      background: linear-gradient(to bottom, #f5f5f5 0%, #e5e5e5 50%, #d5d5d5 100%);
+      color: #000;
+      border: 1px solid #aaa;
+      border-radius: 6px;
+      padding: 4px 16px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 -1px 1px rgba(0, 0, 0, 0.1);
+    }
+
+    .gui-button-textured-rounded:hover {
+      background: linear-gradient(to bottom, #fafafa 0%, #eaeaea 50%, #dadada 100%);
+    }
+
+    .gui-button-textured-rounded:active {
+      background: linear-gradient(to bottom, #d0d0d0 0%, #c0c0c0 50%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-textured-square {
+      background: linear-gradient(to bottom, #f5f5f5 0%, #e5e5e5 50%, #d5d5d5 100%);
+      color: #000;
+      border: 1px solid #aaa;
+      border-radius: 0;
+      padding: 4px 12px;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 -1px 1px rgba(0, 0, 0, 0.1);
+    }
+
+    .gui-button-textured-square:hover {
+      background: linear-gradient(to bottom, #fafafa 0%, #eaeaea 50%, #dadada 100%);
+    }
+
+    .gui-button-textured-square:active {
+      background: linear-gradient(to bottom, #d0d0d0 0%, #c0c0c0 50%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-shadowless-square {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+      border-radius: 0;
+      padding: 4px 12px;
+      box-shadow: none;
+    }
+
+    .gui-button-shadowless-square:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-shadowless-square:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+    }
+
+    .gui-button-disclosure {
+      background: transparent;
+      color: #000;
+      border: none;
+      border-radius: 0;
+      padding: 2px 8px;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: none;
+      position: relative;
+    }
+
+    .gui-button-disclosure::after {
+      content: '▶';
+      font-size: 10px;
+      color: #666;
+    }
+
+    .gui-button-disclosure[aria-expanded="true"]::after {
+      content: '▼';
+    }
+
+    .gui-button-disclosure:hover::after {
+      color: #000;
+    }
+
+    .gui-button-rounded-disclosure {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 2px 8px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 1px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-rounded-disclosure::after {
+      content: '▶';
+      font-size: 10px;
+      color: #000;
+    }
+
+    .gui-button-rounded-disclosure[aria-expanded="true"]::after {
+      content: '▼';
+    }
+
+    .gui-button-help {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .gui-button-help::after {
+      content: '?';
+    }
+
+    .gui-button-help:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-help:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-inline {
+      background: transparent;
+      color: #4a90e2;
+      border: none;
+      border-radius: 0;
+      padding: 2px 4px;
+      text-decoration: underline;
+      box-shadow: none;
+      font-size: 13px;
+    }
+
+    .gui-button-inline:hover {
+      color: #5aa0f2;
+      background: rgba(74, 144, 226, 0.1);
+    }
+
+    .gui-button-inline:active {
+      color: #357abd;
+    }
+
+    /* Selected/On State - For toggle buttons */
+    .gui-button-state-selected,
+    .gui-button-state-on {
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      color: #fff;
+      border-color: #2a5a8a;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(74, 144, 226, 0.3);
+    }
+
+    .gui-button-state-selected:hover,
+    .gui-button-state-on:hover {
+      background: linear-gradient(to bottom, #5aa0f2 0%, #458acd 100%);
+    }
+
+    /* Disabled State */
+    .gui-button-state-disabled,
+    .gui-button:disabled {
+      background: linear-gradient(to bottom, #d0d0d0 0%, #c0c0c0 100%);
+      color: #888;
+      border-color: #aaa;
+      cursor: not-allowed;
+      opacity: 0.6;
+      box-shadow: none;
+    }
+
+    .gui-button-state-disabled:hover,
+    .gui-button:disabled:hover {
+      background: linear-gradient(to bottom, #d0d0d0 0%, #c0c0c0 100%);
+    }
+
+    .gui-button-state-disabled:active,
+    .gui-button:disabled:active {
+      background: linear-gradient(to bottom, #d0d0d0 0%, #c0c0c0 100%);
+      transform: none;
+    }
+
+    /* Mixed State - For checkboxes/radio buttons with partial state */
+    .gui-button-state-mixed {
+      background: linear-gradient(to bottom, #888 0%, #777 100%);
+      color: #fff;
+      border-color: #666;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+      position: relative;
+    }
+
+    .gui-button-state-mixed::before {
+      content: '−';
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .gui-button-state-mixed:hover {
+      background: linear-gradient(to bottom, #999 0%, #888 100%);
+    }
+
+    /* Focused State - When button has keyboard focus */
+    .gui-button-state-focused,
+    .gui-button:focus-visible {
+      outline: 2px solid #4a90e2;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.3);
+    }
+
+    /* State combinations for rounded buttons */
+    .gui-button-rounded.gui-button-state-selected {
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      color: #fff;
+      border-color: #2a5a8a;
+    }
+
+    .gui-button-rounded.gui-button-state-disabled {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #999;
+      border-color: #bbb;
+    }
+
+    /* Progress Bar */
+    .gui-progress-container {
+      flex: 1;
+      min-width: 200px;
+      height: 24px;
+      background: #1a1a1a;
+      border: 1px solid #4a4a4a;
+      border-radius: 3px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-progress-bar {
+      height: 100%;
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .gui-progress-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 11px;
+      font-weight: bold;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+
+    /* Status Labels */
+    .gui-status {
+      padding: 4px 10px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .gui-status-success {
+      background: linear-gradient(to bottom, #4a9e4a 0%, #3a7e3a 100%);
+      color: #fff;
+      border: 1px solid #2a5e2a;
+    }
+
+    .gui-status-warning {
+      background: linear-gradient(to bottom, #e6a84a 0%, #c6882a 100%);
+      color: #fff;
+      border: 1px solid #a6681a;
+    }
+
+    .gui-status-error {
+      background: linear-gradient(to bottom, #e64a4a 0%, #c62a2a 100%);
+      color: #fff;
+      border: 1px solid #a61a1a;
+    }
+
+    /* Typography System */
+    .gui-typography-display {
+      font-family: '[DISPLAY_FONT]', 'Arial', sans-serif;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: #e0e0e0;
+      line-height: 1.4;
+    }
+
+    .gui-typography-display-large {
+      font-family: '[DISPLAY_FONT]', 'Arial', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #e0e0e0;
+      line-height: 1.3;
+    }
+
+    .gui-typography-display-medium {
+      font-family: '[DISPLAY_FONT]', 'Arial', sans-serif;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: #e0e0e0;
+      line-height: 1.4;
+    }
+
+    .gui-typography-body {
+      font-family: '[BODY_FONT]', 'Arial', sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      color: #e0e0e0;
+      line-height: 1.5;
+    }
+
+    .gui-typography-body-large {
+      font-family: '[BODY_FONT]', 'Arial', sans-serif;
+      font-size: 15px;
+      font-weight: 400;
+      color: #e0e0e0;
+      line-height: 1.5;
+    }
+
+    .gui-typography-small {
+      font-family: '[BODY_FONT]', 'Arial', sans-serif;
+      font-size: 11px;
+      font-weight: 400;
+      color: #b0b0b0;
+      line-height: 1.4;
+    }
+
+    .gui-typography-caption {
+      font-family: '[BODY_FONT]', 'Arial', sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      color: #888;
+      line-height: 1.4;
+    }
+
+    .gui-typography-mono {
+      font-family: '[MONOSPACE_FONT]', 'Courier New', monospace;
+      font-size: 13px;
+      font-weight: 400;
+      color: #e0e0e0;
+      line-height: 1.5;
+    }
+
+    .gui-typography-mono-small {
+      font-family: '[MONOSPACE_FONT]', 'Courier New', monospace;
+      font-size: 11px;
+      font-weight: 400;
+      color: #e0e0e0;
+      line-height: 1.4;
+    }
+
+    .gui-typography-bold {
+      font-weight: 600;
+    }
+
+    .gui-typography-italic {
+      font-style: italic;
+    }
+
+    .gui-typography-link {
+      color: #4a90e2;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .gui-typography-link:hover {
+      color: #5aa0f2;
+      text-decoration: underline;
+    }
+
+    .gui-typography-example {
+      padding: 12px;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 3px;
+      margin-bottom: 10px;
+    }
+
+    .gui-typography-example-label {
+      color: #888;
+      font-size: 11px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .gui-typography-info {
+      background: #1a1a1a;
+      border-left: 3px solid #4a90e2;
+      padding: 10px 12px;
+      margin: 10px 0;
+      font-size: 12px;
+      color: #b0b0b0;
+    }
+
+    .gui-typography-info-title {
+      color: #e0e0e0;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    /* Grid Popover Dropdown Styles */
+    .gui-grid-popover-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    .gui-grid-popover-trigger {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(to bottom, #444 0%, #333 100%);
+      color: #fff;
+      border: 1px solid #111;
+      border-radius: 3px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      transition: all 0.1s ease;
+      padding: 0;
+    }
+
+    .gui-grid-popover-trigger:hover {
+      background: linear-gradient(to bottom, #4a4a4a 0%, #3a3a3a 100%);
+    }
+
+    .gui-grid-popover-trigger:active,
+    .gui-grid-popover-trigger[aria-expanded="true"] {
+      background: #222;
+      transform: translateY(1px);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+    }
+
+    .gui-grid-popover-trigger-icon {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .gui-grid-popover {
+      position: absolute;
+      background: #2a2a2a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.8);
+      z-index: 1000;
+      min-width: 260px;
+      max-height: 400px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .gui-grid-popover[hidden] {
+      display: none !important;
+    }
+
+    .gui-grid-popover-grid {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 400px;
+    }
+
+    .gui-grid-popover-grid[data-columns="3"] {
+      grid-template-columns: repeat(3, 80px);
+    }
+
+    .gui-grid-popover-grid[data-columns="4"] {
+      grid-template-columns: repeat(4, 80px);
+    }
+
+    .gui-grid-popover-grid[data-columns="5"] {
+      grid-template-columns: repeat(5, 80px);
+    }
+
+    /* Row count support - limits visible rows, enables scrolling */
+    /* Calculation: (item height + label height + gap) * rows + padding */
+    .gui-grid-popover-grid[data-rows="2"] {
+      max-height: calc((80px + 20px + 8px) * 2 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-rows="3"] {
+      max-height: calc((80px + 20px + 8px) * 3 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-rows="4"] {
+      max-height: calc((80px + 20px + 8px) * 4 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-rows="5"] {
+      max-height: calc((80px + 20px + 8px) * 5 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-rows="6"] {
+      max-height: calc((80px + 20px + 8px) * 6 + 24px);
+    }
+
+    .gui-grid-popover-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 3px;
+      transition: all 0.1s ease;
+    }
+
+    .gui-grid-popover-item:hover {
+      background: #333;
+    }
+
+    .gui-grid-popover-item:active {
+      background: #3a3a3a;
+      transform: scale(0.95);
+    }
+
+    .gui-grid-popover-item.selected .gui-grid-popover-item-content {
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      border-color: #2a5a8a;
+      box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.3);
+    }
+
+    .gui-grid-popover-item.selected .gui-grid-popover-item-label {
+      color: #4a90e2;
+      font-weight: 600;
+    }
+
+    .gui-grid-popover-item-content {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #333;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+      transition: all 0.1s ease;
+    }
+
+    .gui-grid-popover-item:hover .gui-grid-popover-item-content {
+      background: linear-gradient(to bottom, #666 0%, #555 100%);
+      border-color: #4a4a4a;
+    }
+
+    .gui-grid-popover-item-label {
+      font-size: 11px;
+      color: #b0b0b0;
+      text-align: center;
+      line-height: 1.2;
+      max-width: 80px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .gui-grid-popover-item[data-hide-label="true"] .gui-grid-popover-item-label {
+      display: none;
+    }
+
+    /* Customizable item sizes */
+    .gui-grid-popover-grid[data-item-size="60"] .gui-grid-popover-item-content {
+      width: 60px;
+      height: 60px;
+    }
+
+    .gui-grid-popover-grid[data-item-size="60"] {
+      grid-template-columns: repeat(3, 60px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="60"][data-rows="2"] {
+      max-height: calc((60px + 20px + 8px) * 2 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="60"][data-rows="3"] {
+      max-height: calc((60px + 20px + 8px) * 3 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="60"][data-rows="4"] {
+      max-height: calc((60px + 20px + 8px) * 4 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="100"] .gui-grid-popover-item-content {
+      width: 100px;
+      height: 100px;
+    }
+
+    .gui-grid-popover-grid[data-item-size="100"] {
+      grid-template-columns: repeat(3, 100px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="100"][data-rows="2"] {
+      max-height: calc((100px + 20px + 8px) * 2 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="100"][data-rows="3"] {
+      max-height: calc((100px + 20px + 8px) * 3 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="100"][data-rows="4"] {
+      max-height: calc((100px + 20px + 8px) * 4 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="120"] .gui-grid-popover-item-content {
+      width: 120px;
+      height: 120px;
+    }
+
+    .gui-grid-popover-grid[data-item-size="120"] {
+      grid-template-columns: repeat(3, 120px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="120"][data-rows="2"] {
+      max-height: calc((120px + 20px + 8px) * 2 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="120"][data-rows="3"] {
+      max-height: calc((120px + 20px + 8px) * 3 + 24px);
+    }
+
+    .gui-grid-popover-grid[data-item-size="120"][data-rows="4"] {
+      max-height: calc((120px + 20px + 8px) * 4 + 24px);
+    }
+
+    /* Scrollbar styling */
+    .gui-grid-popover-grid::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .gui-grid-popover-grid::-webkit-scrollbar-track {
+      background: #1a1a1a;
+      border-radius: 4px;
+    }
+
+    .gui-grid-popover-grid::-webkit-scrollbar-thumb {
+      background: #4a4a4a;
+      border-radius: 4px;
+    }
+
+    .gui-grid-popover-grid::-webkit-scrollbar-thumb:hover {
+      background: #5a5a5a;
+    }
+
+    /* Tab Controls Styles */
+    .gui-tabs-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .gui-tabs-example {
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 3px;
+      padding: 15px;
+    }
+
+    .gui-tabs-example-label {
+      color: #888;
+      font-size: 11px;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Standard Horizontal Tabs */
+    .gui-tabs-horizontal {
+      display: flex;
+      gap: 2px;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 4px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-tabs-horizontal .gui-tab {
+      background: transparent;
+      color: #b0b0b0;
+      border: none;
+      border-radius: 2px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .gui-tabs-horizontal .gui-tab:hover:not(.gui-tab-active) {
+      color: #e0e0e0;
+      background: #222;
+    }
+
+    .gui-tabs-horizontal .gui-tab.gui-tab-active {
+      background: linear-gradient(to bottom, #444 0%, #333 100%);
+      color: #fff;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      font-weight: 600;
+    }
+
+    /* Bordered Tabs */
+    .gui-tabs-bordered {
+      display: flex;
+      gap: 0;
+      background: transparent;
+    }
+
+    .gui-tabs-bordered .gui-tab {
+      background: #1a1a1a;
+      color: #b0b0b0;
+      border: 1px solid #3a3a3a;
+      border-right: none;
+      border-radius: 0;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+      position: relative;
+    }
+
+    .gui-tabs-bordered .gui-tab:first-child {
+      border-radius: 4px 0 0 4px;
+    }
+
+    .gui-tabs-bordered .gui-tab:last-child {
+      border-right: 1px solid #3a3a3a;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .gui-tabs-bordered .gui-tab:hover:not(.gui-tab-active) {
+      background: #222;
+      color: #e0e0e0;
+      border-color: #4a4a4a;
+    }
+
+    .gui-tabs-bordered .gui-tab.gui-tab-active {
+      background: #2a2a2a;
+      color: #e0e0e0;
+      border-color: #4a90e2;
+      font-weight: 600;
+      z-index: 1;
+    }
+
+    /* Vertical Tabs */
+    .gui-tabs-vertical-container {
+      display: flex;
+      gap: 0;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      overflow: hidden;
+      min-height: 300px;
+    }
+
+    .gui-tabs-vertical {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      background: #222;
+      border-right: 1px solid #3a3a3a;
+      min-width: 150px;
+    }
+
+    .gui-tabs-vertical .gui-tab {
+      background: transparent;
+      color: #b0b0b0;
+      border: none;
+      border-bottom: 1px solid #3a3a3a;
+      border-radius: 0;
+      padding: 12px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+      text-align: left;
+    }
+
+    .gui-tabs-vertical .gui-tab:last-child {
+      border-bottom: none;
+    }
+
+    .gui-tabs-vertical .gui-tab:hover:not(.gui-tab-active) {
+      background: #2a2a2a;
+      color: #e0e0e0;
+    }
+
+    .gui-tabs-vertical .gui-tab.gui-tab-active {
+      background: #1a1a1a;
+      color: #e0e0e0;
+      border-right: 2px solid #4a90e2;
+      font-weight: 600;
+    }
+
+    .gui-tabs-vertical-content {
+      flex: 1;
+      padding: 20px;
+      background: #1a1a1a;
+    }
+
+    /* Tab Panel */
+    .gui-tab-panel {
+      display: none;
+      padding: 20px;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      min-height: 150px;
+    }
+
+    .gui-tab-panel.gui-tab-panel-active {
+      display: block;
+    }
+
+    /* Small Tabs */
+    .gui-tabs-small {
+      display: flex;
+      gap: 2px;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 3px;
+      padding: 2px;
+    }
+
+    .gui-tabs-small .gui-tab {
+      padding: 5px 12px;
+      font-size: 11px;
+    }
+
+    /* Large Tabs */
+    .gui-tabs-large {
+      display: flex;
+      gap: 2px;
+      background: #1a1a1a;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 6px;
+    }
+
+    .gui-tabs-large .gui-tab {
+      padding: 12px 24px;
+      font-size: 15px;
+    }
+
+    /* Slider Variations - Full Thickness Bar (Pro App Style) */
+    .gui-slider-full-thickness {
+      flex: 1;
+      height: 8px;
+      background: #1a1a1a;
+      border-radius: 4px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      position: relative;
+    }
+
+    .gui-slider-full-thickness::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 8px;
+      background: linear-gradient(to bottom, #3a3a3a 0%, #2a2a2a 100%);
+      border: 1px solid #1a1a1a;
+      border-radius: 4px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    .gui-slider-full-thickness::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+      margin-top: -6px;
+    }
+
+    .gui-slider-full-thickness::-moz-range-track {
+      width: 100%;
+      height: 8px;
+      background: linear-gradient(to bottom, #3a3a3a 0%, #2a2a2a 100%);
+      border: 1px solid #1a1a1a;
+      border-radius: 4px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    .gui-slider-full-thickness::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Slider with Arrowhead */
+    .gui-slider-arrowhead {
+      flex: 1;
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    .gui-slider-arrowhead::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 2px;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+      margin-top: -5px;
+    }
+
+    .gui-slider-arrowhead::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 2px;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    }
+
+    /* Slider with Interval Ticks */
+    .gui-slider-ticks {
+      flex: 1;
+      height: 6px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      position: relative;
+      background-image: repeating-linear-gradient(
+        to right,
+        #3a3a3a 0px,
+        #3a3a3a 1px,
+        transparent 1px,
+        transparent calc((100% - 2px) / 10)
+      );
+    }
+
+    .gui-slider-ticks::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-slider-ticks::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Vertical Slider Container */
+    .gui-slider-vertical-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      height: 200px;
+      min-width: 40px;
+    }
+
+    .gui-slider-vertical {
+      width: 6px;
+      height: 200px;
+      background: #1a1a1a;
+      border-radius: 3px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      writing-mode: bt-lr;
+      -webkit-appearance: slider-vertical;
+    }
+
+    .gui-slider-vertical::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-slider-vertical::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .gui-slider-vertical-full-thickness {
+      width: 8px;
+      height: 200px;
+      background: #1a1a1a;
+      border-radius: 4px;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      writing-mode: bt-lr;
+      -webkit-appearance: slider-vertical;
+    }
+
+    .gui-slider-vertical-full-thickness::-webkit-slider-runnable-track {
+      width: 8px;
+      height: 100%;
+      background: linear-gradient(to right, #3a3a3a 0%, #2a2a2a 100%);
+      border: 1px solid #1a1a1a;
+      border-radius: 4px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    .gui-slider-vertical-full-thickness::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    }
+
+    .gui-slider-vertical-full-thickness::-moz-range-track {
+      width: 8px;
+      height: 100%;
+      background: linear-gradient(to right, #3a3a3a 0%, #2a2a2a 100%);
+      border: 1px solid #1a1a1a;
+      border-radius: 4px;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+
+    .gui-slider-vertical-full-thickness::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: linear-gradient(to bottom, #555 0%, #444 100%);
+      border: 1px solid #111;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Light Button Variants */
+    .gui-button-light {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+      border-radius: 3px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      transition: all 0.1s ease;
+    }
+
+    .gui-button-light:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-light:active {
+      background: linear-gradient(to bottom, #c0c0c0 0%, #b0b0b0 100%);
+      transform: translateY(1px);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+
+    .gui-button-light-primary {
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+      color: #fff;
+      border-color: #2a5a8a;
+    }
+
+    .gui-button-light-primary:hover {
+      background: linear-gradient(to bottom, #5aa0f2 0%, #458acd 100%);
+    }
+
+    .gui-button-light.gui-button-rounded {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 1px solid #999;
+    }
+
+    .gui-button-light.gui-button-rounded:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    .gui-button-light.gui-button-regular-square {
+      background: linear-gradient(to bottom, #e0e0e0 0%, #d0d0d0 100%);
+      color: #000;
+      border: 2px solid #999;
+    }
+
+    .gui-button-light.gui-button-regular-square:hover {
+      background: linear-gradient(to bottom, #f0f0f0 0%, #e0e0e0 100%);
+    }
+
+    /* Pro Panel Section Headings */
+    .gui-group-header-pro {
+      background: linear-gradient(to bottom, #1a1a1a 0%, #0f0f0f 100%);
+      color: #b0b0b0;
+      padding: 8px 12px;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #3a3a3a;
+      border-top: 1px solid #3a3a3a;
+      border-radius: 0;
+      position: relative;
+    }
+
+    .gui-group-header-pro::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+    }
+
+    /* Update existing group headers to pro style */
+    .gui-group-header {
+      background: linear-gradient(to bottom, #1a1a1a 0%, #0f0f0f 100%);
+      color: #b0b0b0;
+      padding: 8px 12px;
+      font-weight: 600;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #3a3a3a;
+      border-top: 1px solid #3a3a3a;
+      border-radius: 0;
+      position: relative;
+    }
+
+    .gui-group-header::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, #4a90e2 0%, #357abd 100%);
+    }
+  </style>
+</head>
+<body>
+  <div class="piano-container">
+    <h1>Interactive Piano</h1>
+    <div class="piano" id="piano"></div>
+    <div class="controls">
+      <label>
+        <input type="checkbox" id="showKeys"> Show Key Labels
+      </label>
+    </div>
+  </div>
+
+  <div id="daw-tabs-v3" class="mcp-le-root">
+    <div class="mcp-le-viewer mcp-le-viewer--tabs" data-le-orientation="horizontal">
+      <div class="mcp-le-viewer-triggers" role="tablist">
+        <button class="mcp-le-viewer-trigger mcp-le-selected" data-le-selectable-item="" data-le-index="0" data-le-target="mcp-le-panel-0" id="mcp-le-trigger-0" type="button" role="tab" aria-selected="true" aria-controls="mcp-le-panel-0">
+          Arrangement
+        </button>
+        <button class="mcp-le-viewer-trigger" data-le-selectable-item="" data-le-index="1" data-le-target="mcp-le-panel-1" id="mcp-le-trigger-1" type="button" role="tab" aria-selected="false" aria-controls="mcp-le-panel-1">
+          Mixer
+        </button>
+      </div>
+
+      <div class="mcp-le-viewer-panels">
+        <div class="mcp-le-viewer-panel" data-le-selectable-panel="" data-le-index="0" id="mcp-le-panel-0" role="tabpanel">
+          <div style="background: #1a1a1a; color: #e0e0e0; height: 500px; display: flex; flex-direction: column;">
+            <div style="padding: 15px; border-bottom: 1px solid #3a3a3a; display: flex; gap: 15px; align-items: center; background: #2a2a2a;">
+              <button class="daw-button">Play</button>
+              <button class="daw-button">Stop</button>
+              <button class="daw-button daw-button-red">Record</button>
+              <div style="background: #000; color: #0f0; padding: 4px 12px; font-family: monospace; font-size: 18px; border: 1px solid #444; border-radius: 3px;">00:00:00:00</div>
+              <div style="color: #888; font-size: 13px;">120.00 BPM</div>
+            </div>
+            <div style="flex-grow: 1; display: flex;">
+              <div style="width: 200px; border-right: 1px solid #3a3a3a; background: #222;">
+                <div style="padding: 12px; border-bottom: 1px solid #333; color: #fff;">Track 1: MIDI</div>
+                <div style="padding: 12px; border-bottom: 1px solid #333; color: #fff; background: #2a2a2a;">Track 2: Audio</div>
+                <div style="padding: 12px; border-bottom: 1px solid #333; color: #fff;">Track 3: Synth</div>
+              </div>
+              <div style="flex-grow: 1; background: #0f0f0f; position: relative;">
+                <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: linear-gradient(90deg, #222 1px, transparent 1px); background-size: 40px 100%;"></div>
+                <div style="position: absolute; top: 52px; left: 80px; width: 160px; height: 35px; background: #4a90e2; border-radius: 3px; opacity: 0.8;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mcp-le-viewer-panel" data-le-selectable-panel="" data-le-index="1" id="mcp-le-panel-1" hidden role="tabpanel">
+          <div style="background: #1a1a1a; height: 500px; display: flex; gap: 10px; padding: 20px;">
+            <div style="width: 70px; height: 100%; background: #222; border: 1px solid #333; display: flex; flex-direction: column; justify-content: flex-end; padding: 5px;">
+              <div style="height: 60%; background: #4a90e2;"></div>
+              <div style="text-align: center; color: #888; font-size: 10px; margin-top: 5px;">CH 1</div>
+            </div>
+            <div style="width: 70px; height: 100%; background: #222; border: 1px solid #333; display: flex; flex-direction: column; justify-content: flex-end; padding: 5px;">
+              <div style="height: 40%; background: #50e3c2;"></div>
+              <div style="text-align: center; color: #888; font-size: 10px; margin-top: 5px;">CH 2</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="gui-controls-container" style="width: 100%; max-width: 1000px; margin: 0 auto;">
+    <h2 style="color: #e0e0e0; margin-bottom: 20px; text-align: center; font-size: 1.5em;">GUI Controls Showcase</h2>
+    
+    <div class="gui-group-box">
+      <div class="gui-group-header-pro">Input Controls</div>
+      <div class="gui-group-content">
+        <div class="gui-control-row">
+          <label class="gui-label">Text Input:</label>
+          <input type="text" class="gui-text-input" placeholder="Enter text..." value="">
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Number Input:</label>
+          <input type="number" class="gui-text-input" value="42" min="0" max="100">
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Password:</label>
+          <input type="password" class="gui-text-input" placeholder="Password">
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Slider (Standard):</label>
+          <div class="gui-slider-container">
+            <input type="range" class="gui-slider" min="0" max="100" value="50">
+            <span class="gui-slider-value">50</span>
+          </div>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Slider (Full Thickness):</label>
+          <div class="gui-slider-container">
+            <input type="range" class="gui-slider-full-thickness" min="0" max="100" value="65">
+            <span class="gui-slider-value">65</span>
+          </div>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Slider (Arrowhead):</label>
+          <div class="gui-slider-container">
+            <input type="range" class="gui-slider-arrowhead" min="0" max="100" value="40">
+            <span class="gui-slider-value">40</span>
+          </div>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Slider (Interval Ticks):</label>
+          <div class="gui-slider-container">
+            <input type="range" class="gui-slider-ticks" min="0" max="100" value="75">
+            <span class="gui-slider-value">75</span>
+          </div>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Vertical Slider:</label>
+          <div class="gui-slider-vertical-container">
+            <input type="range" class="gui-slider-vertical" min="0" max="100" value="60" orient="vertical">
+            <span class="gui-slider-value">60</span>
+          </div>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Vertical (Full Thickness):</label>
+          <div class="gui-slider-vertical-container">
+            <input type="range" class="gui-slider-vertical-full-thickness" min="0" max="100" value="45" orient="vertical">
+            <span class="gui-slider-value">45</span>
+          </div>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Textarea:</label>
+          <textarea class="gui-textarea" placeholder="Multi-line text..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="gui-group-box">
+      <div class="gui-group-header-pro">Selection Controls</div>
+      <div class="gui-group-content">
+        <div class="gui-control-row">
+          <label class="gui-label">Checkbox:</label>
+          <label class="gui-checkbox-label">
+            <input type="checkbox" class="gui-checkbox">
+            <span class="gui-checkbox-custom"></span>
+            <span>Enable feature</span>
+          </label>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Radio Group:</label>
+          <div class="gui-radio-group">
+            <label class="gui-radio-label">
+              <input type="radio" name="radio-group" class="gui-radio" checked>
+              <span class="gui-radio-custom"></span>
+              <span>Option 1</span>
+            </label>
+            <label class="gui-radio-label">
+              <input type="radio" name="radio-group" class="gui-radio">
+              <span class="gui-radio-custom"></span>
+              <span>Option 2</span>
+            </label>
+            <label class="gui-radio-label">
+              <input type="radio" name="radio-group" class="gui-radio">
+              <span class="gui-radio-custom"></span>
+              <span>Option 3</span>
+            </label>
+          </div>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Dropdown:</label>
+          <select class="gui-select">
+            <option>Option 1</option>
+            <option>Option 2</option>
+            <option>Option 3</option>
+            <option>Option 4</option>
+          </select>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Dropdown (Segmented Style):</label>
+          <select class="gui-select-segmented">
+            <option>Option 1</option>
+            <option>Option 2</option>
+            <option>Option 3</option>
+            <option>Option 4</option>
+          </select>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Toggle Switch:</label>
+          <label class="gui-toggle">
+            <input type="checkbox" class="gui-toggle-input">
+            <span class="gui-toggle-slider"></span>
+            <span class="gui-toggle-label">On/Off</span>
+          </label>
+          <label class="gui-toggle-square">
+            <input type="checkbox" class="gui-toggle-square-input">
+            <span class="gui-toggle-square-slider"></span>
+            <span class="gui-toggle-square-label">On/Off</span>
+          </label>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Segmented Control:</label>
+          <div class="gui-segmented-control" role="tablist">
+            <button class="gui-segmented-control-item gui-segmented-control-item-selected" type="button" role="tab" aria-selected="true">Option 1</button>
+            <button class="gui-segmented-control-item" type="button" role="tab" aria-selected="false">Option 2</button>
+            <button class="gui-segmented-control-item" type="button" role="tab" aria-selected="false">Option 3</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gui-group-box">
+      <div class="gui-group-header-pro">Grid Popover Dropdown</div>
+      <div class="gui-group-content">
+        <div class="gui-control-row">
+          <label class="gui-label">Grid Popover:</label>
+          <div class="gui-grid-popover-container">
+            <button class="gui-grid-popover-trigger" type="button" aria-haspopup="true" aria-expanded="false">
+              <span class="gui-grid-popover-trigger-icon">▼</span>
+            </button>
+            <div class="gui-grid-popover" role="menu" hidden data-edge-priority="right">
+              <div class="gui-grid-popover-grid" data-columns="3" data-rows="3" data-item-size="80">
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 1</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 2</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 3</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 4</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 5</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 6</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 7</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 8</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 9</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 10</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 11</div>
+                </div>
+                <div class="gui-grid-popover-item" role="menuitem">
+                  <div class="gui-grid-popover-item-content"></div>
+                  <div class="gui-grid-popover-item-label">Item 12</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gui-group-box">
+      <div class="gui-group-header-pro">Button Variants</div>
+      <div class="gui-group-content">
+        <div class="gui-control-row">
+          <button class="gui-button gui-button-primary">Primary Button</button>
+          <button class="gui-button gui-button-secondary">Secondary</button>
+          <button class="gui-button gui-button-danger">Danger</button>
+        </div>
+        <div class="gui-control-row">
+          <button class="gui-button gui-button-small">Small</button>
+          <button class="gui-button">Default</button>
+          <button class="gui-button gui-button-large">Large</button>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Rounded:</label>
+          <button class="gui-button gui-button-rounded">Rounded Button</button>
+          <button class="gui-button gui-button-rounded gui-button-light">Rounded Light</button>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Square:</label>
+          <button class="gui-button gui-button-regular-square">Square Button</button>
+          <button class="gui-button gui-button-regular-square gui-button-light">Square Light</button>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Disclosure:</label>
+          <button class="gui-button gui-button-disclosure" aria-expanded="false"></button>
+          <button class="gui-button gui-button-rounded-disclosure" aria-expanded="false"></button>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Inline:</label>
+          <button class="gui-button gui-button-inline">Inline Button</button>
+          <span class="gui-typography-body" style="margin-left: 10px;">Text with <button class="gui-button gui-button-inline">inline button</button> example</span>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Help:</label>
+          <button class="gui-button gui-button-help"></button>
+        </div>
+        <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #3a3a3a;">
+          <div class="gui-typography-info-title" style="margin-bottom: 15px; color: #e0e0e0;">Button States</div>
+          <div class="gui-control-row" style="margin-bottom: 15px;">
+            <label class="gui-label">Normal:</label>
+            <button class="gui-button gui-button-rounded">Normal Button</button>
+            <span class="gui-typography-small" style="color: #888; margin-left: 10px;">Default unpressed state</span>
+          </div>
+          <div class="gui-control-row" style="margin-bottom: 15px;">
+            <label class="gui-label">Selected/On:</label>
+            <button class="gui-button gui-button-rounded gui-button-state-selected">Selected Button</button>
+            <span class="gui-typography-small" style="color: #888; margin-left: 10px;">Pressed/selected state for toggle buttons</span>
+          </div>
+          <div class="gui-control-row" style="margin-bottom: 15px;">
+            <label class="gui-label">Mixed:</label>
+            <button class="gui-button gui-button-rounded gui-button-state-mixed">Mixed Button</button>
+            <span class="gui-typography-small" style="color: #888; margin-left: 10px;">Partial/indeterminate state</span>
+          </div>
+          <div class="gui-control-row" style="margin-bottom: 15px;">
+            <label class="gui-label">Disabled:</label>
+            <button class="gui-button gui-button-rounded gui-button-state-disabled" disabled>Disabled Button</button>
+            <span class="gui-typography-small" style="color: #888; margin-left: 10px;">Button that cannot be interacted with</span>
+          </div>
+          <div class="gui-control-row" style="margin-bottom: 15px;">
+            <label class="gui-label">Focused:</label>
+            <button class="gui-button gui-button-rounded gui-button-state-focused">Focused Button</button>
+            <span class="gui-typography-small" style="color: #888; margin-left: 10px;">Keyboard focus state (tab navigation)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="gui-group-box">
+      <div class="gui-group-header">Display Controls</div>
+      <div class="gui-group-content">
+        <div class="gui-control-row">
+          <label class="gui-label">Progress Bar:</label>
+          <div class="gui-progress-container">
+            <div class="gui-progress-bar" style="width: 65%;"></div>
+            <span class="gui-progress-text">65%</span>
+          </div>
+        </div>
+        <div class="gui-control-row">
+          <label class="gui-label">Status Label:</label>
+          <span class="gui-status gui-status-success">Success</span>
+          <span class="gui-status gui-status-warning">Warning</span>
+          <span class="gui-status gui-status-error">Error</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="gui-group-box">
+      <div class="gui-group-header">Tab Controls</div>
+      <div class="gui-group-content">
+        <div class="gui-tabs-container">
+          <div class="gui-tabs-example">
+            <div class="gui-tabs-example-label">Standard Horizontal Tabs (Segmented Style)</div>
+            <div class="gui-tabs-horizontal" role="tablist">
+              <button class="gui-tab gui-tab-active" role="tab" aria-selected="true" data-tab-panel="tab-panel-1">Tab 1</button>
+              <button class="gui-tab" role="tab" aria-selected="false" data-tab-panel="tab-panel-2">Tab 2</button>
+              <button class="gui-tab" role="tab" aria-selected="false" data-tab-panel="tab-panel-3">Tab 3</button>
+            </div>
+            <div class="gui-tab-panel gui-tab-panel-active" id="tab-panel-1" role="tabpanel">
+              <p style="color: #b0b0b0; margin: 0;">Content for Tab 1 - Standard horizontal tabs with segmented control style.</p>
+            </div>
+            <div class="gui-tab-panel" id="tab-panel-2" role="tabpanel">
+              <p style="color: #b0b0b0; margin: 0;">Content for Tab 2 - This style uses a contained background with rounded corners.</p>
+            </div>
+            <div class="gui-tab-panel" id="tab-panel-3" role="tabpanel">
+              <p style="color: #b0b0b0; margin: 0;">Content for Tab 3 - Active tab has elevated appearance with gradient background.</p>
+            </div>
+          </div>
+
+          <div class="gui-tabs-example">
+            <div class="gui-tabs-example-label">Bordered Tabs</div>
+            <div class="gui-tabs-bordered" role="tablist">
+              <button class="gui-tab gui-tab-active" role="tab" aria-selected="true" data-tab-panel="tab-panel-7">File</button>
+              <button class="gui-tab" role="tab" aria-selected="false" data-tab-panel="tab-panel-8">Edit</button>
+              <button class="gui-tab" role="tab" aria-selected="false" data-tab-panel="tab-panel-9">View</button>
+            </div>
+            <div class="gui-tab-panel gui-tab-panel-active" id="tab-panel-7" role="tabpanel">
+              <p style="color: #b0b0b0; margin: 0;">Content for File - Classic bordered style with connected tabs.</p>
+            </div>
+            <div class="gui-tab-panel" id="tab-panel-8" role="tabpanel">
+              <p style="color: #b0b0b0; margin: 0;">Content for Edit - Traditional desktop application appearance.</p>
+            </div>
+            <div class="gui-tab-panel" id="tab-panel-9" role="tabpanel">
+              <p style="color: #b0b0b0; margin: 0;">Content for View - Clear visual separation between tabs.</p>
+            </div>
+          </div>
+
+          <div class="gui-tabs-example">
+            <div class="gui-tabs-example-label">Vertical Tabs</div>
+            <div class="gui-tabs-vertical-container">
+              <div class="gui-tabs-vertical" role="tablist">
+                <button class="gui-tab gui-tab-active" role="tab" aria-selected="true" data-tab-panel="tab-panel-16">Dashboard</button>
+                <button class="gui-tab" role="tab" aria-selected="false" data-tab-panel="tab-panel-17">Projects</button>
+                <button class="gui-tab" role="tab" aria-selected="false" data-tab-panel="tab-panel-18">Team</button>
+                <button class="gui-tab" role="tab" aria-selected="false" data-tab-panel="tab-panel-19">Settings</button>
+              </div>
+              <div class="gui-tabs-vertical-content">
+                <div class="gui-tab-panel gui-tab-panel-active" id="tab-panel-16" role="tabpanel">
+                  <p style="color: #b0b0b0; margin: 0;">Content for Dashboard - Vertical layout for sidebar navigation.</p>
+                </div>
+                <div class="gui-tab-panel" id="tab-panel-17" role="tabpanel">
+                  <p style="color: #b0b0b0; margin: 0;">Content for Projects - Ideal for applications with multiple sections.</p>
+                </div>
+                <div class="gui-tab-panel" id="tab-panel-18" role="tabpanel">
+                  <p style="color: #b0b0b0; margin: 0;">Content for Team - Efficient use of vertical space.</p>
+                </div>
+                <div class="gui-tab-panel" id="tab-panel-19" role="tabpanel">
+                  <p style="color: #b0b0b0; margin: 0;">Content for Settings - Left sidebar with content area on the right.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gui-tabs-example">
+            <div class="gui-tabs-example-label">Size Variants</div>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+              <div>
+                <div style="color: #888; font-size: 11px; margin-bottom: 8px;">Small Tabs</div>
+                <div class="gui-tabs-small" role="tablist">
+                  <button class="gui-tab gui-tab-active" role="tab" aria-selected="true">Small 1</button>
+                  <button class="gui-tab" role="tab" aria-selected="false">Small 2</button>
+                  <button class="gui-tab" role="tab" aria-selected="false">Small 3</button>
+                </div>
+              </div>
+              <div>
+                <div style="color: #888; font-size: 11px; margin-bottom: 8px;">Default Tabs</div>
+                <div class="gui-tabs-horizontal" role="tablist">
+                  <button class="gui-tab gui-tab-active" role="tab" aria-selected="true">Default 1</button>
+                  <button class="gui-tab" role="tab" aria-selected="false">Default 2</button>
+                  <button class="gui-tab" role="tab" aria-selected="false">Default 3</button>
+                </div>
+              </div>
+              <div>
+                <div style="color: #888; font-size: 11px; margin-bottom: 8px;">Large Tabs</div>
+                <div class="gui-tabs-large" role="tablist">
+                  <button class="gui-tab gui-tab-active" role="tab" aria-selected="true">Large 1</button>
+                  <button class="gui-tab" role="tab" aria-selected="false">Large 2</button>
+                  <button class="gui-tab" role="tab" aria-selected="false">Large 3</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gui-typography-info">
+            <div class="gui-typography-info-title">Tab Control Usage Guidelines</div>
+            <div style="margin-top: 6px; line-height: 1.6;">
+              • <strong>Standard Horizontal:</strong> Best for main navigation, content sections with equal importance<br>
+              • <strong>Bordered:</strong> Classic desktop application style, traditional software interfaces<br>
+              • <strong>Vertical:</strong> Sidebar navigation, applications with multiple sections, efficient space usage<br>
+              • <strong>Size Variants:</strong> Use small for compact spaces, large for touch interfaces or emphasis<br>
+              • All tab styles support keyboard navigation and ARIA attributes for accessibility
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gui-group-box">
+      <div class="gui-group-header">Typography System</div>
+      <div class="gui-group-content">
+        <div class="gui-typography-info">
+          <div class="gui-typography-info-title">Typography Hierarchy</div>
+          This toolkit uses a structured typography system with Display, Body, Small, and Monospace font categories. Font placeholders are marked with [FONT_NAME] and should be replaced with actual font families.
+        </div>
+
+        <div class="gui-control-row" style="flex-direction: column; align-items: stretch;">
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Display Font - Large (H1)</div>
+            <div class="gui-typography-display-large">The quick brown fox jumps over the lazy dog</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[DISPLAY_FONT]</code> | Size: 24px | Weight: 700 | Use: Major titles, page headers
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Display Font - Standard (H2-H3)</div>
+            <div class="gui-typography-display">The quick brown fox jumps over the lazy dog</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[DISPLAY_FONT]</code> | Size: 18px | Weight: 600 | Use: Section headers, grouping box labels
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Display Font - Medium (H4-H6)</div>
+            <div class="gui-typography-display-medium">The quick brown fox jumps over the lazy dog</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[DISPLAY_FONT]</code> | Size: 16px | Weight: 600 | Use: Subsection headers, panel titles
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Body Font - Large</div>
+            <div class="gui-typography-body-large">The quick brown fox jumps over the lazy dog</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[BODY_FONT]</code> | Size: 15px | Weight: 400 | Use: Important labels, emphasized text
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Body Font - Standard</div>
+            <div class="gui-typography-body">The quick brown fox jumps over the lazy dog</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[BODY_FONT]</code> | Size: 13px | Weight: 400 | Use: Control labels, button text, form fields, general UI text
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Small Text</div>
+            <div class="gui-typography-small">The quick brown fox jumps over the lazy dog</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[BODY_FONT]</code> | Size: 11px | Weight: 400 | Use: Helper text, captions, units, tooltips
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Caption Text</div>
+            <div class="gui-typography-caption">The quick brown fox jumps over the lazy dog</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[BODY_FONT]</code> | Size: 12px | Weight: 400 | Use: Secondary information, muted labels
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Monospace Font - Standard</div>
+            <div class="gui-typography-mono">00:00:00:00 | 120.00 BPM | #4a90e2</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[MONOSPACE_FONT]</code> | Size: 13px | Weight: 400 | Use: Time displays, numeric values, code, technical parameters
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Monospace Font - Small</div>
+            <div class="gui-typography-mono-small">CH 1 | Track 1: MIDI | 65%</div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Font: <code>[MONOSPACE_FONT]</code> | Size: 11px | Weight: 400 | Use: Compact numeric displays, channel labels
+            </div>
+          </div>
+
+          <div class="gui-typography-example">
+            <div class="gui-typography-example-label">Text Variants</div>
+            <div class="gui-typography-body">
+              Normal text, <span class="gui-typography-bold">Bold text</span>, 
+              <span class="gui-typography-italic">Italic text</span>, 
+              <span class="gui-typography-link">Link text</span>
+            </div>
+            <div style="margin-top: 8px; font-size: 11px; color: #888;">
+              Use: Emphasis within body text, interactive elements, secondary descriptions
+            </div>
+          </div>
+        </div>
+
+        <div class="gui-typography-info">
+          <div class="gui-typography-info-title">Font Placeholders</div>
+          <div style="margin-top: 6px;">
+            <strong>[DISPLAY_FONT]</strong> - Replace with your display/heading font family (e.g., 'Roboto', 'Inter', 'Open Sans')<br>
+            <strong>[BODY_FONT]</strong> - Replace with your body text font family (e.g., 'Arial', 'Helvetica', 'Segoe UI')<br>
+            <strong>[MONOSPACE_FONT]</strong> - Replace with your monospace font family (e.g., 'Courier New', 'Consolas', 'Monaco')
+          </div>
+        </div>
+
+        <div class="gui-typography-info">
+          <div class="gui-typography-info-title">Usage Guidelines</div>
+          <div style="margin-top: 6px; line-height: 1.6;">
+            • <strong>Display fonts</strong> establish visual hierarchy for section headers and grouping box labels<br>
+            • <strong>Body fonts</strong> are used for all labels, button text, form fields, and general UI text<br>
+            • <strong>Small text</strong> is for helper text, captions, units, and tooltips<br>
+            • <strong>Monospace</strong> is reserved for numeric displays, time displays, code, and technical parameters<br>
+            • Maintain consistent font sizing ratios (12px body / 14px labels / 16px headers)<br>
+            • Ensure sufficient contrast against dark theme background for accessibility
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gui-group-box">
+      <div class="gui-group-header">Design System Best Practices & Semantic Tokens</div>
+      <div class="gui-group-content">
+        <div class="gui-typography-info">
+          <div class="gui-typography-info-title">What Are Semantic Tokens?</div>
+          <div style="margin-top: 6px; line-height: 1.6;">
+            <strong>Semantic tokens</strong> are named design values that describe the <em>purpose</em> or <em>meaning</em> of a design property, rather than its raw value. They create a layer of abstraction between primitive design tokens (like colors, spacing, typography) and their actual usage in components.
+            <br><br>
+            Unlike primitive tokens that might be named <code>color-blue-500</code> or <code>font-size-16</code>, semantic tokens use meaningful names like <code>text-primary</code>, <code>heading-large</code>, or <code>spacing-section</code> that describe <em>what</em> they're used for, not <em>what</em> they are.
+          </div>
+        </div>
+
+        <div class="gui-typography-example" style="background: #1a1a1a; border: 1px solid #3a3a3a; padding: 15px;">
+          <div class="gui-typography-example-label">Example: Primitive vs Semantic Tokens</div>
+          <div style="margin-top: 10px; font-size: 12px; color: #b0b0b0; line-height: 1.6;">
+            <div style="margin-bottom: 12px;">
+              <strong style="color: #e0e0e0;">Primitive Token (Raw Value):</strong><br>
+              <code style="color: #4a90e2;">font-size: 18px</code> | <code style="color: #4a90e2;">color: #e0e0e0</code> | <code style="color: #4a90e2;">spacing: 20px</code>
+            </div>
+            <div>
+              <strong style="color: #e0e0e0;">Semantic Token (Purpose-Based):</strong><br>
+              <code style="color: #4a90e2;">font-size: var(--heading-medium)</code> | <code style="color: #4a90e2;">color: var(--text-primary)</code> | <code style="color: #4a90e2;">spacing: var(--section-gap)</code>
+            </div>
+          </div>
+        </div>
+
+        <div class="gui-typography-info">
+          <div class="gui-typography-info-title">Benefits of Semantic Tokens</div>
+          <div style="margin-top: 6px; line-height: 1.6;">
+            • <strong>Flexibility:</strong> Change the underlying values without updating every component<br>
+            • <strong>Consistency:</strong> Ensure the same semantic meaning uses the same token across the system<br>
+            • <strong>Theme Support:</strong> Easily switch between light/dark themes by changing token mappings<br>
+            • <strong>Maintainability:</strong> Update design decisions in one place, affecting all components<br>
+            • <strong>Clarity:</strong> Code becomes self-documenting with meaningful token names<br>
+            • <strong>Scalability:</strong> Add new themes or variations without refactoring components
+          </div>
+        </div>
+
+        <div class="gui-typography-example" style="background: #1a1a1a; border: 1px solid #3a3a3a; padding: 15px;">
+          <div class="gui-typography-example-label">Semantic Token Structure Example</div>
+          <div style="margin-top: 10px; font-size: 11px; color: #b0b0b0; font-family: monospace; line-height: 1.8; background: #0f0f0f; padding: 12px; border-radius: 3px; overflow-x: auto;">
+            <div style="color: #888; margin-bottom: 8px;">/* Primitive Tokens (Base Values) */</div>
+            <div>--color-gray-100: #e0e0e0;</div>
+            <div>--color-gray-200: #b0b0b0;</div>
+            <div>--font-size-18: 18px;</div>
+            <div>--font-weight-600: 600;</div>
+            <div style="margin-top: 12px; color: #888;">/* Semantic Tokens (Purpose-Based) */</div>
+            <div>--text-primary: var(--color-gray-100);</div>
+            <div>--text-secondary: var(--color-gray-200);</div>
+            <div>--heading-medium: var(--font-size-18);</div>
+            <div>--font-weight-heading: var(--font-weight-600);</div>
+            <div style="margin-top: 12px; color: #888;">/* Usage in Components */</div>
+            <div style="color: #4a90e2;">.gui-group-header {</div>
+            <div style="color: #4a90e2;">  font-size: var(--heading-medium);</div>
+            <div style="color: #4a90e2;">  font-weight: var(--font-weight-heading);</div>
+            <div style="color: #4a90e2;">  color: var(--text-primary);</div>
+            <div style="color: #4a90e2;">}</div>
+          </div>
+        </div>
+
+        <div class="gui-typography-info">
+          <div class="gui-typography-info-title">Design System Best Practices</div>
+          <div style="margin-top: 6px; line-height: 1.6;">
+            <strong>1. Start with Body Text:</strong> Establish your body text size first (typically 13-16px), then build your type scale from there. This ensures readability is prioritized.<br><br>
+            
+            <strong>2. Use a Limited Type Scale:</strong> Don't create too many font sizes. A good system uses 6-8 sizes that work harmoniously together. Common scales include: 11px, 12px, 13px, 15px, 16px, 18px, 24px.<br><br>
+            
+            <strong>3. Establish Clear Hierarchy:</strong> Use headings (H1-H6) for structure and body text for content. Display fonts should be noticeably larger and bolder than body text.<br><br>
+            
+            <strong>4. Define Line Heights:</strong> Line height should be optimized for readability based on font size. Common ratios: 1.4-1.5 for headings, 1.5-1.6 for body text.<br><br>
+            
+            <strong>5. Consistent Font Weights:</strong> Use a limited set of weights (400 for body, 600-700 for headings). Too many weights can create visual noise.<br><br>
+            
+            <strong>6. Letter Spacing:</strong> Adjust letter spacing (tracking) for improved legibility. Headings often benefit from slightly increased letter spacing (0.3-0.5px).<br><br>
+            
+            <strong>7. Color Contrast:</strong> Ensure sufficient contrast between text and background for accessibility (WCAG AA: 4.5:1 for body text, 3:1 for large text).<br><br>
+            
+            <strong>8. Responsive Typography:</strong> Consider how typography scales across different screen sizes. Use relative units (rem, em) or viewport-based units when appropriate.<br><br>
+            
+            <strong>9. Semantic Naming:</strong> Use semantic token names that describe purpose (e.g., <code>--text-primary</code>, <code>--heading-large</code>) rather than raw values (e.g., <code>--color-gray-100</code>, <code>--font-size-24</code>).<br><br>
+            
+            <strong>10. Document Everything:</strong> Maintain clear documentation of your typography system, including when and how to use each style, size, and weight.
+          </div>
+        </div>
+
+        <div class="gui-typography-info" style="background: #1a1a1a; border-left: 3px solid #4a9e4a;">
+          <div class="gui-typography-info-title" style="color: #4a9e4a;">Implementation Tips</div>
+          <div style="margin-top: 6px; line-height: 1.6;">
+            • Create CSS custom properties (variables) for all typography tokens<br>
+            • Reference primitive tokens from semantic tokens to maintain consistency<br>
+            • Use semantic tokens in components, not raw values<br>
+            • Test typography at different sizes and in different contexts<br>
+            • Consider creating a type scale generator tool for your team<br>
+            • Regularly audit your typography usage to ensure consistency<br>
+            • Document token naming conventions for your team
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Piano key notes - one octave (C to B)
+    const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const whiteNotes = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    const blackNotes = ['C#', 'D#', 'F#', 'G#', 'A#'];
+
+    // Audio context for generating sounds
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playNote(note, octave = 4) {
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      const frequency = getFrequency(note, octave);
+      const now = audioContext.currentTime;
+      const duration = 1.2;
+      
+      const oscillators = [
+        { type: 'sine', gain: 0.25, detune: 0, harmonic: 1 },
+        { type: 'sine', gain: 0.15, detune: 0, harmonic: 2 },
+        { type: 'sine', gain: 0.08, detune: 0, harmonic: 3 },
+        { type: 'triangle', gain: 0.12, detune: -2, harmonic: 1 },
+        { type: 'sine', gain: 0.05, detune: 5, harmonic: 1 },
+      ];
+      
+      oscillators.forEach(({ type, gain: baseGain, detune, harmonic }) => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        const filter = audioContext.createBiquadFilter();
+        
+        filter.type = 'lowpass';
+        filter.frequency.value = 4000 + (frequency * 2);
+        filter.Q.value = 1;
+        
+        oscillator.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = frequency * harmonic;
+        oscillator.type = type;
+        oscillator.detune.value = detune;
+        
+        const attackTime = 0.005;
+        const decayTime = 0.15;
+        const sustainLevel = 0.4;
+        
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(baseGain, now + attackTime);
+        gainNode.gain.exponentialRampToValueAtTime(baseGain * sustainLevel, now + attackTime + decayTime);
+        gainNode.gain.setValueAtTime(baseGain * sustainLevel, now + attackTime + decayTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        
+        filter.frequency.setValueAtTime(6000 + (frequency * 3), now);
+        filter.frequency.exponentialRampToValueAtTime(2000 + (frequency * 1.5), now + duration);
+        
+        oscillator.start(now);
+        oscillator.stop(now + duration);
+      });
+    }
+
+    function getFrequency(note, octave) {
+      const A4 = 440;
+      const noteIndex = notes.indexOf(note);
+      const semitones = (octave - 4) * 12 + noteIndex;
+      return A4 * Math.pow(2, semitones / 12);
+    }
+
+    function createPiano() {
+      const piano = document.getElementById('piano');
+      piano.innerHTML = '';
+      const octaves = 2;
+      let keyIndex = 0;
+      const blackKeyWidth = 40;
+      
+      for (let octave = 3; octave < 3 + octaves; octave++) {
+        const whiteKeys = [];
+        whiteNotes.forEach((note, index) => {
+          const whiteKey = document.createElement('div');
+          whiteKey.className = 'white-key';
+          whiteKey.dataset.note = note;
+          whiteKey.dataset.octave = octave;
+          whiteKey.dataset.index = keyIndex++;
+          
+          const label = document.createElement('span');
+          label.className = 'key-label';
+          label.textContent = note + octave;
+          whiteKey.appendChild(label);
+          
+          whiteKey.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            whiteKey.classList.add('pressed');
+            playNote(note, octave);
+          });
+          whiteKey.addEventListener('mouseup', () => whiteKey.classList.remove('pressed'));
+          whiteKey.addEventListener('mouseleave', () => whiteKey.classList.remove('pressed'));
+          
+          piano.appendChild(whiteKey);
+          whiteKeys.push(whiteKey);
+          
+          if (note !== 'E' && note !== 'B') {
+            const blackKey = document.createElement('div');
+            blackKey.className = 'black-key';
+            const sharpNote = note + '#';
+            blackKey.dataset.note = sharpNote;
+            blackKey.dataset.octave = octave;
+            blackKey.dataset.index = keyIndex++;
+            
+            const blackLabel = document.createElement('span');
+            blackLabel.className = 'key-label';
+            blackLabel.textContent = sharpNote + octave;
+            blackKey.appendChild(blackLabel);
+            
+            blackKey.addEventListener('mousedown', (e) => {
+              e.preventDefault();
+              blackKey.classList.add('pressed');
+              playNote(sharpNote, octave);
+            });
+            blackKey.addEventListener('mouseup', () => blackKey.classList.remove('pressed'));
+            blackKey.addEventListener('mouseleave', () => blackKey.classList.remove('pressed'));
+            
+            piano.appendChild(blackKey);
+          }
+        });
+        
+        setTimeout(() => {
+          const blackKeys = Array.from(piano.querySelectorAll('.black-key')).filter(k => k.dataset.octave === octave.toString());
+          let blackKeyIndex = 0;
+          whiteNotes.forEach((note, whiteIndex) => {
+            if (note !== 'E' && note !== 'B') {
+              const whiteKey = whiteKeys[whiteIndex];
+              const nextWhiteKey = whiteKeys[whiteIndex + 1];
+              if (whiteKey && nextWhiteKey) {
+                const whiteKeyRect = whiteKey.getBoundingClientRect();
+                const nextWhiteKeyRect = nextWhiteKey.getBoundingClientRect();
+                const pianoRect = piano.getBoundingClientRect();
+                const centerX = (whiteKeyRect.right + nextWhiteKeyRect.left) / 2;
+                blackKeys[blackKeyIndex].style.left = (centerX - pianoRect.left - (blackKeyWidth / 2)) + 'px';
+              }
+              blackKeyIndex++;
+            }
+          });
+        }, 10);
+      }
+    }
+
+    // Tab Logic
+    const tabs = document.querySelectorAll('[role="tab"]');
+    const panels = document.querySelectorAll('[role="tabpanel"]');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => {
+          t.classList.remove('mcp-le-selected');
+          t.setAttribute('aria-selected', 'false');
+        });
+        panels.forEach(p => p.hidden = true);
+        
+        tab.classList.add('mcp-le-selected');
+        tab.setAttribute('aria-selected', 'true');
+        const panel = document.getElementById(tab.getAttribute('aria-controls'));
+        panel.hidden = false;
+      });
+    });
+
+    // Keyboard mapping
+    const keyboardMap = {
+      'a': { note: 'C', octave: 3 }, 'w': { note: 'C#', octave: 3 }, 's': { note: 'D', octave: 3 },
+      'e': { note: 'D#', octave: 3 }, 'd': { note: 'E', octave: 3 }, 'f': { note: 'F', octave: 3 },
+      't': { note: 'F#', octave: 3 }, 'g': { note: 'G', octave: 3 }, 'y': { note: 'G#', octave: 3 },
+      'h': { note: 'A', octave: 3 }, 'u': { note: 'A#', octave: 3 }, 'j': { note: 'B', octave: 3 },
+      'k': { note: 'C', octave: 4 }, 'o': { note: 'C#', octave: 4 }, 'l': { note: 'D', octave: 4 },
+      'p': { note: 'D#', octave: 4 }, ';': { note: 'E', octave: 4 }, "'": { note: 'F', octave: 4 }
+    };
+
+    document.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (keyboardMap[key]) {
+        const { note, octave } = keyboardMap[key];
+        const keyElement = document.querySelector(`[data-note="${note}"][data-octave="${octave}"]`);
+        if (keyElement && !keyElement.classList.contains('pressed')) {
+          keyElement.classList.add('pressed');
+          playNote(note, octave);
+        }
+      }
+    });
+
+    document.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (keyboardMap[key]) {
+        const { note, octave } = keyboardMap[key];
+        const keyElement = document.querySelector(`[data-note="${note}"][data-octave="${octave}"]`);
+        if (keyElement) keyElement.classList.remove('pressed');
+      }
+    });
+
+    document.getElementById('showKeys').addEventListener('change', (e) => {
+      document.querySelectorAll('.key-label').forEach(l => l.classList.toggle('show', e.target.checked));
+    });
+
+    // GUI Controls Interactive Behavior
+    (function() {
+      // Enhanced Slider value updates for all slider types
+      const allSliders = document.querySelectorAll('.gui-slider, .gui-slider-full-thickness, .gui-slider-arrowhead, .gui-slider-ticks, .gui-slider-vertical, .gui-slider-vertical-full-thickness');
+      allSliders.forEach(slider => {
+        const container = slider.closest('.gui-slider-container, .gui-slider-vertical-container');
+        if (container) {
+          const valueDisplay = container.querySelector('.gui-slider-value');
+          if (valueDisplay) {
+            valueDisplay.textContent = slider.value;
+            slider.addEventListener('input', (e) => {
+              valueDisplay.textContent = e.target.value;
+            });
+          }
+        }
+      });
+
+      // Segmented Control behavior
+      const segmentedControls = document.querySelectorAll('.gui-segmented-control');
+      segmentedControls.forEach(control => {
+        const items = control.querySelectorAll('.gui-segmented-control-item');
+        items.forEach(item => {
+          item.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Remove selected state from all items in this control
+            items.forEach(i => {
+              i.classList.remove('gui-segmented-control-item-selected');
+              i.setAttribute('aria-selected', 'false');
+            });
+            // Add selected state to clicked item
+            item.classList.add('gui-segmented-control-item-selected');
+            item.setAttribute('aria-selected', 'true');
+          });
+        });
+      });
+    })();
+
+    // Grid Popover Dropdown Functionality
+    (function() {
+      function initGridPopovers() {
+        const containers = document.querySelectorAll('.gui-grid-popover-container');
+        
+        containers.forEach(container => {
+          const trigger = container.querySelector('.gui-grid-popover-trigger');
+          const popover = container.querySelector('.gui-grid-popover');
+          const grid = popover.querySelector('.gui-grid-popover-grid');
+          
+          if (!trigger || !popover) return;
+          
+          // Toggle popover on click (like dropdown)
+          trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = !popover.hidden;
+            
+            if (isOpen) {
+              closePopover(trigger, popover);
+            } else {
+              openPopover(trigger, popover, container);
+            }
+          });
+          
+          // Close on item click
+          const items = popover.querySelectorAll('.gui-grid-popover-item');
+          items.forEach(item => {
+            item.addEventListener('click', (e) => {
+              e.stopPropagation();
+              // Add selected state
+              items.forEach(i => i.classList.remove('selected'));
+              item.classList.add('selected');
+              
+              // Optional: close after selection
+              // closePopover(trigger, popover);
+            });
+          });
+          
+          // Close on outside click
+          document.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+              closePopover(trigger, popover);
+            }
+          });
+          
+          // Close on escape
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !popover.hidden) {
+              closePopover(trigger, popover);
+            }
+          });
+        });
+      }
+      
+      function openPopover(trigger, popover, container) {
+        popover.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        
+        // Calculate position (space-aware)
+        positionPopover(trigger, popover, container);
+      }
+      
+      function closePopover(trigger, popover) {
+        popover.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        popover.removeAttribute('data-position');
+      }
+      
+      function positionPopover(trigger, popover, container) {
+        const triggerRect = trigger.getBoundingClientRect();
+        const popoverRect = popover.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Get edge priority from data attribute (default: 'right')
+        const edgePriority = popover.getAttribute('data-edge-priority') || 'right';
+        
+        // Reset position
+        popover.style.top = '';
+        popover.style.left = '';
+        popover.style.right = '';
+        popover.style.bottom = '';
+        popover.removeAttribute('data-position');
+        popover.removeAttribute('data-side');
+        
+        // Check available space
+        const spaceRight = viewportWidth - triggerRect.right;
+        const spaceLeft = triggerRect.left;
+        const spaceBelow = viewportHeight - triggerRect.bottom;
+        const spaceAbove = triggerRect.top;
+        
+        const popoverWidth = popoverRect.width;
+        const popoverHeight = popoverRect.height;
+        const margin = 4; // Gap between button and popover
+        
+        // Position horizontally - default to right side
+        if (edgePriority === 'right' || !edgePriority || edgePriority === '') {
+          // Try to position to the right of the button
+          if (spaceRight >= popoverWidth + margin) {
+            // Position to the right: left edge of popover touches right edge of button
+            popover.style.left = `calc(100% + ${margin}px)`;
+            popover.style.right = 'auto';
+            popover.setAttribute('data-side', 'right');
+          } else if (spaceLeft >= popoverWidth + margin) {
+            // Not enough space on right, position to the left
+            popover.style.right = `calc(100% + ${margin}px)`;
+            popover.style.left = 'auto';
+            popover.setAttribute('data-side', 'left');
+          } else {
+            // Not enough space on either side, position to the right and adjust
+            popover.style.left = `calc(100% + ${margin}px)`;
+            popover.style.right = 'auto';
+            popover.setAttribute('data-side', 'right');
+            
+            // Adjust if extends beyond viewport
+            const popoverRight = triggerRect.right + popoverWidth + margin;
+            if (popoverRight > viewportWidth) {
+              const overflow = popoverRight - viewportWidth;
+              popover.style.left = `calc(100% + ${margin - overflow}px)`;
+            }
+          }
+        } else if (edgePriority === 'left') {
+          // Try to position to the left of the button
+          if (spaceLeft >= popoverWidth + margin) {
+            // Position to the left: right edge of popover touches left edge of button
+            popover.style.right = `calc(100% + ${margin}px)`;
+            popover.style.left = 'auto';
+            popover.setAttribute('data-side', 'left');
+          } else if (spaceRight >= popoverWidth + margin) {
+            // Not enough space on left, position to the right
+            popover.style.left = `calc(100% + ${margin}px)`;
+            popover.style.right = 'auto';
+            popover.setAttribute('data-side', 'right');
+          } else {
+            // Not enough space on either side, position to the left and adjust
+            popover.style.right = `calc(100% + ${margin}px)`;
+            popover.style.left = 'auto';
+            popover.setAttribute('data-side', 'left');
+            
+            // Adjust if extends beyond viewport
+            const popoverLeft = triggerRect.left - popoverWidth - margin;
+            if (popoverLeft < 0) {
+              const overflow = Math.abs(popoverLeft);
+              popover.style.right = `calc(100% + ${margin + overflow}px)`;
+            }
+          }
+        } else if (edgePriority === 'center') {
+          // Center popover relative to trigger (below/above positioning)
+          const centerOffset = (popoverWidth - triggerRect.width) / 2;
+          popover.style.left = `${-centerOffset}px`;
+          popover.style.right = 'auto';
+          
+          // Adjust if extends beyond viewport
+          const popoverLeft = triggerRect.left - centerOffset;
+          if (popoverLeft < 0) {
+            popover.style.left = `${Math.abs(popoverLeft) + margin}px`;
+          }
+          
+          const popoverRight = triggerRect.left - centerOffset + popoverWidth;
+          if (popoverRight > viewportWidth) {
+            const overflow = popoverRight - viewportWidth;
+            popover.style.left = `${-centerOffset - overflow - margin}px`;
+          }
+        }
+        
+        // Position vertically - align top of popover with top of button by default
+        popover.style.top = '0';
+        popover.style.bottom = 'auto';
+        
+        // Adjust if popover extends below viewport
+        const popoverBottom = triggerRect.top + popoverHeight;
+        if (popoverBottom > viewportHeight) {
+          // Shift up so it fits
+          const overflow = popoverBottom - viewportHeight;
+          popover.style.top = `${-overflow}px`;
+        }
+        
+        // Adjust if popover extends above viewport
+        const popoverTop = triggerRect.top;
+        if (popoverTop < 0) {
+          popover.style.top = `${Math.abs(popoverTop)}px`;
+        }
+      }
+      
+      // Initialize on load
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initGridPopovers);
+      } else {
+        initGridPopovers();
+      }
+    })();
+
+    // Tab Controls Functionality
+    (function() {
+      function initTabs() {
+        // Find all tab containers
+        const tabContainers = document.querySelectorAll('[role="tablist"]');
+        
+        tabContainers.forEach(container => {
+          const tabs = container.querySelectorAll('[role="tab"]');
+          
+          tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+              e.preventDefault();
+              
+              // Get the panel ID from data attribute
+              const panelId = tab.getAttribute('data-tab-panel');
+              
+              // Find the parent container (example or vertical container)
+              const parentContainer = container.closest('.gui-tabs-example') || 
+                                     container.closest('.gui-tabs-vertical-container');
+              
+              if (parentContainer) {
+                // Get all tabs and panels within this container
+                const containerTabs = parentContainer.querySelectorAll('[role="tab"]');
+                const containerPanels = parentContainer.querySelectorAll('[role="tabpanel"]');
+                
+                // Remove active state from all tabs in this container
+                containerTabs.forEach(t => {
+                  t.classList.remove('gui-tab-active');
+                  t.setAttribute('aria-selected', 'false');
+                });
+                
+                // Hide all panels in this container
+                containerPanels.forEach(p => {
+                  p.classList.remove('gui-tab-panel-active');
+                });
+                
+                // Activate clicked tab
+                tab.classList.add('gui-tab-active');
+                tab.setAttribute('aria-selected', 'true');
+                
+                // Show corresponding panel
+                if (panelId) {
+                  const panel = document.getElementById(panelId);
+                  if (panel) {
+                    panel.classList.add('gui-tab-panel-active');
+                  }
+                }
+              }
+            });
+          });
+        });
+      }
+      
+      // Initialize on load
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTabs);
+      } else {
+        initTabs();
+      }
+    })();
+
+    // Disclosure Button Functionality
+    (function() {
+      function initDisclosureButtons() {
+        const disclosureButtons = document.querySelectorAll('.gui-button-disclosure, .gui-button-rounded-disclosure');
+        
+        disclosureButtons.forEach(button => {
+          button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isExpanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', isExpanded ? 'false' : 'true');
+          });
+        });
+      }
+      
+      // Initialize on load
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initDisclosureButtons);
+      } else {
+        initDisclosureButtons();
+      }
+    })();
+
+    createPiano();
+  </script>
+</body>
+</html>

@@ -293,6 +293,8 @@ update work_completed/work_remaining/implementation_issues fields to track your 
                 "To create a subtask, set parent_id to the parent todo ID. "
                 "Subtasks are first-class todos (can be long, have notes/deps/queue/etc.) and are intended for breaking down work "
                 "without cluttering the top-level listing (the web UI renders them nested under their parent). "
+                "IMPORTANT: When you make a todo, if it has subtasks, make subtasks for it. "
+                "In the subtasks, if relevant and available, give information about file locations and implementation to assist in cold start orientation. "
                 "You can optionally include progress tracking fields to document initial plans."
             ) if subtasks_enabled else (
                 "Create a new todo (top-level). NOTE: Subtasks are disabled for this project "
@@ -380,7 +382,9 @@ update work_completed/work_remaining/implementation_issues fields to track your 
             description=(
                 "Create multiple todos/subtasks in one call. Each item uses the same fields as create_todo. "
                 "Best practice: when you are breaking down a larger task, create subtasks by setting parent_id "
-                "so they remain nested under the parent in the UI."
+                "so they remain nested under the parent in the UI. "
+                "IMPORTANT: When creating a todo that has subtasks, if relevant and available, include file locations and implementation details "
+                "in the subtasks to assist in cold start orientation."
             ),
             inputSchema=_with_project_context_schema({
                 "type": "object",
